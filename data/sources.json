@@ -46,5 +46,37 @@
     "file_url": "https://dipel.com.ar/docpublicar/PRECIO_SUGERIDO_AL_PUBLICO.xlsm",
     "format": "xlsm",
     "notes": "Macro-enabled workbook (.xlsm). Treat as untrusted bytes: never open it with macros enabled."
+  },
+  {
+    "id": "distrilap-libreria",
+    "name": "DistriLap - Libreria",
+    "page_url": "https://distrilap.com.ar/",
+    "file_url": "https://distrilap.com.ar/files/lista_libreria.xlsx",
+    "format": "xlsx",
+    "notes": "Stationery and toy wholesaler. Stable URL. VAT treatment not stated on the page."
+  },
+  {
+    "id": "distrilap-computacion",
+    "name": "DistriLap - Computacion y electronica",
+    "page_url": "https://distrilap.com.ar/",
+    "file_url": "https://distrilap.com.ar/files/lista_computacion-electronica.xlsx",
+    "format": "xlsx",
+    "notes": "Same distributor as distrilap-libreria; computing and electronics list."
+  },
+  {
+    "id": "megamayorista-libreria",
+    "name": "Megamayorista - Libreria",
+    "page_url": "https://megamayorista.com/listas-de-precios",
+    "file_url": "https://megamayorista.com/wp-content/uploads/2026/10/Lista-Libreria.xlsx",
+    "format": "xlsx",
+    "notes": "Stationery wholesaler. The URL embeds the upload month and changes on each update; refresh it from the page before re-downloading."
+  },
+  {
+    "id": "bulonera-camba-completa",
+    "name": "Bulonera Camba - Lista completa",
+    "page_url": "https://www.buloneracamba.com.ar/tuerca-bulon/listas.php",
+    "file_url": "https://www.buloneracamba.com.ar/tuerca-bulon/uploads/listas/completa-lista-formato-sabana_2026-10-04.xlsx",
+    "format": "xlsx",
+    "notes": "Fasteners and hardware wholesaler. Page states free download without registration; prices exclude VAT, in ARS. The URL embeds the list date and changes on each update."
   }
 ]
