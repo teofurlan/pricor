@@ -1,0 +1,50 @@
+[
+  {
+    "id": "electricidad-emilio",
+    "name": "Electricidad Emilio",
+    "page_url": "https://www.electricidademilio.com.ar/",
+    "file_url": "https://www.electricidademilio.com.ar/lista.xlsx",
+    "format": "xlsx",
+    "notes": "Electrical supplies. Linked from the home page as the price list; the server labels it text/plain but the content is an OOXML zip."
+  },
+  {
+    "id": "distribucion-masiva-ferreteria",
+    "name": "Distribucion Masiva - Ferreteria",
+    "page_url": "https://distribucionmasivaweb.com.ar/catalogo/",
+    "file_url": "https://distribucionmasivaweb.com.ar/listas/ferreteria.xls",
+    "format": "xls",
+    "notes": "Hardware category list (legacy .xls). The same page also links completo.xls and one list per category."
+  },
+  {
+    "id": "dipel-lista-pagina-web",
+    "name": "Dipel - Lista pagina web",
+    "page_url": "https://dipel.com.ar/",
+    "file_url": "https://dipel.com.ar/docpublicar/LISTA_PAGINA_WEB.xlsx",
+    "format": "xlsx",
+    "notes": "Linked from the Dipel home page."
+  },
+  {
+    "id": "dipel-lista-000",
+    "name": "Dipel - Lista 000",
+    "page_url": "https://dipel.com.ar/",
+    "file_url": "https://dipel.com.ar/docpublicar/LISTA_000.xlsx",
+    "format": "xlsx",
+    "notes": "Linked from the Dipel home page."
+  },
+  {
+    "id": "dipel-haga-su-pedido",
+    "name": "Dipel - Haga su pedido",
+    "page_url": "https://dipel.com.ar/",
+    "file_url": "https://dipel.com.ar/docpublicar/HAGA_SU_PEDIDO.xlsx",
+    "format": "xlsx",
+    "notes": "Order form workbook linked from the Dipel home page."
+  },
+  {
+    "id": "dipel-precio-sugerido",
+    "name": "Dipel - Precio sugerido al publico",
+    "page_url": "https://dipel.com.ar/",
+    "file_url": "https://dipel.com.ar/docpublicar/PRECIO_SUGERIDO_AL_PUBLICO.xlsm",
+    "format": "xlsm",
+    "notes": "Macro-enabled workbook (.xlsm). Treat as untrusted bytes: never open it with macros enabled."
+  }
+]
