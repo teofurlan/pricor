@@ -112,6 +112,7 @@ None: nothing was changed after the held-out numbers were seen.
 - It has no column for several roles (listed above), so nothing here says how any classifier does on them. The training pool has no real `retail_price` or `vat_rate` column either.
 - Dipel's files share most of their columns, so the number of distinct columns is smaller than the count; DistriLap's lists have no header row, which is a hard case by construction.
 - The validation set is partly synthetic and its synthetic share comes from the same generator as the training data, so thresholds calibrated on it can be optimistic for real lists. The real-only precision at each threshold is shown next to it. The held-out test set was never used for calibration or for any choice of threshold or stage order.
+- **The heuristics are not a clean baseline on this held-out set.** Their keyword rules, such as the cost-vs-retail modifiers `lista`, `venta` and `sugerido`, were written after the Dipel headers had been seen during exploration and smoke runs. Their 89.7% is therefore optimistic. On the synthetic-heavy validation set, no confidence threshold reached the precision target. Laya and Gemma never saw the held-out distributors.
 - The reference labels are one person's judgment (ambiguous columns are noted in `tools/laya/labels.json`).
 - Gemma runs at temperature 0 through Ollama with `think: false`; its reported confidence is the model's own number, not a probability.
 - Latency depends on this machine (an 8 GB laptop GPU) and on what else it was running.
