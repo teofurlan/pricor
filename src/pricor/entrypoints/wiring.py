@@ -5,19 +5,20 @@ Environment variables:
     PRICOR_OLLAMA_URL      base URL of the Ollama server   (default http://localhost:11434)
     PRICOR_OLLAMA_MODEL    model name                      (default gemma4:e4b)
     PRICOR_OLLAMA_TIMEOUT  seconds per model call          (default 180)
+    PRICOR_DB              path of the SQLite file          (default: see `database_path_from_env`)
 
 Run with: uv run uvicorn pricor.entrypoints.wiring:app_from_env --factory
 """
 
 import os
 from collections.abc import Mapping
+from pathlib import Path
 
 from fastapi import FastAPI
 
 from pricor.adapters.gemma_advisor import GemmaPlanAdvisor
 from pricor.adapters.gemma_classifier import GemmaColumnClassifier
 from pricor.adapters.heuristic_classifier import HeuristicColumnClassifier
-from pricor.adapters.memory_session_repository import InMemoryImportSessionRepository
 from pricor.adapters.ollama_client import (
     DEFAULT_BASE_URL,
     DEFAULT_MODEL,
@@ -25,6 +26,7 @@ from pricor.adapters.ollama_client import (
     OllamaClient,
 )
 from pricor.adapters.spreadsheet_reader import FileSpreadsheetReader
+from pricor.adapters.sqlite_store import SqliteDatabase
 from pricor.application.cascade import ClassifierStage
 from pricor.application.import_first_time import ImportFirstTime
 from pricor.entrypoints.api import ApiDependencies, create_app
@@ -42,20 +44,39 @@ def ollama_client_from_env(env: Mapping[str, str]) -> OllamaClient:
     )
 
 
+def database_path_from_env(env: Mapping[str, str]) -> Path:
+    """Where the SQLite file lives.
+
+    `PRICOR_DB` wins. Otherwise a per-user data directory: `%LOCALAPPDATA%/Pricor`
+    on Windows, `$XDG_DATA_HOME/pricor` elsewhere when it is set, and
+    `./pricor.db` when neither is available.
+    """
+    if env.get("PRICOR_DB"):
+        return Path(env["PRICOR_DB"])
+    if env.get("LOCALAPPDATA"):
+        return Path(env["LOCALAPPDATA"]) / "Pricor" / "pricor.db"
+    if env.get("XDG_DATA_HOME"):
+        return Path(env["XDG_DATA_HOME"]) / "pricor" / "pricor.db"
+    return Path("pricor.db")
+
+
 def dependencies_from_env(env: Mapping[str, str]) -> ApiDependencies:
     client = ollama_client_from_env(env)
+    database = SqliteDatabase(database_path_from_env(env))
     stages = [
         ClassifierStage("heuristics", HeuristicColumnClassifier()),
         ClassifierStage("gemma", GemmaColumnClassifier(client)),
     ]
     use_case = ImportFirstTime(
         FileSpreadsheetReader(),
-        InMemoryImportSessionRepository(),
+        database.sessions,
         stages,
         GemmaPlanAdvisor(client),
+        approvals=database,
     )
     return ApiDependencies(use_case)
 
 
 def app_from_env() -> FastAPI:
     return create_app(dependencies_from_env(os.environ))
+

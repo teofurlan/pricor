@@ -22,6 +22,16 @@ uv run uvicorn pricor.entrypoints.wiring:app_from_env --factory --port 8000
 The endpoints and the session flow are documented in the docstring of `src/pricor/entrypoints/api.py`.
 Uploads accept `.csv`, `.xlsx`, `.xlsm` and `.xls` up to 20 MB.
 
+### Storage (SQLite)
+
+Sessions, approved supplier plans and the price history live in one SQLite file (standard library `sqlite3`, no server). Settings:
+
+| Variable | Default |
+|---|---|
+| `PRICOR_DB` | `%LOCALAPPDATA%\Pricor\pricor.db` on Windows, `$XDG_DATA_HOME/pricor/pricor.db` if set, otherwise `./pricor.db` |
+
+The schema is versioned (`schema_version` table) and migrated at startup; a file written by a newer Pricor is refused. Approving an import stores the plan version, the accepted records and the session state in a single transaction. Plans are never overwritten: each approval adds a version. Prices are stored as exact decimal text.
+
 ### Models (Ollama)
 
 Column classification and question suggestions use Gemma through a local [Ollama](https://ollama.com) server. Settings:

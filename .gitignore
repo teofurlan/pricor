@@ -10,3 +10,10 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+
+# Local data and generated output
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+exports/

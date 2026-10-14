@@ -574,3 +574,60 @@ def parse_plan(data: Any) -> ImportPlan:
         rounding=rounding,
         confirmations=confirmations,
     )
+
+
+# --- serialization ---------------------------------------------------------
+
+
+def _column_dict(ref: ColumnRef) -> dict[str, Any]:
+    return {"index": ref.index, "header": ref.header}
+
+
+def _source_dict(source: FromColumn | FromConstant | FromField) -> dict[str, Any]:
+    if isinstance(source, FromColumn):
+        return {"column": _column_dict(source.column)}
+    if isinstance(source, FromConstant):
+        return {"constant": str(source.value)}
+    return {"field": source.field.value}
+
+
+def _step_dict(step: Step) -> dict[str, Any]:
+    data: dict[str, Any] = {"op": step.op.value}
+    match step:
+        case NormalizeText():
+            data |= {"column": _column_dict(step.column), "to": step.to.value}
+        case ParseNumber():
+            data |= {
+                "column": _column_dict(step.column),
+                "decimal_sep": step.decimal_sep,
+                "thousands_sep": step.thousands_sep,
+            }
+        case ApplyDiscounts(source=ColumnDiscounts() as source):
+            data["from"] = {"column": _column_dict(source.column), "format": source.format}
+        case ApplyDiscounts(source=ConstantDiscounts() as source):
+            data["from"] = {"constant": [str(percent) for percent in source.percents]}
+        case StripVat():
+            data["rate_from"] = _source_dict(step.rate_from)
+        case PerUnit():
+            data["units_from"] = _source_dict(step.units_from)
+        case MapValues():
+            data |= {
+                "column": _column_dict(step.column),
+                "table": {key: str(value) for key, value in step.table.items()},
+                "to": step.to.value,
+            }
+        case Constant():
+            data |= {"field": step.field.value, "value": str(step.value)}
+    return data
+
+
+def plan_to_dict(plan: ImportPlan) -> dict[str, Any]:
+    """Inverse of `parse_plan`: plain JSON types, decimals as exact strings."""
+    return {
+        "contract_version": plan.contract_version,
+        "engine_version": plan.engine_version,
+        "supplier": plan.supplier,
+        "steps": [_step_dict(step) for step in plan.steps],
+        "rounding": {"decimals": plan.rounding.decimals, "mode": plan.rounding.mode},
+        "confirmed_by_user": list(plan.confirmations),
+    }

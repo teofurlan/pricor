@@ -15,6 +15,7 @@ the heuristic stage and asks the user more.
 import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +28,7 @@ from pricor.application.errors import (
 from pricor.application.questions import build_questions, decorate, parse_answer, question_for
 from pricor.domain.cells import display
 from pricor.domain.contract import ContractRecord
-from pricor.domain.engine import execute_numbered_rows
+from pricor.domain.engine import ImportResult, execute_numbered_rows
 from pricor.domain.plan import PlanValidationError
 from pricor.domain.plan_builder import PlanParameters, RoleAssignment, build_plan
 from pricor.domain.profile import HEADER_SEARCH_ROWS, RowClass, SheetProfile, profile_sheet
@@ -43,9 +44,12 @@ from pricor.ports.import_session import (
     PreviewTraceStep,
     SessionStatus,
 )
+from pricor.ports.approval_unit_of_work import ApprovalUnitOfWork
 from pricor.ports.import_session_repository import ImportSessionRepository
 from pricor.ports.model_errors import ModelError, ModelTimeoutError, ModelUnavailableError
 from pricor.ports.plan_advisor import ParameterId, PlanAdvisor, parse_value, with_answer
+from pricor.ports.plan_repository import ColumnFingerprint, SheetFingerprint
+from pricor.ports.price_history import ImportedRecord
 from pricor.ports.spreadsheet import SpreadsheetReader
 
 __all__ = ["UNCALIBRATED_THRESHOLD", "ClassifierStage", "ImportFirstTime"]
@@ -85,6 +89,19 @@ def _record_dict(record: ContractRecord) -> dict[str, str | None]:
     }
 
 
+def _fingerprint(session: ImportSession) -> SheetFingerprint:
+    """What T14 compares against the next file of the supplier."""
+    profile = session.profile
+    return SheetFingerprint(
+        session.sheet_name,
+        profile.header_row,
+        tuple(
+            ColumnFingerprint(column.index, column.header, column.apparent_type.value)
+            for column in profile.columns
+        ),
+    )
+
+
 class ImportFirstTime:
     def __init__(
         self,
@@ -93,12 +110,16 @@ class ImportFirstTime:
         stages: Sequence[ClassifierStage],
         advisor: PlanAdvisor | None = None,
         id_factory: Callable[[], str] = lambda: uuid.uuid4().hex,
+        approvals: ApprovalUnitOfWork | None = None,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ):
         self._reader = reader
         self._repository = repository
         self._stages = tuple(stages)
         self._advisor = advisor
         self._new_id = id_factory
+        self._approvals = approvals
+        self._clock = clock
 
     # -- operations ------------------------------------------------------------
 
@@ -212,8 +233,35 @@ class ImportFirstTime:
         session.approved_plan = session.plan
         session.approved_result = result
         session.approved = True
-        self._repository.save(session)
+        try:
+            self._persist_approval(session, result)
+        except BaseException:
+            # The repository may hand out live objects: undo the freeze so the
+            # user can retry.
+            session.approved = False
+            session.approved_plan = None
+            session.approved_result = None
+            raise
         return session
+
+    def _persist_approval(self, session: ImportSession, result: ImportResult) -> None:
+        """Without a unit of work only the session is saved; with one, plan, history and
+        session are written in a single transaction."""
+        if self._approvals is None:
+            self._repository.save(session)
+            return
+        now = self._clock()
+        with self._approvals.approval() as transaction:
+            transaction.plans.save(
+                session.supplier_name, session.plan, _fingerprint(session), now
+            )
+            transaction.history.record_import(
+                session.id,
+                session.supplier_name,
+                now,
+                [ImportedRecord(item.row_number, item.record) for item in result.accepted],
+            )
+            transaction.sessions.save(session)
 
     # -- internals -------------------------------------------------------------
 

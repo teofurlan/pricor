@@ -1,5 +1,6 @@
 import csv
 import io
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,7 +11,11 @@ from pricor.application.cascade import ClassifierStage
 from pricor.application.import_first_time import ImportFirstTime
 from pricor.domain.roles import ColumnRole as R
 from pricor.entrypoints.api import ApiDependencies, create_app
-from pricor.entrypoints.wiring import dependencies_from_env, ollama_client_from_env
+from pricor.entrypoints.wiring import (
+    database_path_from_env,
+    dependencies_from_env,
+    ollama_client_from_env,
+)
 from pricor.ports.model_errors import ModelUnavailableError
 from pricor.ports.plan_advisor import (
     Evidence,
@@ -239,7 +244,7 @@ def test_unexpected_errors_are_hidden_behind_a_generic_500():
     }
 
 
-def test_wiring_reads_ollama_settings_from_the_environment():
+def test_wiring_reads_ollama_settings_from_the_environment(tmp_path):
     client = ollama_client_from_env(
         {
             "PRICOR_OLLAMA_URL": "http://example:1234/",
@@ -256,7 +261,40 @@ def test_wiring_reads_ollama_settings_from_the_environment():
     assert (defaults.base_url, defaults.model) == ("http://localhost:11434", "gemma4:e4b")
     with pytest.raises(ValueError, match="PRICOR_OLLAMA_TIMEOUT"):
         ollama_client_from_env({"PRICOR_OLLAMA_TIMEOUT": "soon"})
-    assert dependencies_from_env({}).max_upload_bytes == 20 * 1024 * 1024
+    deps = dependencies_from_env({"PRICOR_DB": str(tmp_path / "pricor.db")})
+    assert deps.max_upload_bytes == 20 * 1024 * 1024
+
+
+def test_database_path_comes_from_the_environment_or_a_per_user_default():
+    assert database_path_from_env({"PRICOR_DB": "x/y.db"}) == Path("x/y.db")
+    assert database_path_from_env({"LOCALAPPDATA": "C:/Users/me/AppData/Local"}) == Path(
+        "C:/Users/me/AppData/Local/Pricor/pricor.db"
+    )
+    assert database_path_from_env({"XDG_DATA_HOME": "/home/me/.data"}) == Path(
+        "/home/me/.data/pricor/pricor.db"
+    )
+    assert database_path_from_env({"PRICOR_DB": "x.db", "LOCALAPPDATA": "C:/L"}) == Path("x.db")
+    assert database_path_from_env({}) == Path("pricor.db")
+
+
+def test_the_wired_app_keeps_sessions_and_approvals_across_restarts(tmp_path):
+    env = {"PRICOR_DB": str(tmp_path / "pricor.db"), "PRICOR_OLLAMA_TIMEOUT": "1"}
+
+    def app():
+        deps = dependencies_from_env(env)
+        return TestClient(create_app(deps), raise_server_exceptions=False)
+
+    first = app()
+    session_id = first.post(
+        "/imports",
+        files={"file": ("lista.csv", csv_bytes(ROWS), "text/csv")},
+        data={"supplier_name": "Ferreteria Ejemplo"},
+    ).json()["id"]
+
+    second = app()  # a fresh process: new connection, nothing in memory
+    state = second.get(f"/imports/{session_id}").json()
+    assert state["supplier_name"] == "Ferreteria Ejemplo"
+    assert state["id"] == session_id
 
 
 def test_approving_with_no_accepted_rows_is_a_409():

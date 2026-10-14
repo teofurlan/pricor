@@ -1,3 +1,4 @@
+import json
 from decimal import Decimal
 
 import pytest
@@ -20,6 +21,7 @@ from pricor.domain.plan import (
     PlanValidationError,
     StripVat,
     parse_plan,
+    plan_to_dict,
 )
 
 from .golden import golden_plan_dict
@@ -350,3 +352,32 @@ def test_map_values_accepts_distinct_normalized_keys():
     data = golden_plan_dict()
     data["steps"][4]["table"] = {"21%": 21, "10,5%": 10.5, "0%": 0}
     assert parse_plan(data).steps[4].table["0%"] == 0
+
+
+# -- serialization ----------------------------------------------------------------
+
+
+def test_plan_to_dict_round_trips_through_parse_plan():
+    plan = parse_plan(golden_plan_dict())
+    data = plan_to_dict(plan)
+    assert parse_plan(data) == plan
+    assert json.loads(json.dumps(data)) == data  # plain JSON types only
+
+
+def test_plan_to_dict_keeps_decimal_digits_exactly():
+    data = golden_plan_dict()
+    data["steps"][4]["table"] = {"21%": "21.50", "10,5%": "0.10"}
+    data["steps"][3] = {"op": "apply_discounts", "from": {"constant": ["10.0", "5"]}}
+    plan = parse_plan(data)
+    back = parse_plan(plan_to_dict(plan))
+    assert [str(v) for v in back.steps[4].table.values()] == ["21.50", "0.10"]
+    assert [str(p) for p in back.steps[3].source.percents] == ["10.0", "5"]
+
+
+def test_plan_to_dict_covers_every_step_kind():
+    data = golden_plan_dict()
+    data["steps"][3] = {"op": "apply_discounts", "from": {"constant": [10]}}
+    data["steps"][6] = {"op": "per_unit", "units_from": {"constant": 12}}
+    data["steps"].append({"op": "constant", "field": "units_per_pack", "value": 12})
+    plan = parse_plan(data)
+    assert parse_plan(plan_to_dict(plan)) == plan
