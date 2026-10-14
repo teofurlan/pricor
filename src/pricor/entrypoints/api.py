@@ -1,0 +1,305 @@
+"""HTTP API for the first-import flow (FastAPI).
+
+All bodies are JSON except the upload, which is multipart. Session state is
+always returned in the same shape (`id`, `status`, `header`, `columns`,
+`role_issues`, `questions`, `answers`, `notices`, `approved`); follow `status`:
+
+    header_choice_required      -> PUT  /imports/{id}/header
+    role_confirmation_required  -> PUT  /imports/{id}/roles
+    questions_pending           -> POST /imports/{id}/answers (one per question)
+    ready_for_preview           -> GET  /imports/{id}/preview, POST /imports/{id}/approve
+    approved                    -> frozen
+
+Endpoints:
+
+    POST /imports                 multipart: file, supplier_name, [sheet], [language]  -> 201 state
+    GET  /imports/{id}            current state
+    PUT  /imports/{id}/header     {"row_index": 3 | null}   (null = the sheet has no header)
+    PUT  /imports/{id}/roles      {"roles": {"2": "cost_price"}}   (column index -> role)
+    POST /imports/{id}/answers    {"question_id": "currency", "option": "ARS"}
+    GET  /imports/{id}/preview    ?offset=0&limit=50  -> per-row original, trace, final values
+    POST /imports/{id}/approve    freezes the plan and the result
+
+Errors share one body, `{"error": {"code": "...", "message": "..."}}`, with
+404 (unknown session), 409 (operation not allowed in this state), 413 (file too
+large), 415 (unsupported file type) and 422 (invalid input or unreadable file).
+Nothing a model says is ever executed: questions are deterministic and a model
+hypothesis is only a suggestion.
+"""
+
+import re
+import shutil
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+
+from pricor.application.errors import ApplicationError, InvalidInputError, InvalidOperationError
+from pricor.application.import_first_time import ImportFirstTime
+from pricor.application.import_session import ImportSession, PreviewPage
+from pricor.application.questions import Question
+from pricor.domain.roles import ColumnRole
+from pricor.ports.import_session_repository import SessionNotFoundError
+from pricor.ports.spreadsheet import (
+    FileTooLargeError,
+    SpreadsheetError,
+    TooManyRowsError,
+    UnsupportedFormatError,
+)
+
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+ALLOWED_EXTENSIONS = frozenset({".csv", ".xlsx", ".xlsm", ".xls"})
+_CHUNK = 1024 * 1024
+_UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+@dataclass(frozen=True)
+class ApiDependencies:
+    use_case: ImportFirstTime
+    max_upload_bytes: int = MAX_UPLOAD_BYTES
+    upload_dir: Path | None = None  # parent for temporary uploads; the system default if None
+
+
+class HeaderBody(BaseModel):
+    row_index: int | None
+
+
+class RolesBody(BaseModel):
+    roles: dict[int, ColumnRole]
+
+
+class AnswerBody(BaseModel):
+    question_id: str
+    option: str
+
+
+# -- serialization ----------------------------------------------------------------
+
+
+def _question(question: Question) -> dict[str, Any]:
+    suggestion = question.suggestion
+    return {
+        "id": question.id.value,
+        "text": question.text.as_dict(),
+        "options": [
+            {"token": option.token, "label": option.label.as_dict()} for option in question.options
+        ],
+        "allows_custom": question.allows_custom,
+        "reason": question.reason,
+        "model_phrasing": question.model_phrasing,
+        "suggestion": None
+        if suggestion is None
+        else {
+            "suggested_by": suggestion.suggested_by,
+            "option": suggestion.option,
+            "confidence": suggestion.confidence,
+            "calibrated": suggestion.calibrated,
+            "evidence": [
+                {"column_index": item.column_index, "sample": item.sample}
+                for item in suggestion.evidence
+            ],
+        },
+    }
+
+
+def session_state(session: ImportSession) -> dict[str, Any]:
+    profile = session.profile
+    return {
+        "id": session.id,
+        "status": session.status.value,
+        "supplier_name": session.supplier_name,
+        "file_name": session.file_name,
+        "sheet_name": session.sheet_name,
+        "header": {
+            "row_index": profile.header_row,
+            "confidence": profile.header_confidence,
+            "ambiguous": profile.header_ambiguous,
+            "candidates": [
+                {"row_index": item.row_index, "file_row": item.file_row, "cells": list(item.cells)}
+                for item in session.header_candidates
+            ],
+        },
+        "columns": [
+            {
+                "index": column.index,
+                "header": column.header,
+                "role": None if column.role is None else column.role.value,
+                "decided_by": column.decided_by,
+                "score": column.score,
+                "rationale": column.rationale,
+                "proposals": [
+                    {
+                        "stage": item.stage,
+                        "role": item.role.value,
+                        "score": item.score,
+                        "rationale": item.rationale,
+                    }
+                    for item in column.proposals
+                ],
+            }
+            for column in session.columns
+        ],
+        "role_issues": list(session.role_issues),
+        "questions": [_question(question) for question in session.questions],
+        "answers": {parameter.value: token for parameter, token in session.answers.items()},
+        "notices": [
+            {"code": item.code, "message": item.message, "stage": item.stage}
+            for item in session.notices
+        ],
+        "approved": session.approved,
+    }
+
+
+def preview_body(page: PreviewPage) -> dict[str, Any]:
+    return {
+        "offset": page.offset,
+        "limit": page.limit,
+        "total_items": page.total_items,
+        "totals": page.totals,
+        "items": [
+            {
+                "row_number": item.row_number,
+                "status": item.status,
+                "original": list(item.original),
+                "trace": [{"step": step.step, "value": step.value} for step in item.trace],
+                "record": item.record,
+                "reasons": list(item.reasons),
+            }
+            for item in page.items
+        ],
+    }
+
+
+# -- errors -----------------------------------------------------------------------
+
+
+def _error(status: int, code: str, message: str) -> JSONResponse:
+    return JSONResponse({"error": {"code": code, "message": message}}, status_code=status)
+
+
+def _spreadsheet_status(error: SpreadsheetError) -> tuple[int, str]:
+    if isinstance(error, UnsupportedFormatError):
+        return 415, "unsupported_format"
+    if isinstance(error, FileTooLargeError):
+        return 413, "file_too_large"
+    if isinstance(error, TooManyRowsError):
+        return 422, "too_many_rows"
+    return 422, "unreadable_file"
+
+
+def _install_error_handlers(app: FastAPI) -> None:
+    @app.exception_handler(SessionNotFoundError)
+    async def not_found(_: Request, error: SessionNotFoundError) -> JSONResponse:
+        return _error(404, "session_not_found", str(error))
+
+    @app.exception_handler(InvalidOperationError)
+    async def conflict(_: Request, error: InvalidOperationError) -> JSONResponse:
+        return _error(409, "invalid_operation", str(error))
+
+    @app.exception_handler(InvalidInputError)
+    async def invalid(_: Request, error: InvalidInputError) -> JSONResponse:
+        return _error(422, "invalid_input", str(error))
+
+    @app.exception_handler(ApplicationError)
+    async def application(_: Request, error: ApplicationError) -> JSONResponse:
+        return _error(422, "application_error", str(error))
+
+    @app.exception_handler(SpreadsheetError)
+    async def spreadsheet(_: Request, error: SpreadsheetError) -> JSONResponse:
+        status, code = _spreadsheet_status(error)
+        return _error(status, code, str(error))
+
+    @app.exception_handler(RequestValidationError)
+    async def validation(_: Request, error: RequestValidationError) -> JSONResponse:
+        problems = "; ".join(
+            f"{'.'.join(str(part) for part in item['loc'][1:]) or item['loc'][0]}: {item['msg']}"
+            for item in error.errors()
+        )
+        return _error(422, "invalid_request", problems)
+
+    @app.exception_handler(Exception)
+    async def unexpected(_: Request, __: Exception) -> JSONResponse:
+        return _error(500, "internal_error", "unexpected server error")
+
+
+# -- uploads ----------------------------------------------------------------------
+
+
+def _safe_name(filename: str | None) -> str:
+    name = _UNSAFE.sub("_", Path(filename or "upload").name).strip("._") or "upload"
+    return name[:100]
+
+
+def _store_upload(upload: UploadFile, directory: Path, limit: int) -> Path:
+    name = _safe_name(upload.filename)
+    if Path(name).suffix.lower() not in ALLOWED_EXTENSIONS:
+        raise UnsupportedFormatError(
+            f"unsupported file type; use one of: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
+        )
+    target = directory / name
+    written = 0
+    with target.open("wb") as handle:
+        while chunk := upload.file.read(_CHUNK):
+            written += len(chunk)
+            if written > limit:
+                raise FileTooLargeError(f"the file is larger than {limit // (1024 * 1024)} MB")
+            handle.write(chunk)
+    return target
+
+
+# -- app --------------------------------------------------------------------------
+
+
+def create_app(dependencies: ApiDependencies) -> FastAPI:
+    app = FastAPI(title="Pricor", version="0.1.0")
+    use_case = dependencies.use_case
+    _install_error_handlers(app)
+
+    @app.post("/imports", status_code=201)
+    def create_import(
+        file: UploadFile = File(...),
+        supplier_name: str = Form(...),
+        sheet: str | None = Form(None),
+        language: str = Form("en"),
+    ) -> dict[str, Any]:
+        if language not in ("en", "es"):
+            raise InvalidInputError("language must be 'en' or 'es'")
+        parent = None if dependencies.upload_dir is None else str(dependencies.upload_dir)
+        directory = Path(tempfile.mkdtemp(prefix="pricor-upload-", dir=parent))
+        try:
+            path = _store_upload(file, directory, dependencies.max_upload_bytes)
+            session = use_case.start(path, supplier_name, sheet or None, language)
+        finally:
+            shutil.rmtree(directory, ignore_errors=True)
+        return session_state(session)
+
+    @app.get("/imports/{session_id}")
+    def get_import(session_id: str) -> dict[str, Any]:
+        return session_state(use_case.get(session_id))
+
+    @app.put("/imports/{session_id}/header")
+    def choose_header(session_id: str, body: HeaderBody) -> dict[str, Any]:
+        return session_state(use_case.choose_header(session_id, body.row_index))
+
+    @app.put("/imports/{session_id}/roles")
+    def set_roles(session_id: str, body: RolesBody) -> dict[str, Any]:
+        return session_state(use_case.set_roles(session_id, body.roles))
+
+    @app.post("/imports/{session_id}/answers")
+    def answer(session_id: str, body: AnswerBody) -> dict[str, Any]:
+        return session_state(use_case.answer(session_id, body.question_id, body.option))
+
+    @app.get("/imports/{session_id}/preview")
+    def preview(session_id: str, offset: int = 0, limit: int = 50) -> dict[str, Any]:
+        return preview_body(use_case.preview(session_id, offset, limit))
+
+    @app.post("/imports/{session_id}/approve")
+    def approve(session_id: str) -> dict[str, Any]:
+        return session_state(use_case.approve(session_id))
+
+    return app

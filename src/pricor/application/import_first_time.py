@@ -255,10 +255,11 @@ class ImportFirstTime:
             return
         questions, issues = build_questions(built.unresolved)
         session.role_issues = issues
-        if questions and not issues:
+        if issues:
+            return  # questions wait until the column roles are consistent
+        if questions:
             self._ensure_proposal(session, assignments)
-            questions = decorate(questions, session.proposal)
-        session.questions = questions
+        session.questions = decorate(questions, session.proposal)
 
     def _ensure_proposal(self, session: ImportSession, assignments: list[RoleAssignment]) -> None:
         if self._advisor is None or session.model_unreachable:

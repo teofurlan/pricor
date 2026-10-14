@@ -447,6 +447,7 @@ def test_role_problems_are_reported_when_the_builder_cannot_find_a_column():
     session = start(use_case)
     assert session.status is SessionStatus.ROLE_CONFIRMATION_REQUIRED
     assert any("product code" in issue for issue in session.role_issues)
+    assert session.questions == ()  # questions wait until the roles are consistent
     session = use_case.set_roles(session.id, {0: R.CODE})
     assert session.role_issues == ()
     assert session.status is SessionStatus.QUESTIONS_PENDING
