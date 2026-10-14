@@ -16,6 +16,7 @@ import { RejectedList } from "../components/organisms/RejectedList";
 import { Stepper, type StepId, type StepItem } from "../components/organisms/Stepper";
 import { UploadForm } from "../components/organisms/UploadForm";
 import { useI18n, type TextKey } from "../i18n";
+import { PriceChanges } from "./PriceChanges";
 import { toApiError, usePreview } from "./usePreview";
 
 const TITLES: Record<StepId, { title: TextKey; lede: TextKey }> = {
@@ -218,6 +219,9 @@ export function ImportWizard({ api }: { api: ApiClient }) {
                   links={links(session.id)}
                   onApprove={approve}
                 />
+                {session.approved && (
+                  <PriceChanges api={api} sessionId={session.id} supplierName={session.supplier_name} />
+                )}
               </div>
             ) : (
               loadingPreview

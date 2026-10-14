@@ -23,12 +23,20 @@ Endpoints:
     POST /imports/{id}/approve    freezes the plan and the result
     GET  /imports/{id}/export     ?format=csv|xlsx (default csv)  -> the products file
     GET  /imports/{id}/rejected   ?format=csv|xlsx (default csv)  -> the rejected-rows report
+    GET  /imports/{id}/report     ?threshold=0.30  -> what changed since the previous import
+    GET  /imports/{id}/report/export  ?threshold=0.30&format=csv  -> the same, as a file
 
 A supplier with an approved plan is reused automatically: `mode` is `"reuse"`,
 `based_on_plan_version` names the plan, and `changes` lists what differs in the new file
 (`moved`, `retyped`, `new`, `missing` columns, `sheet_changed`, `header_row_changed`).
 Columns the plan settled have `decided_by: "saved_plan"`. Send `force_first_import=true` to
 start from scratch instead; `mode` is then `"first_import"`.
+
+The price-change report compares an approved import with the supplier's previous approved
+one by `supplier_code`, in each record's own currency. `threshold` is a ratio (`0.30` is
+30%, the default). It is a 409 `no_previous_import` for a supplier's first import and a 409
+`invalid_operation` before approval; a bad threshold is a 422. Costs are exact decimal
+strings and `*_pct` fields are percentages rounded to two decimals for display.
 
 Both downloads are attachments (`Content-Disposition`) and exist only for approved
 sessions (409 otherwise); an unknown `format` is a 422. The XLSX export carries the
@@ -46,6 +54,7 @@ import re
 import shutil
 import tempfile
 from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -59,15 +68,23 @@ from pricor.application.errors import (
     InvalidInputError,
     InvalidOperationError,
     NoAcceptedRowsError,
+    NoPreviousImportError,
 )
 from pricor.adapters.csv_exporter import CsvExporter
 from pricor.adapters.xlsx_exporter import XlsxExporter
 from pricor.application.export_import import ExportedFile, ExportImport
 from pricor.application.import_first_time import ImportFirstTime
 from pricor.application.questions import Question
+from pricor.application.report_price_changes import (
+    ImportComparison,
+    ReportPriceChanges,
+    parse_threshold,
+)
+from pricor.domain.price_report import PriceChange, ProductPrice, percent_text
 from pricor.domain.roles import ColumnRole
 from pricor.ports.import_session import ImportSession, PlanChange, PreviewPage
 from pricor.ports.import_session_repository import SessionNotFoundError
+from pricor.ports.price_history import ImportSummary
 from pricor.entrypoints.web_app import install_web_app
 from pricor.ports.spreadsheet import (
     FileTooLargeError,
@@ -89,6 +106,7 @@ class ApiDependencies:
     upload_dir: Path | None = None  # parent for temporary uploads; the system default if None
     exports: ExportImport | None = None  # CSV and XLSX exporters over the use case if None
     web_dist: Path | None = None  # built web app to serve at `/`; API only if None
+    reports: ReportPriceChanges | None = None  # price-change reports; unavailable if None
 
 
 class HeaderBody(BaseModel):
@@ -224,6 +242,91 @@ def preview_body(page: PreviewPage) -> dict[str, Any]:
 # -- errors -----------------------------------------------------------------------
 
 
+def _money(value: Decimal) -> str:
+    return format(value, "f")
+
+
+def _change_item(item: PriceChange) -> dict[str, Any]:
+    return {
+        "supplier_code": item.supplier_code,
+        "description": item.description,
+        "currency": item.currency,
+        "previous_cost": _money(item.previous_cost),
+        "current_cost": _money(item.current_cost),
+        "change": _money(item.change),
+        "change_pct": None if item.change_ratio is None else percent_text(item.change_ratio),
+        "anomaly": item.anomaly,
+    }
+
+
+def _product_item(item: ProductPrice) -> dict[str, Any]:
+    return {
+        "supplier_code": item.supplier_code,
+        "description": item.description,
+        "currency": item.currency,
+        "unit_cost_net": _money(item.unit_cost_net),
+    }
+
+
+def _import_item(summary: ImportSummary) -> dict[str, Any]:
+    return {
+        "import_id": summary.import_id,
+        "imported_at": summary.imported_at.isoformat(),
+        "record_count": summary.record_count,
+    }
+
+
+def report_body(comparison: ImportComparison) -> dict[str, Any]:
+    """The price-change report as JSON: money as exact strings, percentages rounded for display."""
+    report, totals = comparison.report, comparison.report.summary
+    return {
+        "import_id": comparison.current.import_id,
+        "supplier_name": comparison.current.supplier_name,
+        "threshold": str(report.threshold),
+        "previous_import": _import_item(comparison.previous),
+        "current_import": _import_item(comparison.current),
+        "summary": {
+            "unchanged": totals.unchanged,
+            "increases": totals.increases,
+            "decreases": totals.decreases,
+            "from_zero": totals.from_zero,
+            "new_products": totals.new_products,
+            "discontinued": totals.discontinued,
+            "currency_changed": totals.currency_changed,
+            "ambiguous": totals.ambiguous,
+            "anomalies": totals.anomalies,
+            "median_change_pct": None
+            if totals.median_change is None
+            else percent_text(totals.median_change),
+        },
+        "increases": [_change_item(item) for item in report.increases],
+        "decreases": [_change_item(item) for item in report.decreases],
+        "from_zero": [_change_item(item) for item in report.from_zero],
+        "anomalies": [_change_item(item) for item in report.anomalies],
+        "new_products": [_product_item(item) for item in report.new_products],
+        "discontinued": [_product_item(item) for item in report.discontinued],
+        "currency_changed": [
+            {
+                "supplier_code": item.supplier_code,
+                "description": item.description,
+                "previous_currency": item.previous_currency,
+                "current_currency": item.current_currency,
+                "previous_cost": _money(item.previous_cost),
+                "current_cost": _money(item.current_cost),
+            }
+            for item in report.currency_changed
+        ],
+        "ambiguous_codes": [
+            {
+                "supplier_code": item.supplier_code,
+                "previous_count": item.previous_count,
+                "current_count": item.current_count,
+            }
+            for item in report.ambiguous_codes
+        ],
+    }
+
+
 def _download(file: ExportedFile) -> Response:
     # Filenames are ASCII slugs built by the use case: safe inside a quoted header value.
     return Response(
@@ -251,6 +354,10 @@ def _install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(SessionNotFoundError)
     async def not_found(_: Request, error: SessionNotFoundError) -> JSONResponse:
         return _error(404, "session_not_found", str(error))
+
+    @app.exception_handler(NoPreviousImportError)
+    async def no_previous_import(_: Request, error: NoPreviousImportError) -> JSONResponse:
+        return _error(409, "no_previous_import", str(error))
 
     @app.exception_handler(NoAcceptedRowsError)
     async def no_accepted_rows(_: Request, error: NoAcceptedRowsError) -> JSONResponse:
@@ -374,6 +481,23 @@ def create_app(dependencies: ApiDependencies) -> FastAPI:
     @app.get("/imports/{session_id}/rejected")
     def export_rejected(session_id: str, format: str = "csv") -> Response:
         return _download(exports.rejected(session_id, format))
+
+    def reporter() -> ReportPriceChanges:
+        if dependencies.reports is None:
+            raise InvalidOperationError("the price history is not available")
+        return dependencies.reports
+
+    @app.get("/imports/{session_id}/report")
+    def price_report(session_id: str, threshold: str | None = None) -> dict[str, Any]:
+        return report_body(reporter().compare(session_id, parse_threshold(threshold)))
+
+    @app.get("/imports/{session_id}/report/export")
+    def export_report(
+        session_id: str, threshold: str | None = None, format: str = "csv"
+    ) -> Response:
+        if format != "csv":
+            raise InvalidInputError(f"unknown format {format!r}; use: csv")
+        return _download(reporter().export(session_id, parse_threshold(threshold)))
 
     if dependencies.web_dist is not None:
         install_web_app(app, dependencies.web_dist)

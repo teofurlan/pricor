@@ -44,7 +44,7 @@ NOW = datetime(2026, 10, 15, 12, 0, tzinfo=UTC)
 
 
 class Harness:
-    def __init__(self, table=ROLES):
+    def __init__(self, table=ROLES, clock=lambda: NOW):
         self.reader = FakeReader(FIRST)
         self.classifier = FakeClassifier(table)
         self.database = SqliteDatabase(":memory:")
@@ -55,7 +55,7 @@ class Harness:
             [ClassifierStage("heuristics", self.classifier)],
             plans=self.database.plans,
             approvals=self.database,
-            clock=lambda: NOW,
+            clock=clock,
             id_factory=lambda: next(ids),
         )
 

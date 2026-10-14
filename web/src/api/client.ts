@@ -2,6 +2,7 @@ import type {
   CreateImportInput,
   ExportFormat,
   PreviewPage,
+  PriceReport,
   SessionState,
   ColumnRole,
 } from "./types";
@@ -27,8 +28,11 @@ export interface ApiClient {
   answer(id: string, questionId: string, option: string): Promise<SessionState>;
   preview(id: string, offset: number, limit: number): Promise<PreviewPage>;
   approve(id: string): Promise<SessionState>;
+  /** What changed since the supplier's previous approved import; `threshold` is a ratio ("0.30"). */
+  report(id: string, threshold?: string): Promise<PriceReport>;
   exportUrl(id: string, format: ExportFormat): string;
   rejectedUrl(id: string, format: ExportFormat): string;
+  reportUrl(id: string, threshold?: string): string;
 }
 
 type Fetch = typeof fetch;
@@ -83,7 +87,11 @@ export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), 
       call(`${base(id)}/answers`, json("POST", { question_id: questionId, option })),
     preview: (id, offset, limit) => call(`${base(id)}/preview?offset=${offset}&limit=${limit}`),
     approve: (id) => call(`${base(id)}/approve`, { method: "POST" }),
+    report: (id, threshold) =>
+      call(`${base(id)}/report${threshold === undefined ? "" : `?threshold=${encodeURIComponent(threshold)}`}`),
     exportUrl: (id, format) => `${baseUrl}${base(id)}/export?format=${format}`,
     rejectedUrl: (id, format) => `${baseUrl}${base(id)}/rejected?format=${format}`,
+    reportUrl: (id, threshold) =>
+      `${baseUrl}${base(id)}/report/export?format=csv${threshold === undefined ? "" : `&threshold=${encodeURIComponent(threshold)}`}`,
   };
 }

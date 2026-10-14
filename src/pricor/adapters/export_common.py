@@ -1,10 +1,15 @@
 """Shared formatting rules of the file exporters."""
 
+import csv
+import io
+from collections.abc import Iterable
 from decimal import Decimal, InvalidOperation
 
 from pricor.domain.contract import ContractRecord
 from pricor.ports.exporter import REJECTED_COLUMNS, ImportExport
 
+_BOM = b"\xef\xbb\xbf"
+_CRLF = "\r\n"
 _FORMULA_STARTS = ("=", "+", "-", "@", "\t", "\r")
 
 
@@ -60,3 +65,22 @@ def product_values(row_number: int, record: ContractRecord) -> list[object]:
         row_number,
     ]
 
+
+
+def csv_cell(value: object) -> str:
+    """One CSV field: empty for `None`, formula-safe text, decimals in positional notation."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return neutralize(value)
+    return decimal_text(value) if not isinstance(value, int) else str(value)
+
+
+def csv_bytes(header: Iterable[str], rows: Iterable[list[object]], delimiter: str = ",") -> bytes:
+    """UTF-8 with a byte-order mark (so Excel detects it), CRLF line ends, RFC 4180 quoting."""
+    buffer = io.StringIO(newline="")
+    writer = csv.writer(buffer, delimiter=delimiter, lineterminator=_CRLF)
+    writer.writerow(csv_cell(name) for name in header)
+    for row in rows:
+        writer.writerow(csv_cell(value) for value in row)
+    return _BOM + buffer.getvalue().encode("utf-8")

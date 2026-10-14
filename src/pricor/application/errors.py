@@ -15,3 +15,7 @@ class InvalidOperationError(ApplicationError):
 
 class NoAcceptedRowsError(InvalidOperationError):
     """Approval was requested but the plan accepts none of the data rows."""
+
+
+class NoPreviousImportError(InvalidOperationError):
+    """A report needs an earlier approved import of the same supplier and there is none."""

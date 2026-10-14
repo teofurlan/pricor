@@ -27,7 +27,7 @@ class ExportedFile:
     content: bytes
 
 
-def _slug(text: str) -> str:
+def slug(text: str) -> str:
     ascii_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
     return _SLUG_CHARS.sub("-", ascii_text.lower()).strip("-")[:_SLUG_MAX].strip("-") or "supplier"
 
@@ -65,7 +65,7 @@ class ExportImport:
 
     @staticmethod
     def _file(session: ImportSession, exporter: Exporter, kind: str, content: bytes) -> ExportedFile:
-        name = f"pricor-{_slug(session.supplier_name)}-{session.id[:_ID_CHARS]}-{kind}{exporter.extension}"
+        name = f"pricor-{slug(session.supplier_name)}-{session.id[:_ID_CHARS]}-{kind}{exporter.extension}"
         return ExportedFile(name, exporter.media_type, content)
 
     @staticmethod

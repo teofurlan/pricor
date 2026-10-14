@@ -1,4 +1,13 @@
-import type { ColumnState, PlanChange, PreviewItem, PreviewPage, Question, SessionState } from "../api/types";
+import type {
+  ColumnState,
+  PlanChange,
+  PreviewItem,
+  PreviewPage,
+  PriceReport,
+  Question,
+  ReportChange,
+  SessionState,
+} from "../api/types";
 
 export function change(overrides: Partial<PlanChange> = {}): PlanChange {
   return {
@@ -98,6 +107,51 @@ export function previewPage(overrides: Partial<PreviewPage> = {}): PreviewPage {
       skipped_rows: { empty: 1, total: 1, section: 0, preamble: 1 },
     },
     items: [previewItem()],
+    ...overrides,
+  };
+}
+
+export function reportChange(overrides: Partial<ReportChange> = {}): ReportChange {
+  return {
+    supplier_code: "A1",
+    description: "Tornillo",
+    currency: "ARS",
+    previous_cost: "1000.00",
+    current_cost: "1100.00",
+    change: "100.00",
+    change_pct: "10.00",
+    anomaly: false,
+    ...overrides,
+  };
+}
+
+export function priceReport(overrides: Partial<PriceReport> = {}): PriceReport {
+  return {
+    import_id: "s2",
+    supplier_name: "Ferreteria Ejemplo",
+    threshold: "0.30",
+    previous_import: { import_id: "s1", imported_at: "2026-10-01T10:00:00+00:00", record_count: 5 },
+    current_import: { import_id: "s2", imported_at: "2026-10-08T10:00:00+00:00", record_count: 5 },
+    summary: {
+      unchanged: 312,
+      increases: 85,
+      decreases: 4,
+      from_zero: 0,
+      new_products: 2,
+      discontinued: 1,
+      currency_changed: 0,
+      ambiguous: 0,
+      anomalies: 3,
+      median_change_pct: "4.20",
+    },
+    increases: [reportChange()],
+    decreases: [],
+    from_zero: [],
+    anomalies: [],
+    new_products: [],
+    discontinued: [],
+    currency_changed: [],
+    ambiguous_codes: [],
     ...overrides,
   };
 }

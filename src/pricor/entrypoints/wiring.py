@@ -25,9 +25,11 @@ from pricor.adapters.ollama_client import (
     DEFAULT_TIMEOUT_SECONDS,
     OllamaClient,
 )
+from pricor.adapters.report_csv_exporter import ReportCsvExporter
 from pricor.adapters.spreadsheet_reader import FileSpreadsheetReader
 from pricor.adapters.sqlite_store import SqliteDatabase
 from pricor.application.cascade import ClassifierStage
+from pricor.application.report_price_changes import ReportPriceChanges
 from pricor.application.reuse_supplier_plan import ReuseSupplierPlan
 from pricor.entrypoints.api import ApiDependencies, create_app
 from pricor.entrypoints.web_app import DEFAULT_WEB_DIST
@@ -76,7 +78,8 @@ def dependencies_from_env(env: Mapping[str, str]) -> ApiDependencies:
         plans=database.plans,
         approvals=database,
     )
-    return ApiDependencies(use_case, web_dist=DEFAULT_WEB_DIST)
+    reports = ReportPriceChanges(use_case.get, database.history, ReportCsvExporter())
+    return ApiDependencies(use_case, web_dist=DEFAULT_WEB_DIST, reports=reports)
 
 
 def app_from_env() -> FastAPI:

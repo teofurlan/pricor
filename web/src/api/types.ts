@@ -187,3 +187,76 @@ export interface CreateImportInput {
   /** Ignore the supplier's saved plan and run a first import. */
   forceFirstImport?: boolean;
 }
+
+export interface ReportChange {
+  supplier_code: string;
+  description: string;
+  currency: string;
+  previous_cost: string;
+  current_cost: string;
+  change: string;
+  /** Percentage rounded for display ("4.20"), or null when the previous cost was zero. */
+  change_pct: string | null;
+  anomaly: boolean;
+}
+
+export interface ReportProduct {
+  supplier_code: string;
+  description: string;
+  currency: string;
+  unit_cost_net: string;
+}
+
+export interface ReportCurrencyChange {
+  supplier_code: string;
+  description: string;
+  previous_currency: string;
+  current_currency: string;
+  previous_cost: string;
+  current_cost: string;
+}
+
+export interface ReportAmbiguousCode {
+  supplier_code: string;
+  previous_count: number;
+  current_count: number;
+}
+
+export interface ReportImport {
+  import_id: string;
+  imported_at: string;
+  record_count: number;
+}
+
+export interface ReportSummary {
+  unchanged: number;
+  increases: number;
+  decreases: number;
+  from_zero: number;
+  new_products: number;
+  discontinued: number;
+  currency_changed: number;
+  ambiguous: number;
+  anomalies: number;
+  /** Median change of the increases and decreases, as a rounded percentage ("4.20"). */
+  median_change_pct: string | null;
+}
+
+/** What changed between an approved import and the supplier's previous approved one. */
+export interface PriceReport {
+  import_id: string;
+  supplier_name: string;
+  /** The anomaly threshold as a ratio ("0.30" is 30%). */
+  threshold: string;
+  previous_import: ReportImport;
+  current_import: ReportImport;
+  summary: ReportSummary;
+  increases: ReportChange[];
+  decreases: ReportChange[];
+  from_zero: ReportChange[];
+  anomalies: ReportChange[];
+  new_products: ReportProduct[];
+  discontinued: ReportProduct[];
+  currency_changed: ReportCurrencyChange[];
+  ambiguous_codes: ReportAmbiguousCode[];
+}

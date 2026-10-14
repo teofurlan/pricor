@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ApiError, type ApiClient } from "../api/client";
 import type { SessionState } from "../api/types";
-import { change, column, previewPage, question, session } from "../test/fixtures";
+import { change, column, previewPage, priceReport, question, session } from "../test/fixtures";
 import { renderWithI18n } from "../test/render";
 import { ImportWizard } from "./ImportWizard";
 
@@ -17,8 +17,11 @@ function fakeApi(overrides: Partial<ApiClient> = {}): ApiClient {
     answer: vi.fn(unexpected("answer")),
     preview: vi.fn(unexpected("preview")),
     approve: vi.fn(unexpected("approve")),
+    // A first import has no earlier list to compare with, which is the quiet default here.
+    report: vi.fn(() => Promise.reject(new ApiError(409, "no_previous_import", "nothing to compare with"))),
     exportUrl: (id, format) => `/imports/${id}/export?format=${format}`,
     rejectedUrl: (id, format) => `/imports/${id}/rejected?format=${format}`,
+    reportUrl: (id) => `/imports/${id}/report/export?format=csv`,
     ...overrides,
   };
 }
@@ -201,6 +204,40 @@ describe("ImportWizard", () => {
     finish(withQuestion);
     await screen.findByRole("button", { name: "Confirm columns" });
     expect(screen.queryByText(/Working. Local models can take up to a minute/)).toBeNull();
+  });
+
+  it("shows what changed in prices once the import is approved", async () => {
+    const api = fakeApi({
+      createImport: vi.fn().mockResolvedValue(ready),
+      preview: vi.fn().mockResolvedValue(previewPage()),
+      approve: vi.fn().mockResolvedValue(approved),
+      report: vi.fn().mockResolvedValue(priceReport()),
+    });
+    renderWithI18n(<ImportWizard api={api} />);
+    await startImport();
+    await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Continue to approval" }));
+    expect(api.report).not.toHaveBeenCalled(); // nothing to compare before the user signs
+
+    await userEvent.click(await screen.findByRole("button", { name: "Approve import" }));
+
+    expect(await screen.findByRole("heading", { level: 2, name: /312 unchanged, 85 up/ })).toBeInTheDocument();
+    expect(api.report).toHaveBeenCalledWith("s1", undefined);
+  });
+
+  it("says so when an approved import is the first of its supplier", async () => {
+    const api = fakeApi({
+      createImport: vi.fn().mockResolvedValue(ready),
+      preview: vi.fn().mockResolvedValue(previewPage()),
+      approve: vi.fn().mockResolvedValue(approved),
+    });
+    renderWithI18n(<ImportWizard api={api} />);
+    await startImport();
+    await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Continue to approval" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Approve import" }));
+
+    expect(await screen.findByText(/This is the first approved list from Ferreteria Ejemplo/)).toBeInTheDocument();
   });
 
   it("shows the reused plan and what changed on the columns step", async () => {
