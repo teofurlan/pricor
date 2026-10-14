@@ -19,6 +19,13 @@ Endpoints:
     POST /imports/{id}/answers    {"question_id": "currency", "option": "ARS"}
     GET  /imports/{id}/preview    ?offset=0&limit=50  -> per-row original, trace, final values
     POST /imports/{id}/approve    freezes the plan and the result
+    GET  /imports/{id}/export     ?format=csv|xlsx (default csv)  -> the products file
+    GET  /imports/{id}/rejected   ?format=csv|xlsx (default csv)  -> the rejected-rows report
+
+Both downloads are attachments (`Content-Disposition`) and exist only for approved
+sessions (409 otherwise); an unknown `format` is a 422. The XLSX export carries the
+rejected rows as a second sheet. Column order and text/number rules are in
+`pricor.ports.exporter` and the exporter modules.
 
 Errors share one body, `{"error": {"code": "...", "message": "..."}}`, with
 404 (unknown session), 409 (operation not allowed in this state), 413 (file too
@@ -36,7 +43,7 @@ from typing import Any
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 from pricor.application.errors import (
@@ -45,6 +52,9 @@ from pricor.application.errors import (
     InvalidOperationError,
     NoAcceptedRowsError,
 )
+from pricor.adapters.csv_exporter import CsvExporter
+from pricor.adapters.xlsx_exporter import XlsxExporter
+from pricor.application.export_import import ExportedFile, ExportImport
 from pricor.application.import_first_time import ImportFirstTime
 from pricor.application.questions import Question
 from pricor.domain.roles import ColumnRole
@@ -68,6 +78,7 @@ class ApiDependencies:
     use_case: ImportFirstTime
     max_upload_bytes: int = MAX_UPLOAD_BYTES
     upload_dir: Path | None = None  # parent for temporary uploads; the system default if None
+    exports: ExportImport | None = None  # CSV and XLSX exporters over the use case if None
 
 
 class HeaderBody(BaseModel):
@@ -183,6 +194,15 @@ def preview_body(page: PreviewPage) -> dict[str, Any]:
 # -- errors -----------------------------------------------------------------------
 
 
+def _download(file: ExportedFile) -> Response:
+    # Filenames are ASCII slugs built by the use case: safe inside a quoted header value.
+    return Response(
+        file.content,
+        media_type=file.media_type,
+        headers={"Content-Disposition": f'attachment; filename="{file.filename}"'},
+    )
+
+
 def _error(status: int, code: str, message: str) -> JSONResponse:
     return JSONResponse({"error": {"code": code, "message": message}}, status_code=status)
 
@@ -267,6 +287,9 @@ def _store_upload(upload: UploadFile, directory: Path, limit: int) -> Path:
 def create_app(dependencies: ApiDependencies) -> FastAPI:
     app = FastAPI(title="Pricor", version="0.1.0")
     use_case = dependencies.use_case
+    exports = dependencies.exports or ExportImport(
+        use_case.get, [CsvExporter(), XlsxExporter()]
+    )
     _install_error_handlers(app)
 
     @app.post("/imports", status_code=201)
@@ -310,5 +333,13 @@ def create_app(dependencies: ApiDependencies) -> FastAPI:
     @app.post("/imports/{session_id}/approve")
     def approve(session_id: str) -> dict[str, Any]:
         return session_state(use_case.approve(session_id))
+
+    @app.get("/imports/{session_id}/export")
+    def export_products(session_id: str, format: str = "csv") -> Response:
+        return _download(exports.products(session_id, format))
+
+    @app.get("/imports/{session_id}/rejected")
+    def export_rejected(session_id: str, format: str = "csv") -> Response:
+        return _download(exports.rejected(session_id, format))
 
     return app
