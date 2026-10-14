@@ -28,6 +28,7 @@ from .cells import (
     is_blank,
 )
 from .parsing import CellError, normalize_text, parse_number
+from .plan import column_header
 
 HEADER_SEARCH_ROWS = 30
 _MAX_REPRESENTATIVE = 5
@@ -86,6 +87,11 @@ class ColumnProfile:
     number_format: NumberFormat | None
     samples: tuple[str, ...]
     atypical: tuple[Sample, ...]
+
+    @property
+    def plan_header(self) -> str:
+        """The header plans use for this column (`column_N` when it has none)."""
+        return column_header(self.index, self.raw_header)
 
 
 @dataclass(frozen=True)
@@ -387,6 +393,6 @@ def engine_input(
     """
     if profile.header_row is None:
         raise ValueError("no header row was detected; choose one before running a plan")
-    headers = [column.raw_header for column in profile.columns]
+    headers = [column.plan_header for column in profile.columns]
     data = [(index + 1, rows[index]) for index in profile.indexes_of(RowClass.DATA)]
     return headers, data

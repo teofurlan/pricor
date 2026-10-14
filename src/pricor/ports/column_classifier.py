@@ -8,25 +8,10 @@ and an optional latency for that purpose.
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from enum import StrEnum
 from typing import Protocol
 
 from pricor.domain.profile import ColumnProfile, SheetProfile
-
-
-class ColumnRole(StrEnum):
-    """Closed set of roles a column can play in a supplier price list."""
-
-    CODE = "code"
-    DESCRIPTION = "description"
-    COST_PRICE = "cost_price"
-    RETAIL_PRICE = "retail_price"
-    VAT_RATE = "vat_rate"
-    UNITS_PER_PACK = "units_per_pack"
-    BARCODE = "barcode"
-    DISCOUNT = "discount"
-    CURRENCY = "currency"
-    IGNORE = "ignore"
+from pricor.domain.roles import ColumnRole
 
 
 @dataclass(frozen=True)

@@ -47,6 +47,11 @@ _NORMALIZABLE_FIELDS = frozenset(
 )
 
 
+def column_header(index: int, raw_header: str) -> str:
+    """Header a plan uses to reference a column; header-less columns become `column_N`."""
+    return raw_header.strip() or f"column_{index}"
+
+
 class PlanValidationError(Exception):
     """Raised when a plan is invalid. Carries every problem found."""
 

@@ -33,6 +33,7 @@ from .plan import (
     ParseNumber,
     PerUnit,
     StripVat,
+    column_header,
 )
 
 # Working precision for intermediate results; far beyond any price list.
@@ -107,7 +108,9 @@ def check_compatibility(plan: ImportPlan, headers: Sequence[str]) -> None:
                 f"column {ref.index} ('{ref.header}') does not exist; "
                 f"the file has {len(headers)} columns"
             )
-        elif _normalize_header(str(headers[ref.index])) != _normalize_header(ref.header):
+        elif _normalize_header(column_header(ref.index, str(headers[ref.index]))) != (
+            _normalize_header(ref.header)
+        ):
             problems.append(
                 f"column {ref.index} is '{headers[ref.index]}' in the file "
                 f"but the plan expects '{ref.header}'"

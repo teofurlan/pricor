@@ -259,3 +259,14 @@ def test_incompatible_plan_executes_nothing():
     headers = [h.upper() if i != 0 else "Otro" for i, h in enumerate(GOLDEN_HEADERS)]
     with pytest.raises(PlanIncompatibleError):
         run([GOLDEN_ROW], headers=headers)
+
+
+def test_blank_file_header_matches_the_synthesized_plan_header():
+    plan = golden_plan_dict()
+    plan["steps"][2]["column"]["header"] = "column_2"
+    headers = list(GOLDEN_HEADERS)
+    headers[2] = ""
+
+    result = run([GOLDEN_ROW], plan, headers)
+
+    assert result.rejected == ()
