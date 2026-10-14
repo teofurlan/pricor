@@ -14,6 +14,7 @@ from typing import Any
 from .contract import REQUIRED_FIELDS, ContractRecord, TargetField
 from .parsing import (
     CellError,
+    lookup_key,
     normalize_text,
     parse_discounts,
     parse_number,
@@ -288,10 +289,10 @@ class _RowRun:
     def _map_values(self, index: int, step: MapValues) -> None:
         key = normalize_text(_cell(self.row, step.column.index))
         table = self.tables[index]
-        if key.casefold() not in table:
+        if lookup_key(key) not in table:
             self._reject(step.column, f"unmapped value {key!r}", step.to)
             return
-        self.fields[step.to] = table[key.casefold()]
+        self.fields[step.to] = table[lookup_key(key)]
 
     # -- closing checks --
 
@@ -331,7 +332,7 @@ class _RowRun:
 
 def _normalized_tables(plan: ImportPlan) -> dict[int, dict[str, Decimal | str]]:
     return {
-        index: {normalize_text(key).casefold(): value for key, value in step.table.items()}
+        index: {lookup_key(key): value for key, value in step.table.items()}
         for index, step in enumerate(plan.steps)
         if isinstance(step, MapValues)
     }

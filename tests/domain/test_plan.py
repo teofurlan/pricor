@@ -328,3 +328,25 @@ def test_non_string_junk_in_enumerated_params_is_rejected_not_crashing(junk):
     data["steps"].append({"op": junk})
 
     assert len(problems_for(data)) >= 5
+
+
+@pytest.mark.parametrize(
+    "table",
+    [
+        {"U$S": 21, "u$s": 10.5},
+        {"Dolar  Blue": 21, "dolar blue": 10.5},
+        {"a b": 21, " A B ": 10.5},
+    ],
+)
+def test_map_values_rejects_keys_that_collide_after_normalization(table):
+    data = golden_plan_dict()
+    data["steps"][4]["table"] = table
+    found = [p for p in problems_for(data) if "steps[4].table" in p and "collide" in p]
+    assert found
+    assert all(repr(key) in found[0] for key in table)
+
+
+def test_map_values_accepts_distinct_normalized_keys():
+    data = golden_plan_dict()
+    data["steps"][4]["table"] = {"21%": 21, "10,5%": 10.5, "0%": 0}
+    assert parse_plan(data).steps[4].table["0%"] == 0

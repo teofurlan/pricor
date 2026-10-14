@@ -13,6 +13,7 @@ from enum import StrEnum
 from typing import Any
 
 from .contract import REQUIRED_FIELDS, TEXT_FIELDS, TargetField
+from .parsing import lookup_key
 
 SUPPORTED_CONTRACT_VERSIONS = frozenset({"1"})
 DECIMAL_SEPARATORS = frozenset({",", "."})
@@ -382,6 +383,17 @@ def _parse_table_value(value: Any, target: TargetField, path: str, problems: _Pr
     return value
 
 
+def _keys_are_distinct(table: Mapping[str, Any], path: str, problems: _Problems) -> bool:
+    """The engine looks cells up by `lookup_key`; two keys with the same one would shadow each other."""
+    groups: dict[str, list[str]] = {}
+    for key in table:
+        groups.setdefault(lookup_key(key), []).append(key)
+    collisions = [keys for keys in groups.values() if len(keys) > 1]
+    for keys in collisions:
+        problems.add(path, "keys collide after normalization: " + ", ".join(repr(k) for k in keys))
+    return not collisions
+
+
 def _parse_map_values(step: dict, path: str, problems: _Problems) -> Step | None:
     if not _check_keys(step, {"column", "table", "to"}, {"op"}, path, problems, "parameter"):
         return None
@@ -402,7 +414,11 @@ def _parse_map_values(step: dict, path: str, problems: _Problems) -> Step | None
         parsed = _parse_table_value(value, to, f"{table_path}[{key!r}]", problems)
         if parsed is not None:
             table[key] = parsed
-    return MapValues(column, table, to) if len(table) == len(raw) else None
+    if len(table) != len(raw):
+        return None
+    if not _keys_are_distinct(table, table_path, problems):
+        return None
+    return MapValues(column, table, to)
 
 
 def _parse_constant(step: dict, path: str, problems: _Problems) -> Step | None:

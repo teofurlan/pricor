@@ -125,3 +125,8 @@ def parse_units(text: str) -> Decimal:
 def normalize_text(text: str) -> str:
     """Trim, collapse inner whitespace, unify non-breaking spaces, drop zero-width chars."""
     return " ".join(text.translate(_ZERO_WIDTH).split())
+
+
+def lookup_key(text: str) -> str:
+    """Key under which `map_values` compares a cell with a table key (trim, collapse, casefold)."""
+    return normalize_text(text).casefold()
