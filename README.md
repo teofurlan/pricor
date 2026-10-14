@@ -2,10 +2,33 @@
 
 Pricor turns heterogeneous supplier price lists (Excel/CSV) from Argentine stores into a normalized catalog. Models propose an import plan from a closed catalog of operations, and a deterministic engine executes it with exact decimal math, so no model ever touches the numbers.
 
+## Quick start
+
+Requires Python 3.13 with [uv](https://docs.astral.sh/uv/), Node 22 with npm, and [Ollama](https://ollama.com) with the `gemma4:e4b` model pulled.
+
+```text
+# 1. Start Ollama with flash attention off (gemma4:e4b crashes with it on the tested setup)
+OLLAMA_FLASH_ATTENTION=0 ollama serve
+
+# 2. Build the web app once (the build output is generated, not committed)
+npm --prefix web ci
+npm --prefix web run build
+
+# 3. Run Pricor: it serves the app and opens your browser
+uv run pricor
+```
+
+`pricor` listens on `http://127.0.0.1:8000` (a free port is used if 8000 is busy) and opens the browser once the server is up. Use `pricor --no-browser` to skip the browser, `--port N` to choose the port. If you start it before building the web app, `/` shows how to build it and the API keeps working.
+
+Without Ollama the import still works: Gemma is skipped, you confirm the columns and answer every question yourself, and the page says so.
+
+For front-end development, run `uv run pricor --no-browser` and, in another terminal, `npm --prefix web run dev` (http://localhost:5173, API calls are proxied to port 8000; set `PRICOR_API` to proxy elsewhere). The front-end tests run with `npm --prefix web run test`.
+
 ## Running the tests
 
 ```text
-uv run pytest
+uv run pytest                    # backend
+npm --prefix web run test        # front end
 ```
 
 Requires Python 3.13 and [uv](https://docs.astral.sh/uv/).
@@ -15,7 +38,7 @@ Requires Python 3.13 and [uv](https://docs.astral.sh/uv/).
 Pricor serves the first-import flow over HTTP (FastAPI):
 
 ```text
-uv run pricor serve                      # http://127.0.0.1:8000, docs at /docs
+uv run pricor serve --no-browser         # no browser; http://127.0.0.1:8000, API docs at /docs
 uv run uvicorn pricor.entrypoints.wiring:app_from_env --factory --port 8000
 ```
 

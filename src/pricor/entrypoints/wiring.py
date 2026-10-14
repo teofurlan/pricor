@@ -30,6 +30,7 @@ from pricor.adapters.sqlite_store import SqliteDatabase
 from pricor.application.cascade import ClassifierStage
 from pricor.application.import_first_time import ImportFirstTime
 from pricor.entrypoints.api import ApiDependencies, create_app
+from pricor.entrypoints.web_app import DEFAULT_WEB_DIST
 
 
 def ollama_client_from_env(env: Mapping[str, str]) -> OllamaClient:
@@ -74,7 +75,7 @@ def dependencies_from_env(env: Mapping[str, str]) -> ApiDependencies:
         GemmaPlanAdvisor(client),
         approvals=database,
     )
-    return ApiDependencies(use_case)
+    return ApiDependencies(use_case, web_dist=DEFAULT_WEB_DIST)
 
 
 def app_from_env() -> FastAPI:

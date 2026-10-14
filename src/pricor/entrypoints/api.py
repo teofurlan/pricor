@@ -60,6 +60,7 @@ from pricor.application.questions import Question
 from pricor.domain.roles import ColumnRole
 from pricor.ports.import_session import ImportSession, PreviewPage
 from pricor.ports.import_session_repository import SessionNotFoundError
+from pricor.entrypoints.web_app import install_web_app
 from pricor.ports.spreadsheet import (
     FileTooLargeError,
     SpreadsheetError,
@@ -79,6 +80,7 @@ class ApiDependencies:
     max_upload_bytes: int = MAX_UPLOAD_BYTES
     upload_dir: Path | None = None  # parent for temporary uploads; the system default if None
     exports: ExportImport | None = None  # CSV and XLSX exporters over the use case if None
+    web_dist: Path | None = None  # built web app to serve at `/`; API only if None
 
 
 class HeaderBody(BaseModel):
@@ -344,4 +346,6 @@ def create_app(dependencies: ApiDependencies) -> FastAPI:
     def export_rejected(session_id: str, format: str = "csv") -> Response:
         return _download(exports.rejected(session_id, format))
 
+    if dependencies.web_dist is not None:
+        install_web_app(app, dependencies.web_dist)
     return app
