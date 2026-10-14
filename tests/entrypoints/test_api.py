@@ -313,3 +313,12 @@ def test_approving_with_no_accepted_rows_is_a_409():
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "no_accepted_rows"
     assert client.get(f"/imports/{session_id}").json()["approved"] is False
+
+
+def test_columns_carry_a_few_sample_values_for_the_review_table():
+    client = make_client()
+    state = upload(client).json()
+    by_header = {column["header"]: column for column in state["columns"]}
+    assert by_header["Descripcion"]["samples"]
+    assert set(by_header["Descripcion"]["samples"]) <= {"Tornillo", "Tuerca", "Arandela", "Clavo", "Taco", "Brida"}
+    assert all(isinstance(value, str) for column in state["columns"] for value in column["samples"])

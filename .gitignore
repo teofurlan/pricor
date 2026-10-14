@@ -17,3 +17,6 @@ build/
 *.db-wal
 *.db-shm
 exports/
+
+# Web build output (generate with: npm --prefix web ci && npm --prefix web run build)
+src/pricor/web_dist/

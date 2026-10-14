@@ -125,6 +125,7 @@ def _question(question: Question) -> dict[str, Any]:
 
 def session_state(session: ImportSession) -> dict[str, Any]:
     profile = session.profile
+    samples = {column.index: list(column.samples) for column in profile.columns}
     return {
         "id": session.id,
         "status": session.status.value,
@@ -148,6 +149,7 @@ def session_state(session: ImportSession) -> dict[str, Any]:
                 "decided_by": column.decided_by,
                 "score": column.score,
                 "rationale": column.rationale,
+                "samples": samples.get(column.index, []),
                 "proposals": [
                     {
                         "stage": item.stage,
