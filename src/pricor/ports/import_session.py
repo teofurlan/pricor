@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
-from pricor.application.questions import Question
+from pricor.ports.question_model import Question
 from pricor.domain.engine import ImportResult
 from pricor.domain.plan import ImportPlan
 from pricor.domain.profile import SheetProfile

@@ -8,9 +8,9 @@ unsettled after the last stage get no role: the user decides.
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
-from pricor.application.import_session import ColumnDecision, Notice, StageProposal
 from pricor.domain.profile import SheetProfile
 from pricor.ports.column_classifier import ColumnClassifier
+from pricor.ports.import_session import ColumnDecision, Notice, StageProposal
 from pricor.ports.model_errors import ModelError, ModelTimeoutError, ModelUnavailableError
 
 # PLACEHOLDER: not calibrated on held-out data. It is calibrated in T21 (Q24);

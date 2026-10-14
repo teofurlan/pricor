@@ -13,9 +13,9 @@ from pricor.application.import_first_time import (
     ClassifierStage,
     ImportFirstTime,
 )
-from pricor.application.import_session import SessionStatus
 from pricor.domain.plan_builder import ConstantSource
 from pricor.domain.roles import ColumnRole as R
+from pricor.ports.import_session import SessionStatus
 from pricor.ports.import_session_repository import SessionNotFoundError
 from pricor.ports.model_errors import ModelSchemaError, ModelTimeoutError, ModelUnavailableError
 from pricor.ports.plan_advisor import (

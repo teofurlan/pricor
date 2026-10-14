@@ -46,9 +46,9 @@ from pricor.application.errors import (
     NoAcceptedRowsError,
 )
 from pricor.application.import_first_time import ImportFirstTime
-from pricor.application.import_session import ImportSession, PreviewPage
 from pricor.application.questions import Question
 from pricor.domain.roles import ColumnRole
+from pricor.ports.import_session import ImportSession, PreviewPage
 from pricor.ports.import_session_repository import SessionNotFoundError
 from pricor.ports.spreadsheet import (
     FileTooLargeError,

@@ -24,16 +24,6 @@ from pricor.application.errors import (
     InvalidOperationError,
     NoAcceptedRowsError,
 )
-from pricor.application.import_session import (
-    ColumnDecision,
-    HeaderCandidate,
-    ImportSession,
-    Notice,
-    PreviewPage,
-    PreviewRow,
-    PreviewTraceStep,
-    SessionStatus,
-)
 from pricor.application.questions import build_questions, decorate, parse_answer, question_for
 from pricor.domain.cells import display
 from pricor.domain.contract import ContractRecord
@@ -43,6 +33,16 @@ from pricor.domain.plan_builder import PlanParameters, RoleAssignment, build_pla
 from pricor.domain.profile import HEADER_SEARCH_ROWS, RowClass, SheetProfile, profile_sheet
 from pricor.domain.roles import ColumnRole
 from pricor.ports.column_classifier import ColumnClassification
+from pricor.ports.import_session import (
+    ColumnDecision,
+    HeaderCandidate,
+    ImportSession,
+    Notice,
+    PreviewPage,
+    PreviewRow,
+    PreviewTraceStep,
+    SessionStatus,
+)
 from pricor.ports.import_session_repository import ImportSessionRepository
 from pricor.ports.model_errors import ModelError, ModelTimeoutError, ModelUnavailableError
 from pricor.ports.plan_advisor import ParameterId, PlanAdvisor, parse_value, with_answer

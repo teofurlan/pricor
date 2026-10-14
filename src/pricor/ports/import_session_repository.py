@@ -8,7 +8,7 @@ may hand out copies.
 
 from typing import Protocol
 
-from pricor.application.import_session import ImportSession
+from pricor.ports.import_session import ImportSession
 
 
 class SessionNotFoundError(Exception):

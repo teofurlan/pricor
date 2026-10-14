@@ -1,6 +1,6 @@
 """In-memory `ImportSessionRepository` (sessions live as long as the process)."""
 
-from pricor.application.import_session import ImportSession
+from pricor.ports.import_session import ImportSession
 from pricor.ports.import_session_repository import SessionNotFoundError
 
 
