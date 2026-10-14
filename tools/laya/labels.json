@@ -1,0 +1,523 @@
+{
+ "description": "Hand-labeled reference roles for the real columns of the downloaded price lists (headers only, no cell values). 'header_row' is the 0-based header row of each sheet (null: the sheet has no header row). dipel-lista-000 is encrypted and simulated files are not labeled.",
+ "sheets": [
+  {
+   "source_id": "bulonera-camba-completa",
+   "sheet": "Lista Sabana",
+   "header_row": 0
+  },
+  {
+   "source_id": "bulonera-camba-completa",
+   "sheet": "Codigos Viejos",
+   "header_row": 0
+  },
+  {
+   "source_id": "dipel-haga-su-pedido",
+   "sheet": "Hoja1",
+   "header_row": 16
+  },
+  {
+   "source_id": "dipel-lista-pagina-web",
+   "sheet": "LISTA",
+   "header_row": 16
+  },
+  {
+   "source_id": "dipel-precio-sugerido",
+   "sheet": "Hoja1",
+   "header_row": 14
+  },
+  {
+   "source_id": "distribucion-masiva-ferreteria",
+   "sheet": "ferreteria",
+   "header_row": 0
+  },
+  {
+   "source_id": "distrilap-computacion",
+   "sheet": "Worksheet",
+   "header_row": null
+  },
+  {
+   "source_id": "distrilap-libreria",
+   "sheet": "Worksheet",
+   "header_row": null
+  },
+  {
+   "source_id": "electricidad-emilio",
+   "sheet": "LISTA",
+   "header_row": 0
+  },
+  {
+   "source_id": "megamayorista-libreria",
+   "sheet": "Hoja1",
+   "header_row": 0
+  }
+ ],
+ "columns": [
+  {
+   "source_id": "bulonera-camba-completa",
+   "sheet": "Lista Sabana",
+   "index": 0,
+   "header": "Codigo ID",
+   "role": "code",
+   "note": "Internal numeric id of the product; the list's own reference is column 1."
+  },
+  {
+   "source_id": "bulonera-camba-completa",
+   "sheet": "Lista Sabana",
+   "index": 1,
+   "header": "Referencia interna",
+   "role": "code"
+  },
+  {
+   "source_id": "bulonera-camba-completa",
+   "sheet": "Lista Sabana",
+   "index": 2,
+   "header": "Nombre",
+   "role": "description"
+  },
+  {
+   "source_id": "bulonera-camba-completa",
+   "sheet": "Lista Sabana",
+   "index": 3,
+   "header": "Última actualización el",
+   "role": "ignore",
+   "note": "Timestamp of the last update."
+  },
+  {
+   "source_id": "bulonera-camba-completa",
+   "sheet": "Lista Sabana",
+   "index": 4,
+   "header": "Precio de venta",
+   "role": "cost_price",
+   "note": "Ambiguous: 'sale price' of a wholesaler list; it is the only price column, so it is what the buyer pays."
+  },
+  {
+   "source_id": "bulonera-camba-completa",
+   "sheet": "Lista Sabana",
+   "index": 5,
+   "header": "Cant.1",
+   "role": "ignore",
+   "note": "Ambiguous: looks like quantity breaks (500, 1000, ...); could be units per pack."
+  },
+  {
+   "source_id": "bulonera-camba-completa",
+   "sheet": "Lista Sabana",
+   "index": 6,
+   "header": "Cant.2",
+   "role": "ignore",
+   "note": "Ambiguous: same as Cant.1, a second quantity break."
+  },
+  {
+   "source_id": "bulonera-camba-completa",
+   "sheet": "Lista Sabana",
+   "index": 7,
+   "header": "Código de barras",
+   "role": "barcode",
+   "note": "The whole column is empty in this snapshot; the header names it."
+  },
+  {
+   "source_id": "bulonera-camba-completa",
+   "sheet": "Lista Sabana",
+   "index": 8,
+   "header": "Peso",
+   "role": "ignore"
+  },
+  {
+   "source_id": "bulonera-camba-completa",
+   "sheet": "Lista Sabana",
+   "index": 9,
+   "header": "Categoría del producto",
+   "role": "ignore"
+  },
+  {
+   "source_id": "bulonera-camba-completa",
+   "sheet": "Lista Sabana",
+   "index": 10,
+   "header": "Activo",
+   "role": "ignore"
+  },
+  {
+   "source_id": "bulonera-camba-completa",
+   "sheet": "Codigos Viejos",
+   "index": 0,
+   "header": "Código",
+   "role": "code",
+   "note": "Lookup sheet of previous codes, not a price list."
+  },
+  {
+   "source_id": "bulonera-camba-completa",
+   "sheet": "Codigos Viejos",
+   "index": 1,
+   "header": "CodigoInt",
+   "role": "code",
+   "note": "Internal numeric id."
+  },
+  {
+   "source_id": "bulonera-camba-completa",
+   "sheet": "Codigos Viejos",
+   "index": 2,
+   "header": "Articulo",
+   "role": "description"
+  },
+  {
+   "source_id": "bulonera-camba-completa",
+   "sheet": "Codigos Viejos",
+   "index": 3,
+   "header": "Código",
+   "role": "code",
+   "note": "Repeats column 0 under the same header."
+  },
+  {
+   "source_id": "dipel-haga-su-pedido",
+   "sheet": "Hoja1",
+   "index": 0,
+   "header": "",
+   "role": "ignore",
+   "note": "Unnamed key column: brand and category glued together."
+  },
+  {
+   "source_id": "dipel-haga-su-pedido",
+   "sheet": "Hoja1",
+   "index": 1,
+   "header": "CODIGO",
+   "role": "code"
+  },
+  {
+   "source_id": "dipel-haga-su-pedido",
+   "sheet": "Hoja1",
+   "index": 2,
+   "header": "DESCRIPCION",
+   "role": "description"
+  },
+  {
+   "source_id": "dipel-haga-su-pedido",
+   "sheet": "Hoja1",
+   "index": 3,
+   "header": "MARCA",
+   "role": "ignore"
+  },
+  {
+   "source_id": "dipel-haga-su-pedido",
+   "sheet": "Hoja1",
+   "index": 4,
+   "header": "RUBRO",
+   "role": "ignore"
+  },
+  {
+   "source_id": "dipel-haga-su-pedido",
+   "sheet": "Hoja1",
+   "index": 5,
+   "header": "PRECIO LISTA",
+   "role": "cost_price"
+  },
+  {
+   "source_id": "dipel-haga-su-pedido",
+   "sheet": "Hoja1",
+   "index": 6,
+   "header": "PRECIO VENTA",
+   "role": "retail_price",
+   "note": "Ambiguous: the list says to load a margin to use it as a public price, so it is the list price plus margin."
+  },
+  {
+   "source_id": "dipel-haga-su-pedido",
+   "sheet": "Hoja1",
+   "index": 7,
+   "header": "CANTIDAD",
+   "role": "ignore",
+   "note": "Order quantity; empty in this snapshot."
+  },
+  {
+   "source_id": "dipel-haga-su-pedido",
+   "sheet": "Hoja1",
+   "index": 8,
+   "header": "IMPORTE",
+   "role": "ignore",
+   "note": "Order line amount."
+  },
+  {
+   "source_id": "dipel-lista-pagina-web",
+   "sheet": "LISTA",
+   "index": 0,
+   "header": "",
+   "role": "ignore",
+   "note": "Unnamed key column: brand and category glued together."
+  },
+  {
+   "source_id": "dipel-lista-pagina-web",
+   "sheet": "LISTA",
+   "index": 1,
+   "header": "CODIGO",
+   "role": "code"
+  },
+  {
+   "source_id": "dipel-lista-pagina-web",
+   "sheet": "LISTA",
+   "index": 2,
+   "header": "DESCRIPCION",
+   "role": "description"
+  },
+  {
+   "source_id": "dipel-lista-pagina-web",
+   "sheet": "LISTA",
+   "index": 3,
+   "header": "MARCA",
+   "role": "ignore"
+  },
+  {
+   "source_id": "dipel-lista-pagina-web",
+   "sheet": "LISTA",
+   "index": 4,
+   "header": "RUBRO",
+   "role": "ignore"
+  },
+  {
+   "source_id": "dipel-lista-pagina-web",
+   "sheet": "LISTA",
+   "index": 5,
+   "header": "PRECIO LISTA",
+   "role": "cost_price"
+  },
+  {
+   "source_id": "dipel-lista-pagina-web",
+   "sheet": "LISTA",
+   "index": 6,
+   "header": "PRECIO VENTA",
+   "role": "retail_price",
+   "note": "Ambiguous: the list says to load a margin to use it as a public price, so it is the list price plus margin."
+  },
+  {
+   "source_id": "dipel-lista-pagina-web",
+   "sheet": "LISTA",
+   "index": 7,
+   "header": "",
+   "role": "ignore",
+   "note": "Unnamed and empty."
+  },
+  {
+   "source_id": "dipel-precio-sugerido",
+   "sheet": "Hoja1",
+   "index": 0,
+   "header": "CODIGO",
+   "role": "code",
+   "note": "The header row sits under a contact preamble that the profiler mistakes for the header."
+  },
+  {
+   "source_id": "dipel-precio-sugerido",
+   "sheet": "Hoja1",
+   "index": 1,
+   "header": "DESCRIPCION",
+   "role": "description"
+  },
+  {
+   "source_id": "dipel-precio-sugerido",
+   "sheet": "Hoja1",
+   "index": 2,
+   "header": "MARCA",
+   "role": "ignore"
+  },
+  {
+   "source_id": "dipel-precio-sugerido",
+   "sheet": "Hoja1",
+   "index": 3,
+   "header": "RUBRO",
+   "role": "ignore"
+  },
+  {
+   "source_id": "dipel-precio-sugerido",
+   "sheet": "Hoja1",
+   "index": 4,
+   "header": "PRECIO SUGERIDO",
+   "role": "retail_price"
+  },
+  {
+   "source_id": "dipel-precio-sugerido",
+   "sheet": "Hoja1",
+   "index": 5,
+   "header": "",
+   "role": "ignore",
+   "note": "Unnamed and empty."
+  },
+  {
+   "source_id": "distribucion-masiva-ferreteria",
+   "sheet": "ferreteria",
+   "index": 0,
+   "header": "codart",
+   "role": "code"
+  },
+  {
+   "source_id": "distribucion-masiva-ferreteria",
+   "sheet": "ferreteria",
+   "index": 1,
+   "header": "cantxbulto",
+   "role": "units_per_pack"
+  },
+  {
+   "source_id": "distribucion-masiva-ferreteria",
+   "sheet": "ferreteria",
+   "index": 2,
+   "header": "interno",
+   "role": "ignore",
+   "note": "Ambiguous: small counts (0, 15, 30, 75) that may be an inner-pack quantity."
+  },
+  {
+   "source_id": "distribucion-masiva-ferreteria",
+   "sheet": "ferreteria",
+   "index": 3,
+   "header": "nombre",
+   "role": "description"
+  },
+  {
+   "source_id": "distribucion-masiva-ferreteria",
+   "sheet": "ferreteria",
+   "index": 4,
+   "header": "rubro",
+   "role": "ignore",
+   "note": "One category id for the whole file."
+  },
+  {
+   "source_id": "distribucion-masiva-ferreteria",
+   "sheet": "ferreteria",
+   "index": 5,
+   "header": "precio1",
+   "role": "cost_price"
+  },
+  {
+   "source_id": "distrilap-computacion",
+   "sheet": "Worksheet",
+   "index": 0,
+   "header": "",
+   "role": "code",
+   "note": "Header-less sheet."
+  },
+  {
+   "source_id": "distrilap-computacion",
+   "sheet": "Worksheet",
+   "index": 1,
+   "header": "",
+   "role": "description",
+   "note": "Header-less sheet."
+  },
+  {
+   "source_id": "distrilap-computacion",
+   "sheet": "Worksheet",
+   "index": 2,
+   "header": "",
+   "role": "cost_price",
+   "note": "Header-less sheet; values carry a $ marker."
+  },
+  {
+   "source_id": "distrilap-libreria",
+   "sheet": "Worksheet",
+   "index": 0,
+   "header": "",
+   "role": "code",
+   "note": "Header-less sheet."
+  },
+  {
+   "source_id": "distrilap-libreria",
+   "sheet": "Worksheet",
+   "index": 1,
+   "header": "",
+   "role": "description",
+   "note": "Header-less sheet."
+  },
+  {
+   "source_id": "distrilap-libreria",
+   "sheet": "Worksheet",
+   "index": 2,
+   "header": "",
+   "role": "cost_price",
+   "note": "Header-less sheet; values carry a $ marker."
+  },
+  {
+   "source_id": "electricidad-emilio",
+   "sheet": "LISTA",
+   "index": 0,
+   "header": "CODIGO",
+   "role": "code",
+   "note": "Empty for about a third of the products; the supplier code is in column 1."
+  },
+  {
+   "source_id": "electricidad-emilio",
+   "sheet": "LISTA",
+   "index": 1,
+   "header": "COD_PROV",
+   "role": "code"
+  },
+  {
+   "source_id": "electricidad-emilio",
+   "sheet": "LISTA",
+   "index": 2,
+   "header": "DESCRIP",
+   "role": "description"
+  },
+  {
+   "source_id": "electricidad-emilio",
+   "sheet": "LISTA",
+   "index": 3,
+   "header": "MONEDA",
+   "role": "currency",
+   "note": "Values are $ and u$s."
+  },
+  {
+   "source_id": "electricidad-emilio",
+   "sheet": "LISTA",
+   "index": 4,
+   "header": "PRECIO",
+   "role": "cost_price"
+  },
+  {
+   "source_id": "electricidad-emilio",
+   "sheet": "LISTA",
+   "index": 5,
+   "header": "DTO_X_CANT",
+   "role": "discount",
+   "note": "Quantity discount rule such as '10% x 10 UN'."
+  },
+  {
+   "source_id": "electricidad-emilio",
+   "sheet": "LISTA",
+   "index": 6,
+   "header": "CAMBIO",
+   "role": "ignore",
+   "note": "Price movement flag (+ or -)."
+  },
+  {
+   "source_id": "megamayorista-libreria",
+   "sheet": "Hoja1",
+   "index": 0,
+   "header": "CODIGO",
+   "role": "code"
+  },
+  {
+   "source_id": "megamayorista-libreria",
+   "sheet": "Hoja1",
+   "index": 1,
+   "header": "DESCRIPCION",
+   "role": "description"
+  },
+  {
+   "source_id": "megamayorista-libreria",
+   "sheet": "Hoja1",
+   "index": 2,
+   "header": "PRECIOS",
+   "role": "cost_price"
+  },
+  {
+   "source_id": "megamayorista-libreria",
+   "sheet": "Hoja1",
+   "index": 3,
+   "header": "ARTICULO",
+   "role": "barcode",
+   "note": "Ambiguous: the header says 'article' but the values are mostly EAN-13 barcodes."
+  },
+  {
+   "source_id": "megamayorista-libreria",
+   "sheet": "Hoja1",
+   "index": 4,
+   "header": "F. Última Modificación",
+   "role": "ignore",
+   "note": "Timestamp of the last modification."
+  }
+ ]
+}

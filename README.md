@@ -84,6 +84,17 @@ If Ollama is down, slow or returns something invalid, the import continues with 
 
 **Model output is never executed.** A model can only pick a role for a column from a closed list and suggest an answer to a question. Questions and their options are deterministic, a suggestion is never applied until the user answers, and the import plan is built and run by deterministic code with exact decimal math. The confidence thresholds that decide which columns are shown to the user are placeholders until they are calibrated on held-out data.
 
+## Laya column classifier (optional)
+
+The column classifier can be fine-tuned locally on a CUDA GPU (about 6 GB of VRAM). The base install does not include torch; the `laya` extra adds `laya==0.4.6` and the CUDA 12.6 build of torch 2.14.1:
+
+```text
+uv sync --extra laya
+uv run python -c "import torch; print(torch.cuda.is_available())"
+```
+
+How the training data is built, how the split by distributor works and how to train and evaluate are in `tools/laya/README.md`.
+
 ## License
 
 Copyright 2026 The Pricor Authors. Licensed under Apache-2.0; see `LICENSE`.

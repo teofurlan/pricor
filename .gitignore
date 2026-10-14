@@ -12,6 +12,7 @@ dist/
 build/
 
 # Local data and generated output
+models/
 *.db
 *.db-journal
 *.db-wal
