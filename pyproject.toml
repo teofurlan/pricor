@@ -5,13 +5,19 @@ description = "Turns heterogeneous supplier price lists into a normalized catalo
 readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "openpyxl>=3.1.5",
+    "xlrd>=2.0.2",
+]
 
 [project.scripts]
 pricor = "pricor.entrypoints.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = [
+    "pytest>=8",
+    "xlwt>=1.3.0",
+]
 
 [build-system]
 requires = ["hatchling"]
