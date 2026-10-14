@@ -34,6 +34,9 @@ HEADER_SEARCH_ROWS = 30
 _MAX_REPRESENTATIVE = 5
 _MAX_OFF_TYPE = 3
 _TYPE_THRESHOLD = 0.8
+# Share of non-empty cells that must read as numbers (plain numbers or percents) for the
+# column to be numeric; the remaining cells are outliers listed as `off_type` samples.
+NUMERIC_MAJORITY_THRESHOLD = 0.8
 _MIN_HEADER_CELL_SHARE = 0.8  # share of non-blank cells that must be non-numeric text
 _HEADER_WIDTH_SHARE = 0.7  # a header must be at least this wide relative to the widest candidate
 _TOTAL_LABEL = re.compile(r"(?:sub\s*-?\s*)?total(?:es)?\b", re.IGNORECASE)
@@ -186,8 +189,13 @@ def _detect_header(rows: Sequence[Row]) -> tuple[int | None, float, bool]:
 # -- row classification ---------------------------------------------------------
 
 
+def _is_numeric_zero(cell: Any) -> bool:
+    return isinstance(cell, int | Decimal) and not isinstance(cell, bool) and cell == 0
+
+
 def _classify_row(row: Row, index: int, header_row: int | None, table_width: int) -> RowClass:
-    cells = _non_blank(row)
+    # Numeric zeros are filler (exports pad blank rows with a zero price), not content.
+    cells = [cell for cell in _non_blank(row) if not _is_numeric_zero(cell)]
     if not cells:
         return RowClass.EMPTY
     if header_row is not None and index < header_row:
@@ -231,7 +239,7 @@ def _decide_type(shapes: list[CellShape]) -> ColumnType:
         return ColumnType.BARCODE
     if _share(percent, total) >= _TYPE_THRESHOLD:
         return ColumnType.PERCENT
-    if _share(numeric, total) >= _TYPE_THRESHOLD:
+    if _share(numeric + percent, total) >= NUMERIC_MAJORITY_THRESHOLD:
         if _share(marked, total) >= 0.5:
             return ColumnType.MONEY
         if any(shape.kind is CellKind.DECIMAL for shape in shapes):

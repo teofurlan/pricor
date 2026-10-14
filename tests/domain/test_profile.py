@@ -407,3 +407,87 @@ def test_forced_header_row_none_means_header_less():
 def test_forced_header_row_out_of_range_is_rejected():
     with pytest.raises(ValueError, match="header row"):
         profile_sheet(_sheet(), header_row=99)
+
+
+# -- zero-padded rows --
+
+ZERO_HEADER = ("CODIGO", "COD_PROV", "DESCRIP", "MONEDA", "PRECIO", "DTO", "CAMBIO")
+
+
+def _zero_sheet(*extra: tuple) -> list[tuple]:
+    data = [(i, f"P{i}", f"ARTICULO {i}", "$", Decimal(100 + i), None, None) for i in range(1, 4)]
+    return [ZERO_HEADER, *extra, *data]
+
+
+def _kinds(profile) -> dict[int, RowClass]:
+    return {item.index: item.kind for item in profile.row_classes}
+
+
+def test_row_whose_only_content_is_numeric_zeros_is_empty():
+    profile = profile_sheet(_zero_sheet((None, None, None, None, 0, None, None)))
+
+    assert _kinds(profile)[1] is RowClass.EMPTY
+
+
+def test_row_with_one_text_cell_and_zeros_is_a_section():
+    banner = (None, None, "*** ANTENAS TV. COLOR ***", None, 0, None, None)
+
+    profile = profile_sheet(_zero_sheet(banner))
+
+    assert _kinds(profile)[1] is RowClass.SECTION
+
+
+def test_zero_price_with_real_content_stays_data():
+    sparse = ("X1", None, "ARTICULO SIN PRECIO", "$", 0, None, None)
+
+    profile = profile_sheet(_zero_sheet(sparse))
+
+    assert _kinds(profile)[1] is RowClass.DATA
+
+
+def test_zero_padded_text_row_still_matches_a_total_label():
+    profile = profile_sheet(_zero_sheet((None, None, "TOTAL GENERAL", None, 0, None, None)))
+
+    assert _kinds(profile)[1] is RowClass.TOTAL
+
+
+def test_zero_only_row_above_the_header_is_empty_not_preamble():
+    rows = [(None, None, None, None, 0, None, None), *_zero_sheet()]
+
+    profile = profile_sheet(rows)
+
+    assert profile.header_row == 1
+    assert _kinds(profile)[0] is RowClass.EMPTY
+
+
+# -- numeric-majority tolerance --
+
+
+def _single_column(values: list) -> list[tuple]:
+    return [("Codigo", "Valor"), *[(f"A{i}", value) for i, value in enumerate(values)]]
+
+
+def test_mostly_numeric_column_is_numeric_and_lists_its_outliers():
+    values = ["12.100,00"] * 9 + ["consultar"]
+
+    column = profile_sheet(_single_column(values)).columns[1]
+
+    assert column.apparent_type is ColumnType.DECIMAL
+    assert [s.value for s in column.atypical if s.kind == "off_type"] == ["consultar"]
+
+
+def test_numbers_mixed_with_percent_cells_count_as_numeric_like():
+    values = ["21", "21", "10,5%", "21", "21", "21%", "21", "21", "21", "21"]
+
+    column = profile_sheet(_single_column(values)).columns[1]
+
+    assert column.apparent_type in (ColumnType.INTEGER, ColumnType.DECIMAL)
+    assert [s.value for s in column.atypical if s.kind == "off_type"] == ["10,5%", "21%"]
+
+
+def test_minority_numbers_do_not_make_a_text_column_numeric():
+    values = ["12,50", "tornillo", "tuerca", "arandela", "clavo"]
+
+    column = profile_sheet(_single_column(values)).columns[1]
+
+    assert column.apparent_type is ColumnType.TEXT
