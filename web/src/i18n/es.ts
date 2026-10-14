@@ -13,6 +13,7 @@ export const es: Record<TextKey, string> = {
   "suggestion.uncalibrated": "Sugerido por {who} (sin calibrar: {confidence})",
   "suggestion.calibrated": "Sugerido por {who} (calibrado: {confidence})",
   "suggestion.setting": "Su configuración por defecto",
+  "suggestion.detected": "Detectado en el archivo: confirme o cambie",
 
   "trace.original": "Original",
   "trace.parse_number": "Leído como número",

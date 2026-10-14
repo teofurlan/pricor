@@ -9,6 +9,9 @@ export function SuggestionBadge({ suggestion }: { suggestion: Suggestion }) {
   if (suggestion.suggested_by === "setting") {
     return <Badge tone="user">{t("suggestion.setting")}</Badge>;
   }
+  if (suggestion.suggested_by === "detected") {
+    return <Badge tone="user">{t("suggestion.detected")}</Badge>;
+  }
   const who = ["gemma", "model"].includes(suggestion.suggested_by) ? "Gemma" : suggestion.suggested_by;
   const confidence = Number(suggestion.confidence.toFixed(2));
   return (

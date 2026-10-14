@@ -491,3 +491,25 @@ def test_minority_numbers_do_not_make_a_text_column_numeric():
     column = profile_sheet(_single_column(values)).columns[1]
 
     assert column.apparent_type is ColumnType.TEXT
+
+
+# -- distinct values --
+
+
+def test_a_low_cardinality_column_lists_every_distinct_value_beyond_the_samples():
+    values = ["$", "u$s", "usd", "ars", "eur", "pesos", "dolares"]
+    rows = [("Item", "Moneda")] + [(f"a{i}", values[i % len(values)]) for i in range(30)]
+    column = profile_sheet(rows).columns[1]
+    assert len(column.samples) <= 5
+    assert set(column.distinct_values) == set(values)
+
+
+def test_distinct_values_are_normalized_and_deduplicated():
+    rows = [("Item", "Moneda"), ("a", "  u$s"), ("b", "u$s "), ("c", "$")]
+    column = profile_sheet(rows).columns[1]
+    assert sorted(column.distinct_values) == ["$", "u$s"]
+
+
+def test_a_high_cardinality_column_does_not_list_its_values():
+    rows = [("Item", "Descripcion")] + [(f"a{i}", f"Producto {i}") for i in range(200)]
+    assert profile_sheet(rows).columns[1].distinct_values is None

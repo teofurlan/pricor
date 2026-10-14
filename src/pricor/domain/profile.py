@@ -33,6 +33,8 @@ from .plan import column_header
 HEADER_SEARCH_ROWS = 30
 _MAX_REPRESENTATIVE = 5
 _MAX_OFF_TYPE = 3
+# Columns with at most this many distinct values list all of them (currency, VAT, unit columns).
+MAX_DISTINCT_VALUES = 25
 _TYPE_THRESHOLD = 0.8
 # Share of non-empty cells that must read as numbers (plain numbers or percents) for the
 # column to be numeric; the remaining cells are outliers listed as `off_type` samples.
@@ -90,6 +92,9 @@ class ColumnProfile:
     number_format: NumberFormat | None
     samples: tuple[str, ...]
     atypical: tuple[Sample, ...]
+    # Every distinct (whitespace-normalized) value, or None when the column has more than
+    # `MAX_DISTINCT_VALUES`; unlike `samples` it is complete, so it can be checked against.
+    distinct_values: tuple[str, ...] | None = None
 
     @property
     def plan_header(self) -> str:
@@ -327,6 +332,11 @@ def _atypical(
     return tuple(samples)
 
 
+def _distinct_values(normalized: list[str]) -> tuple[str, ...] | None:
+    distinct = tuple(dict.fromkeys(normalized))
+    return distinct if len(distinct) <= MAX_DISTINCT_VALUES else None
+
+
 def _profile_column(index: int, raw_header: str, data: list[tuple[int, Row]]) -> ColumnProfile:
     entries = [
         (row_index, value, classify_cell(value))
@@ -358,6 +368,7 @@ def _profile_column(index: int, raw_header: str, data: list[tuple[int, Row]]) ->
         number_format=fmt,
         samples=_representative(texts),
         atypical=_atypical(entries, column_type, fmt),
+        distinct_values=_distinct_values(normalized),
     )
 
 

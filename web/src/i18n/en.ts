@@ -10,6 +10,7 @@ export const en = {
   "suggestion.uncalibrated": "Suggested by {who} (uncalibrated: {confidence})",
   "suggestion.calibrated": "Suggested by {who} (calibrated: {confidence})",
   "suggestion.setting": "Your default setting",
+  "suggestion.detected": "Detected in the file: confirm or change",
 
   "trace.original": "Original",
   "trace.parse_number": "Read as number",

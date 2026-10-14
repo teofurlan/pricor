@@ -79,14 +79,17 @@ def test_an_answer_that_no_longer_applies_leaves_the_plan_without_conversion():
     assert "convert_currency" not in steps(result)
 
 
-def test_a_mixed_currency_column_is_read_from_its_values_and_asks_about_the_dollars():
-    result = build(None)
+MIXED = ColumnSource({"$": "ARS", "u$s": "USD"})
+
+
+def test_a_confirmed_mixed_currency_column_asks_about_the_dollars():
+    result = build(MIXED)
 
     assert unresolved_ids(result) == ["fx_conversion"]
 
 
 def test_a_mixed_currency_column_converts_only_the_foreign_values():
-    result = build(None, FxChoice("oficial", "venta"))
+    result = build(MIXED, FxChoice("oficial", "venta"))
 
     mapping = next(s for s in result.plan.steps if s.op.value == "map_values" and s.to.value == "currency")
     assert dict(mapping.table) == {"$": "ARS", "u$s": "USD"}
@@ -104,7 +107,7 @@ def test_currency_values_that_are_not_recognized_still_need_the_user():
 def test_more_than_one_foreign_currency_cannot_be_converted_with_one_rate():
     rows = [["A1", "X", "10", "u$s"], ["A2", "Y", "20", "eur"]]
 
-    result = build(None, FxChoice("oficial", "venta"), rows=rows)
+    result = build(ColumnSource({"u$s": "USD", "eur": "EUR"}), FxChoice("oficial", "venta"), rows=rows)
 
     assert unresolved_ids(result) == ["fx_currencies"]
 

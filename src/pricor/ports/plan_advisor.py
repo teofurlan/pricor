@@ -9,6 +9,7 @@ deterministic builder assembles the plan from confirmed parameters.
 probability and must not drive automatic decisions.
 """
 
+import json
 import re
 from dataclasses import dataclass, replace
 from decimal import Decimal
@@ -23,6 +24,7 @@ from pricor.domain.plan_builder import (
     KeepOriginalCurrency,
     PlanParameters,
 )
+from pricor.domain.parsing import lookup_key
 from pricor.domain.profile import SheetProfile
 from pricor.ports.column_classifier import ColumnClassification
 
@@ -51,6 +53,7 @@ ParameterValue = (
 )
 
 CURRENCIES = ("ARS", "USD", "EUR")
+CURRENCY_MAP_PREFIX = "map:"  # `map:{"$":"ARS","u$s":"USD"}`: what each value of a currency column means
 _NUMBER = re.compile(r"[0-9]+(?:\.[0-9]+)?", re.ASCII)
 _HUNDRED = Decimal(100)
 
@@ -81,6 +84,29 @@ def _positive(text: str) -> Decimal:
     if not _NUMBER.fullmatch(text) or Decimal(text) == 0:
         raise ValueError(f"not a positive number: {text!r}")
     return Decimal(text)
+
+
+def currency_map_token(table: dict[str, str]) -> str:
+    """The canonical answer token for a currency map (stable key order, no padding)."""
+    return CURRENCY_MAP_PREFIX + json.dumps(
+        table, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+    )
+
+
+def _currency_map(text: str) -> ColumnSource:
+    try:
+        raw = json.loads(text)
+    except ValueError:
+        raise ValueError("a currency map must be a JSON object") from None
+    if not isinstance(raw, dict) or not raw:
+        raise ValueError("a currency map must be a non-empty JSON object")
+    table: dict[str, str] = {}
+    for key, code in raw.items():
+        if not lookup_key(key) or code not in CURRENCIES:
+            raise ValueError(f"a currency map needs non-empty values and codes in {CURRENCIES}")
+        if table.setdefault(lookup_key(key), code) != code:
+            raise ValueError(f"the currency map maps {key!r} to two codes")
+    return ColumnSource(table)
 
 
 def _constant(token: str) -> str | None:
@@ -114,6 +140,8 @@ def parse_value(parameter: ParameterId, token: str) -> ParameterValue:
         case ParameterId.CURRENCY:
             if token in CURRENCIES:
                 return ConstantSource(token)
+            if token.startswith(CURRENCY_MAP_PREFIX):
+                return _currency_map(token.removeprefix(CURRENCY_MAP_PREFIX))
         case ParameterId.FX_CONVERSION:
             if token == "keep":
                 return KeepOriginalCurrency()

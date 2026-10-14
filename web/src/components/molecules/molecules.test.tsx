@@ -45,6 +45,13 @@ describe("SuggestionBadge", () => {
     expect(screen.getByText("Suggested by Gemma (uncalibrated: 0.4)")).toBeInTheDocument();
   });
 
+  it("labels a value read from the file as detected, with no model confidence", () => {
+    renderWithI18n(
+      <SuggestionBadge suggestion={{ ...suggestion, suggested_by: "detected", confidence: 1, calibrated: true }} />,
+    );
+    expect(screen.getByText("Detected in the file: confirm or change")).toBeInTheDocument();
+  });
+
   it("drops the warning once the confidence is calibrated", () => {
     renderWithI18n(<SuggestionBadge suggestion={{ ...suggestion, calibrated: true }} />);
     expect(screen.getByText("Suggested by Gemma (calibrated: 0.6)")).toBeInTheDocument();

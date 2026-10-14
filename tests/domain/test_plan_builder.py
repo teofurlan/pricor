@@ -7,6 +7,7 @@ from pricor.domain.plan import PlanValidationError, parse_plan
 from pricor.domain.plan_builder import (
     ColumnSource,
     ConstantSource,
+    KeepOriginalCurrency,
     PlanParameters,
     RoleAssignment,
     build_plan,
@@ -284,5 +285,88 @@ def test_numeric_cost_column_without_any_separator_still_builds():
     rows = [["A1", "X", "100", "10", "", "21"], ["A2", "Y", "250", "5", "", "21"]]
 
     _, result = build(rows=rows)
+
+    assert result.plan is not None
+
+
+# -- currency column: detected values are proposed, never applied --
+
+CURRENCY_ROLES = [R.CODE, R.DESCRIPTION, R.COST_PRICE, R.UNITS_PER_PACK, R.DISCOUNT, R.CURRENCY]
+
+
+def currency_rows(*values):
+    return [[f"A{i}", "Item", "100,50", "10", "", value] for i, value in enumerate(values)]
+
+
+def build_currency(values, currency=None, **extra):
+    return build(
+        roles=CURRENCY_ROLES,
+        rows=currency_rows(*values),
+        price_includes_vat=False,
+        vat_source=None,
+        price_is_per_pack=False,
+        currency=currency,
+        **extra,
+    )[1]
+
+
+def currency_question(result):
+    return next(item for item in result.unresolved if item.parameter == "currency")
+
+
+def test_a_recognized_currency_column_is_proposed_not_applied():
+    result = build_currency(["$", "u$s", "$", "u$s"])
+
+    assert result.plan is None
+    assert unresolved_ids(result) == ["currency"]
+    assert currency_question(result).detected_map == {"$": "ARS", "u$s": "USD"}
+
+
+def test_confirming_the_detected_map_builds_the_plan_with_it():
+    detected = currency_question(build_currency(["$", "u$s"])).detected_map
+
+    result = build_currency(["$", "u$s"], currency=ColumnSource(detected), fx=KeepOriginalCurrency())
+
+    step = next(s for s in result.plan.steps if s.op.value == "map_values")
+    assert step.to.value == "currency"
+    assert dict(step.table) == {"$": "ARS", "u$s": "USD"}
+
+
+def test_an_unrecognized_value_gets_a_question_without_a_proposal():
+    result = build_currency(["$", "u$s", "guaranies"])
+
+    assert unresolved_ids(result) == ["currency"]
+    assert currency_question(result).detected_map is None
+
+
+def test_the_proposal_covers_every_distinct_value_not_just_the_samples():
+    known = ["$", "u$s", "usd", "ars", "eur", "pesos"]  # more than the profiler's samples hold
+    result = build_currency(known * 3)
+
+    assert currency_question(result).detected_map == {
+        "$": "ARS",
+        "u$s": "USD",
+        "usd": "USD",
+        "ars": "ARS",
+        "eur": "EUR",
+        "pesos": "ARS",
+    }
+
+
+def test_a_rare_unknown_value_among_many_known_ones_blocks_the_proposal():
+    values = ["$", "u$s", "usd", "ars", "eur", "pesos"] * 3 + ["guaranies"]
+
+    assert currency_question(build_currency(values)).detected_map is None
+
+
+def test_a_confirmed_map_that_misses_a_value_is_asked_again_without_a_proposal():
+    result = build_currency(["$", "u$s", "usd"], currency=ColumnSource({"$": "ARS", "u$s": "USD"}))
+
+    assert result.plan is None
+    assert currency_question(result).detected_map is None
+
+
+def test_a_confirmed_map_matches_values_ignoring_case_and_spacing():
+    result = build_currency(["  U$S", "$ "], currency=ColumnSource({"$": "ARS", "u$s": "USD"}), fx=KeepOriginalCurrency())
 
     assert result.plan is not None

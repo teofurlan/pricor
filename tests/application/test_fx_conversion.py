@@ -37,6 +37,7 @@ WEEK2 = [
     ["A2", "Mini antenna", "u$s", "2.50"],
     ["A3", "Cable", "u$s", "10"],
 ]
+CONFIRMED_MAP = 'map:{"$":"ARS","u$s":"USD"}'  # what the user confirms for the Moneda column
 QUOTED = datetime(2026, 10, 14, 10, 0, tzinfo=UTC)
 
 
@@ -86,9 +87,15 @@ class Harness:
             self.use_case.answer(session.id, question_id, option)
         return self.use_case.get(session.id)
 
+    def confirmed_currencies(self, rows=WEEK1):
+        """The user confirmed the currency map; the conversion question is what is left."""
+        return self.answer(self.start(rows), price_includes_vat="no", currency=CONFIRMED_MAP)
+
     def converted_session(self, rows=WEEK1, option="oficial:venta"):
         session = self.start(rows)
-        return self.answer(session, price_includes_vat="no", fx_conversion=option)
+        return self.answer(
+            session, price_includes_vat="no", currency=CONFIRMED_MAP, fx_conversion=option
+        )
 
     def record(self, session, code):
         page = self.use_case.preview(session.id)
@@ -110,7 +117,7 @@ def make():
 
 def test_foreign_prices_raise_the_conversion_question_and_nothing_is_applied(make):
     fx = FakeFx("1535")
-    session = make(fx).start()
+    session = make(fx).confirmed_currencies()
 
     assert [q.id.value for q in session.questions].count("fx_conversion") == 1
     assert session.status is SessionStatus.QUESTIONS_PENDING
@@ -118,7 +125,7 @@ def test_foreign_prices_raise_the_conversion_question_and_nothing_is_applied(mak
 
 
 def test_the_default_rate_type_is_only_a_suggestion_from_the_setting(make):
-    session = make(FakeFx("1535"), default_fx_rate_type="blue").start()
+    session = make(FakeFx("1535"), default_fx_rate_type="blue").confirmed_currencies()
 
     question = next(q for q in session.questions if q.id.value == "fx_conversion")
     assert (question.suggestion.option, question.suggestion.suggested_by) == ("blue:venta", "setting")
@@ -128,7 +135,7 @@ def test_the_default_rate_type_is_only_a_suggestion_from_the_setting(make):
 
 
 def test_the_setting_defaults_to_the_official_rate(make):
-    session = make(FakeFx("1535")).start()
+    session = make(FakeFx("1535")).confirmed_currencies()
 
     question = next(q for q in session.questions if q.id.value == "fx_conversion")
     assert question.suggestion.option == "oficial:venta"

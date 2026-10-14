@@ -7,7 +7,7 @@ wording is kept as `model_phrasing`. The question exists whether or not a
 model said anything.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from decimal import Decimal
 
@@ -21,10 +21,12 @@ from pricor.domain.plan_builder import (
     UnresolvedParameter,
 )
 from pricor.ports.plan_advisor import (
+    CURRENCY_MAP_PREFIX,
     ParameterId,
     ParameterValue,
     PlanProposal,
     SeparatorChoice,
+    currency_map_token,
     parse_value,
 )
 from pricor.ports.question_model import LocalizedText, Option, Question, Suggestion
@@ -162,17 +164,29 @@ def build_questions(
         if parameter not in _OPTIONS:
             issues.append(item.reason)
             continue
-        questions.setdefault(
+        question = Question(
             parameter,
-            Question(
-                parameter,
-                _TEXTS[parameter],
-                _OPTIONS[parameter],
-                item.reason,
-                allows_custom=parameter in _CUSTOM,
-            ),
+            _TEXTS[parameter],
+            _OPTIONS[parameter],
+            item.reason,
+            allows_custom=parameter in _CUSTOM,
         )
+        if item.detected_map:
+            question = _with_detected_map(question, item.detected_map)
+        questions.setdefault(parameter, question)
     return tuple(questions.values()), tuple(issues)
+
+
+def _with_detected_map(question: Question, detected: Mapping[str, str]) -> Question:
+    """Offer what the column's values read as: a labeled option, suggested but never applied."""
+    token = currency_map_token(dict(detected))
+    listing = ", ".join(f"`{key}` → {code}" for key, code in detected.items())
+    option = Option(token, _text(f"Detected: {listing}", f"Detectado: {listing}"))
+    return replace(
+        question,
+        options=(option, *question.options),
+        suggestion=Suggestion(token, 1.0, suggested_by="detected", calibrated=True),
+    )
 
 
 def question_for(parameter: ParameterId) -> Question | None:
@@ -201,6 +215,8 @@ def value_token(parameter: ParameterId, value: ParameterValue) -> str | None:
             return f"constant:{format(number.normalize(), 'f')}"
         case ConstantSource(value=str() as text):
             return text
+        case ColumnSource(value_map=table) if parameter is ParameterId.CURRENCY and table:
+            return currency_map_token({key: str(code) for key, code in table.items()})
         case ColumnSource():
             return "column"
         case KeepOriginalCurrency():
@@ -215,7 +231,9 @@ def value_token(parameter: ParameterId, value: ParameterValue) -> str | None:
 def accepted_value(question: Question, token: str) -> ParameterValue | None:
     """The typed value for `token` if the question accepts it, else `None`."""
     listed = any(option.token == token for option in question.options)
-    if not listed and not (question.allows_custom and token.startswith("constant:")):
+    custom = question.allows_custom and token.startswith("constant:")
+    edited_map = question.id is ParameterId.CURRENCY and token.startswith(CURRENCY_MAP_PREFIX)
+    if not (listed or custom or edited_map):
         return None
     try:
         return parse_value(question.id, token)
@@ -242,9 +260,9 @@ def decorate(questions: Sequence[Question], proposal: PlanProposal | None) -> tu
     phrasings = {item.id: item.text for item in proposal.questions}
     decorated = []
     for question in questions:
-        suggestion = None
+        suggestion = question.suggestion  # a deterministic suggestion outranks a model's
         hypothesis = hypotheses.get(question.id)
-        if hypothesis is not None:
+        if suggestion is None and hypothesis is not None:
             token = value_token(question.id, hypothesis.value)
             if token is not None and accepted_value(question, token) is not None:
                 suggestion = Suggestion(token, hypothesis.confidence, hypothesis.evidence)

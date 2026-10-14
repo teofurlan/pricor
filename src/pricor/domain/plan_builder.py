@@ -93,6 +93,9 @@ class UnresolvedParameter:
 
     parameter: str
     reason: str
+    # For `currency`: what the column's values read as (`{"$": "ARS"}`), offered to the user as
+    # a suggestion to confirm. `None` when some value is not recognized.
+    detected_map: Mapping[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -327,28 +330,36 @@ _CURRENCY_NAMES = {
     "EUR": ("eur", "€", "euro", "euros"),
 }
 _CURRENCY_BY_NAME = {name: code for code, names in _CURRENCY_NAMES.items() for name in names}
-_COMPLETE_SAMPLES_BELOW = 5  # the profiler lists every distinct value only below this many
-
 
 def _currency_key(text: str) -> str:
     return lookup_key(text).replace(".", "")
 
 
 def infer_currency_map(column: ColumnProfile) -> dict[str, str] | None:
-    """Read a currency column's values as ISO codes, only when every value is recognized.
+    """Read a currency column's values as ISO codes, only when every distinct value is recognized.
 
-    `$` is pesos, `u$s` or `usd` dollars, and so on. Anything unknown, or a column with more
-    distinct values than the profiler listed, returns `None` so the user is asked instead.
+    `$` is pesos, `u$s` or `usd` dollars, and so on. The result is a *suggestion*: it is never
+    applied without the user's confirmation. It is built from all distinct values of the column
+    (not from samples); an unknown value, an empty column or one with too many distinct values
+    returns `None`.
     """
-    if not column.samples or len(column.samples) >= _COMPLETE_SAMPLES_BELOW:
+    if not column.distinct_values:
         return None
     table: dict[str, str] = {}
-    for sample in column.samples:
-        code = _CURRENCY_BY_NAME.get(_currency_key(sample))
+    for value in column.distinct_values:
+        code = _CURRENCY_BY_NAME.get(_currency_key(value))
         if code is None:
             return None
-        table.setdefault(lookup_key(sample), code)
+        table.setdefault(lookup_key(value), code)
     return table
+
+
+def _unmapped_values(column: ColumnProfile, table: Mapping[str, Decimal | str]) -> list[str]:
+    """Distinct values of the column that the confirmed table does not cover."""
+    if column.distinct_values is None:
+        return []  # too many values to check; the engine rejects unmapped rows visibly
+    keys = {lookup_key(key) for key in table}
+    return [value for value in column.distinct_values if lookup_key(value) not in keys]
 
 
 def _currency_step(
@@ -358,29 +369,39 @@ def _currency_step(
     missing: list[UnresolvedParameter],
 ) -> set[str] | None:
     """Add the step that sets the currency; return the currencies it can produce, if known."""
-    if source is None and column is not None:
-        inferred = infer_currency_map(column)
-        if inferred is not None:
-            source = ColumnSource(inferred)
     if isinstance(source, ConstantSource):
         steps.append({"op": "constant", "field": "currency", "value": str(source.value)})
         return {str(source.value)}
     if isinstance(source, ColumnSource) and source.value_map and column is not None:
-        steps.append(
-            {
-                "op": "map_values",
-                "column": _ref(column),
-                "table": _table(source.value_map),
-                "to": "currency",
-            }
-        )
-        return {str(value) for value in source.value_map.values()}
-    if column is not None:
+        unmapped = _unmapped_values(column, source.value_map)
+        if not unmapped:
+            steps.append(
+                {
+                    "op": "map_values",
+                    "column": _ref(column),
+                    "table": _table(source.value_map),
+                    "to": "currency",
+                }
+            )
+            return {str(value) for value in source.value_map.values()}
         missing.append(
             UnresolvedParameter(
-                "currency", "a currency column exists but its values are not mapped to ISO codes"
+                "currency",
+                "the confirmed currency map does not cover: "
+                + ", ".join(repr(value) for value in unmapped),
             )
         )
+        return None
+    if column is not None:
+        detected = infer_currency_map(column)
+        reason = (
+            "a currency column exists; its values were read as "
+            + ", ".join(f"{key!r} -> {code}" for key, code in detected.items())
+            + " and need the user's confirmation"
+            if detected
+            else "a currency column exists but its values are not all recognized as currencies"
+        )
+        missing.append(UnresolvedParameter("currency", reason, detected))
     else:
         missing.append(UnresolvedParameter("currency", "the currency of the prices is not known"))
     return None

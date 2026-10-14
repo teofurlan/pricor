@@ -27,6 +27,7 @@ ROWS = [
     ["A1", "Antenna", "$", "1846"],
     ["A2", "Mini antenna", "u$s", "2.50"],
 ]
+CONFIRMED_MAP = 'map:{"$":"ARS","u$s":"USD"}'
 QUOTED = datetime(2026, 10, 14, 10, 0, tzinfo=UTC)
 
 
@@ -66,6 +67,7 @@ def client():
 def converted(client, option="oficial:venta"):
     state = upload(client, rows=ROWS, supplier="Emilio").json()
     answer(client, state["id"], "price_includes_vat", "no")
+    answer(client, state["id"], "currency", CONFIRMED_MAP)
     return answer(client, state["id"], "fx_conversion", option).json()
 
 
@@ -74,6 +76,7 @@ def test_a_session_without_conversion_has_no_fx_block():
     try:
         state = upload(client, rows=ROWS[:1] + [["A1", "Antenna", "$", "1846"]], supplier="X").json()
         answer(client, state["id"], "price_includes_vat", "no")
+        answer(client, state["id"], "currency", CONFIRMED_MAP)
         assert client.get(f"/imports/{state['id']}").json()["fx"] is None
     finally:
         database.close()
@@ -82,6 +85,7 @@ def test_a_session_without_conversion_has_no_fx_block():
 def test_the_conversion_question_is_part_of_the_questions(client):
     state = upload(client, rows=ROWS, supplier="Emilio").json()
     answer(client, state["id"], "price_includes_vat", "no")
+    answer(client, state["id"], "currency", CONFIRMED_MAP)
 
     state = client.get(f"/imports/{state['id']}").json()
 
@@ -155,6 +159,7 @@ def test_a_bad_manual_rate_is_a_422_and_a_missing_conversion_a_409(client):
     assert client.put(f"/imports/{state['id']}/fx", json={}).status_code == 422
     other = upload(client, rows=ROWS, supplier="Otro").json()
     answer(client, other["id"], "price_includes_vat", "no")
+    answer(client, other["id"], "currency", CONFIRMED_MAP)
     answer(client, other["id"], "fx_conversion", "keep")
     assert client.put(f"/imports/{other['id']}/fx", json={"rate": "1500"}).status_code == 409
 
