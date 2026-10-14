@@ -199,9 +199,11 @@ def _discount_step(
     column: ColumnProfile | None,
 ) -> None:
     if isinstance(source, ConstantSource):
-        steps.append(
-            {"op": "apply_discounts", "from": {"constant": [str(p) for p in source.value]}}
-        )
+        # An empty constant is an explicit "no discounts": omit the step.
+        if source.value:
+            steps.append(
+                {"op": "apply_discounts", "from": {"constant": [str(p) for p in source.value]}}
+            )
     elif column is not None:
         steps.append(
             {

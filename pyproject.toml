@@ -29,3 +29,7 @@ packages = ["src/pricor"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+addopts = "-m 'not live'"
+markers = [
+    "live: opt-in smoke tests against a running Ollama (run with: uv run pytest -m live -s)",
+]

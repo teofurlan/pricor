@@ -256,3 +256,10 @@ def test_built_plan_always_passes_through_parse_plan():
     # error rather than being silently repaired.
     with pytest.raises(PlanValidationError):
         build(decimal_sep=",", thousands_sep=",")
+
+
+def test_explicit_empty_discounts_omit_the_step_even_with_a_discount_column():
+    _, result = build(discounts=ConstantSource(()))
+
+    assert result.unresolved == ()
+    assert "apply_discounts" not in op_names(result)
