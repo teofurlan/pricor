@@ -270,3 +270,20 @@ def test_blank_file_header_matches_the_synthesized_plan_header():
     result = run([GOLDEN_ROW], plan, headers)
 
     assert result.rejected == ()
+
+
+def test_map_values_matches_padded_lowercase_cell_against_uppercase_key():
+    plan = golden_plan_dict()
+    plan["steps"][4]["table"] = {"  U$S ": 21}
+    plan["steps"][5] = {"op": "strip_vat", "rate_from": {"constant": 21}}
+    result = run([row_with(vat="    u$s")], plan)
+    accepted = result.accepted[0]
+    assert accepted.record.vat_rate == Decimal("21")
+
+
+def test_map_values_collapses_inner_whitespace_in_cell_and_key():
+    plan = golden_plan_dict()
+    plan["steps"][4]["table"] = {"Sin   IVA": 0}
+    plan["steps"][5] = {"op": "strip_vat", "rate_from": {"constant": 21}}
+    record = run([row_with(vat="sin  iva")], plan).accepted[0].record
+    assert record.vat_rate == Decimal("0")
