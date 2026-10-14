@@ -54,3 +54,29 @@ def test_a_missing_model_does_not_stop_the_app_and_is_reported_when_classifying(
     assert laya_stage.name == "laya"
     assert laya_stage.skipped_reason is not None
     assert "absent" in laya_stage.skipped_reason or "extra" in laya_stage.skipped_reason
+
+
+def test_stage_thresholds_come_from_the_calibration_file_and_say_so(tmp_path):
+    import json
+
+    path = tmp_path / "thresholds.json"
+    path.write_text(
+        json.dumps(
+            {
+                "calibrated_on": "2026-10-14",
+                "stages": {"laya": {"threshold": 0.62}, "gemma": {"threshold": None}},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    laya, gemma = stages({"PRICOR_CALIBRATION": str(path)})
+
+    assert (laya.threshold, laya.threshold_calibrated) == (0.62, True)
+    assert (gemma.threshold, gemma.threshold_calibrated) == (0.75, False)
+
+
+def test_the_committed_calibration_is_valid_and_covers_the_default_cascade():
+    laya, gemma = stages({})
+
+    assert laya.threshold_calibrated and gemma.threshold_calibrated

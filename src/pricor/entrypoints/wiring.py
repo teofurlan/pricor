@@ -8,6 +8,7 @@ Environment variables:
     PRICOR_DB              path of the SQLite file          (default: see `database_path_from_env`)
     PRICOR_LAYA_MODEL      folder of the fine-tuned Laya model (default models/laya-pricor)
     PRICOR_LAYA_DEVICE     auto | cpu | cuda               (default auto: CUDA when available)
+    PRICOR_CALIBRATION     thresholds file (default: the calibrated one shipped in this package)
     PRICOR_FX_RATE_TYPE    rate type suggested for currency conversion (default oficial)
     PRICOR_FX_TIMEOUT      seconds per DolarAPI request      (default 10)
 
@@ -43,6 +44,7 @@ from pricor.adapters.sqlite_store import SqliteDatabase
 from pricor.application.cascade import ClassifierStage
 from pricor.application.report_price_changes import ReportPriceChanges
 from pricor.application.reuse_supplier_plan import ReuseSupplierPlan
+from pricor.entrypoints.calibration_file import DEFAULT_CALIBRATION_PATH, load_calibration
 from pricor.entrypoints.api import ApiDependencies, create_app
 from pricor.domain.fx import MARKET_RATE_TYPES
 from pricor.entrypoints.web_app import DEFAULT_WEB_DIST
@@ -81,14 +83,16 @@ def build_stages(
     """
     model_path, device = laya_settings_from_env(env)
     reason = laya_unavailable_reason(model_path)
-    stages = [
-        ClassifierStage(
-            "laya", LayaColumnClassifier(model_path, device), skipped_reason=reason
-        )
-    ]
+    calibration = load_calibration(Path(env.get("PRICOR_CALIBRATION") or DEFAULT_CALIBRATION_PATH))
+
+    def stage(name: str, classifier, skipped_reason: str | None = None) -> ClassifierStage:
+        threshold, calibrated = calibration.threshold_for(name)
+        return ClassifierStage(name, classifier, threshold, calibrated, skipped_reason)
+
+    stages = [stage("laya", LayaColumnClassifier(model_path, device), reason)]
     if reason is not None:
-        stages.append(ClassifierStage("heuristics", HeuristicColumnClassifier()))
-    stages.append(ClassifierStage("gemma", GemmaColumnClassifier(client)))
+        stages.append(stage("heuristics", HeuristicColumnClassifier()))
+    stages.append(stage("gemma", GemmaColumnClassifier(client)))
     return stages
 
 

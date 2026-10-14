@@ -225,3 +225,20 @@ def test_the_real_corpus_builds_a_leak_free_training_set():
         distributor_of(e.source) in HELD_OUT_DISTRIBUTORS for e in data.held_out
     )
     assert {e.role for e in data.train} == set(ColumnRole)
+
+
+# -- the profile behind each state (the benchmark runs the other classifiers on it) --
+
+
+def test_every_example_keeps_the_profile_its_state_was_built_from():
+    from pricor.adapters.laya_state import state_for_column
+
+    real = examples_from_sheet(sheet_rows(), 0, labeled(*ROLES), resamples=2, seed=1)
+    whole = inference_examples(sheet_rows(), 0, labeled(*ROLES))
+    synthetic = synthetic_examples(5, seed=1, banned=frozenset())
+
+    for example in [*real, *whole, *synthetic]:
+        if example.profile is not None:
+            assert state_for_column(example.profile) == example.state
+    assert all(e.profile is not None for e in [*real, *whole])
+    assert any(e.profile is not None for e in synthetic)

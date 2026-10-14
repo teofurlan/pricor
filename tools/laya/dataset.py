@@ -12,7 +12,7 @@ import random
 import re
 from collections import defaultdict
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +39,8 @@ class Example:
     origin: str  # "real" or "synthetic"
     source: str  # a source id, or "synthetic"
     header: str  # the column header as written ("" when it has none)
+    # The profile the state was built from, so other classifiers can be run on the same input.
+    profile: ColumnProfile | None = field(default=None, compare=False)
 
 
 # -- real columns ----------------------------------------------------------------
@@ -58,6 +60,10 @@ def _check_headers(profile: SheetProfile, columns: Sequence[LabeledColumn]) -> N
                 f"{column.source_id}/{column.sheet} column {column.index}: the labels say "
                 f"{column.header!r} but the file has {found!r}; the file changed"
             )
+
+
+def _real_example(column: ColumnProfile, label: LabeledColumn) -> Example:
+    return Example(state_for_column(column), label.role, "real", label.source_id, label.header, column)
 
 
 def examples_from_sheet(
@@ -80,10 +86,7 @@ def examples_from_sheet(
         size = min(len(data), rng.randint(MIN_SUBSET, MAX_SUBSET))
         subset = [_pad(row, width) for row in rng.sample(data, size)]
         profile = profile_sheet([*head, *subset], 0 if head else None)
-        examples += [
-            Example(state_for_column(profile.columns[c.index]), c.role, "real", c.source_id, c.header)
-            for c in columns
-        ]
+        examples += [_real_example(profile.columns[c.index], c) for c in columns]
     return examples
 
 
@@ -93,10 +96,7 @@ def inference_examples(
     """One example per column from the whole-sheet profile, the way the runtime classifies."""
     profile = profile_sheet(rows, header_row)
     _check_headers(profile, columns)
-    return [
-        Example(state_for_column(profile.columns[c.index]), c.role, "real", c.source_id, c.header)
-        for c in columns
-    ]
+    return [_real_example(profile.columns[c.index], c) for c in columns]
 
 
 # -- synthetic columns -----------------------------------------------------------
@@ -117,7 +117,7 @@ def synthetic_examples(count: int, seed: int, banned: frozenset[str]) -> list[Ex
             if profile is not None
             else serialize_column(column.header, "empty", [])
         )
-        examples.append(Example(state, column.role, "synthetic", "synthetic", column.header))
+        examples.append(Example(state, column.role, "synthetic", "synthetic", column.header, profile))
     return examples
 
 

@@ -1,0 +1,42 @@
+{
+  "calibrated_on": "2026-10-14",
+  "method": "lowest validation confidence whose accepted answers (score >= threshold) have precision >= 0.95 with support >= 20",
+  "target_precision": 0.95,
+  "min_support": 20,
+  "validation": {
+    "n": 161,
+    "real": 48,
+    "synthetic": 113
+  },
+  "stages": {
+    "heuristics": {
+      "threshold": null,
+      "n": 161,
+      "support": 0,
+      "precision": null,
+      "reason": "no threshold meets the target precision with the minimum support"
+    },
+    "laya": {
+      "threshold": 0.9959,
+      "n": 161,
+      "support": 42,
+      "precision": 0.9761904761904762,
+      "reason": "met",
+      "real_only": {
+        "support": 1,
+        "precision": 0.0
+      }
+    },
+    "gemma": {
+      "threshold": 0.98,
+      "n": 161,
+      "support": 37,
+      "precision": 1.0,
+      "reason": "met",
+      "real_only": {
+        "support": 6,
+        "precision": 1.0
+      }
+    }
+  }
+}

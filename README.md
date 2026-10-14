@@ -80,9 +80,9 @@ Column classification and question suggestions use Gemma through a local [Ollama
 OLLAMA_FLASH_ATTENTION=0 ollama serve
 ```
 
-If Ollama is down, slow or returns something invalid, the import continues with the heuristic classifier only: the user confirms the uncertain columns, every open plan parameter is asked, and the session shows a `model_unavailable` notice.
+If Ollama is down, slow or returns something invalid, the import continues with the stages that still work (Laya or the heuristics): the user confirms the uncertain columns, every open plan parameter is asked, and the session shows a `model_unavailable` notice.
 
-**Model output is never executed.** A model can only pick a role for a column from a closed list and suggest an answer to a question. Questions and their options are deterministic, a suggestion is never applied until the user answers, and the import plan is built and run by deterministic code with exact decimal math. The confidence thresholds that decide which columns are shown to the user are placeholders until they are calibrated on held-out data.
+**Model output is never executed.** A model can only pick a role for a column from a closed list and suggest an answer to a question. Questions and their options are deterministic, a suggestion is never applied until the user answers, and the import plan is built and run by deterministic code with exact decimal math. The confidence thresholds that decide which columns are shown to the user are calibrated on a validation set (`src/pricor/entrypoints/thresholds.json`); a stage without a calibrated threshold keeps a 0.75 placeholder. Method, results and limits are in `docs/benchmark.md`.
 
 ## Laya column classifier (optional)
 

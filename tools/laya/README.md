@@ -61,4 +61,4 @@ Training uses the other four distributors (Electricidad Emilio, Distribución Ma
 - The held-out set is 29 columns and has no `vat_rate`, `units_per_pack`, `barcode`, `discount` or `currency` columns. Dipel's two files share most columns, so the effective number of distinct columns is smaller.
 - The training pool has no real `retail_price` or `vat_rate` columns: they come from the synthetic generator only. Synthetic examples are labeled synthetic and are not evidence about real lists.
 - The reference labels are one person's judgment; the ambiguous cases are marked in `labels.json`. In particular Dipel's `PRECIO VENTA` is labeled `retail_price` because the list says to load a margin to use it as a public price.
-- Accuracy numbers from `evaluate` are a preview. The formal benchmark against the heuristics and Gemma, with calibrated thresholds, is a separate task.
+- Accuracy numbers from `evaluate` are a preview. The formal benchmark against the heuristics and Gemma, with calibrated thresholds, is `tools/benchmark`; its results are in `docs/benchmark.md`.
