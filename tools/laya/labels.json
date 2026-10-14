@@ -215,8 +215,8 @@
    "sheet": "Hoja1",
    "index": 6,
    "header": "PRECIO VENTA",
-   "role": "retail_price",
-   "note": "Ambiguous: the list says to load a margin to use it as a public price, so it is the list price plus margin."
+   "role": "ignore",
+   "note": "Supplier calculator, not list data: an Excel formula column driven by the merchant's DESCUENTO and MARGEN input cells (rows 14-15), with the instruction in row 11 to load your own margin to use it as the public price. Relabeled from retail_price after the user confirmed it (2026-10-14), after the first held-out run."
   },
   {
    "source_id": "dipel-haga-su-pedido",
@@ -282,8 +282,8 @@
    "sheet": "LISTA",
    "index": 6,
    "header": "PRECIO VENTA",
-   "role": "retail_price",
-   "note": "Ambiguous: the list says to load a margin to use it as a public price, so it is the list price plus margin."
+   "role": "ignore",
+   "note": "Supplier calculator, not list data: an Excel formula column driven by the merchant's DESCUENTO and MARGEN input cells (rows 14-15), with the instruction in row 11 to load your own margin to use it as the public price. Relabeled from retail_price after the user confirmed it (2026-10-14), after the first held-out run."
   },
   {
    "source_id": "dipel-lista-pagina-web",

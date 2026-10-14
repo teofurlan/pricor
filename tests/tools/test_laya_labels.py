@@ -123,3 +123,23 @@ def test_headers_normalize_without_accents_case_or_punctuation():
     assert normalize_header("Código  de Barras") == "codigodebarras"
     assert normalize_header("COD_PROV") == normalize_header("cod.prov") == "codprov"
     assert normalize_header("") == ""
+
+
+# -- Dipel PRECIO VENTA is a supplier calculator, not a price list column --
+
+
+def test_dipel_precio_venta_is_a_calculator_the_merchant_drives_so_it_is_ignored():
+    labels = load_labels(LABELS)
+
+    entries = [c for c in labels.columns if c.source_id.startswith("dipel") and c.header == "PRECIO VENTA"]
+
+    assert {c.source_id for c in entries} == {"dipel-lista-pagina-web", "dipel-haga-su-pedido"}
+    assert {c.role for c in entries} == {ColumnRole.IGNORE}
+    assert all("calculator" in (c.note or "") and "MARGEN" in c.note for c in entries)
+
+
+def test_no_dipel_column_reaches_training_or_validation_so_laya_needs_no_retraining():
+    split = split_labels(load_labels(LABELS))
+
+    assert not any(distributor_of(c.source_id) == "dipel" for c in split.train.columns)
+    assert not any(distributor_of(c.source_id) == "dipel" for c in split.dropped)
