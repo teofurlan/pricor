@@ -13,11 +13,13 @@ Text that a spreadsheet would run as a formula is neutralized (see `neutralize`)
 
 from pricor.adapters.export_common import (
     csv_bytes,
+    has_conversion,
+    product_columns,
     product_values,
     rejected_header,
     rejected_width,
 )
-from pricor.ports.exporter import PRODUCT_COLUMNS, ImportExport
+from pricor.ports.exporter import ImportExport
 
 
 class CsvExporter:
@@ -29,8 +31,9 @@ class CsvExporter:
         self.delimiter = delimiter
 
     def export(self, data: ImportExport) -> bytes:
-        rows = (product_values(item.row_number, item.record) for item in data.accepted)
-        return csv_bytes(PRODUCT_COLUMNS, rows, self.delimiter)
+        converted = has_conversion(data)
+        rows = (product_values(item.row_number, item.record, converted) for item in data.accepted)
+        return csv_bytes(product_columns(data), rows, self.delimiter)
 
     def export_rejected(self, data: ImportExport) -> bytes:
         width = rejected_width(data)

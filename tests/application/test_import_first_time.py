@@ -303,6 +303,8 @@ def test_numeric_questions_accept_a_custom_constant_but_only_valid_ones():
         use_case.answer(session.id, "vat_rate", "constant:250")
     use_case.answer(session.id, "vat_rate", "constant:10.5")
     use_case.answer(session.id, "currency", "USD")
+    assert "fx_conversion" in question_ids(use_case.get(session.id))  # dollars: convert or keep?
+    use_case.answer(session.id, "fx_conversion", "keep")
     session = use_case.get(session.id)
     assert session.status is SessionStatus.READY_FOR_PREVIEW
     first = use_case.preview(session.id).items[0]

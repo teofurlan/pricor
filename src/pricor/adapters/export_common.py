@@ -6,7 +6,13 @@ from collections.abc import Iterable
 from decimal import Decimal, InvalidOperation
 
 from pricor.domain.contract import ContractRecord
-from pricor.ports.exporter import REJECTED_COLUMNS, ImportExport
+from pricor.ports.exporter import (
+    CONTRACT_COLUMNS,
+    CONVERTED_COLUMNS,
+    REJECTED_COLUMNS,
+    TRACEABILITY_COLUMNS,
+    ImportExport,
+)
 
 _BOM = b"\xef\xbb\xbf"
 _CRLF = "\r\n"
@@ -51,8 +57,25 @@ def rejected_width(data: ImportExport) -> int:
     return len(rejected_header(data)) - len(REJECTED_COLUMNS)
 
 
-def product_values(row_number: int, record: ContractRecord) -> list[object]:
-    """Typed values in `PRODUCT_COLUMNS` order (Decimal/None for numbers, str for text)."""
+def has_conversion(data: ImportExport) -> bool:
+    return any(item.record.unit_cost_net_converted is not None for item in data.accepted)
+
+
+def product_columns(data: ImportExport) -> tuple[str, ...]:
+    """The contract columns, the converted ones when any record was converted, then traceability."""
+    extra = CONVERTED_COLUMNS if has_conversion(data) else ()
+    return (*CONTRACT_COLUMNS, *extra, *TRACEABILITY_COLUMNS)
+
+
+def product_values(
+    row_number: int, record: ContractRecord, converted: bool = False
+) -> list[object]:
+    """Typed values in `product_columns` order (Decimal/None for numbers, str for text)."""
+    extra = (
+        [record.unit_cost_net_converted, record.fx_rate, record.fx_source, record.fx_date]
+        if converted
+        else []
+    )
     return [
         record.supplier_code,
         record.description,
@@ -62,6 +85,7 @@ def product_values(row_number: int, record: ContractRecord) -> list[object]:
         record.units_per_pack,
         record.barcode,
         record.suggested_retail_price,
+        *extra,
         row_number,
     ]
 

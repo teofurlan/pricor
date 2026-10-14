@@ -17,16 +17,20 @@ from openpyxl.styles import Font
 from openpyxl.worksheet.worksheet import Worksheet
 
 from pricor.adapters.export_common import (
+    has_conversion,
+    product_columns,
     product_values,
     rejected_header,
     rejected_width,
 )
-from pricor.ports.exporter import PRODUCT_COLUMNS, ImportExport
+from pricor.ports.exporter import ImportExport
 
 PRODUCTS_SHEET = "Products"
 REJECTED_SHEET = "Rejected rows"
 MAX_EXACT_DIGITS = 15
-_TEXT_COLUMNS = frozenset({"supplier_code", "description", "currency", "barcode"})
+_TEXT_COLUMNS = frozenset(
+    {"supplier_code", "description", "currency", "barcode", "fx_source", "fx_date"}
+)
 
 
 def _set_text(sheet: Worksheet, row: int, column: int, text: str) -> None:
@@ -52,10 +56,12 @@ def _header(sheet: Worksheet, names: list[str]) -> None:
 
 
 def _products(sheet: Worksheet, data: ImportExport) -> None:
-    _header(sheet, list(PRODUCT_COLUMNS))
+    names = product_columns(data)
+    converted = has_conversion(data)
+    _header(sheet, list(names))
     for row, item in enumerate(data.accepted, start=2):
-        values = product_values(item.row_number, item.record)
-        for column, (name, value) in enumerate(zip(PRODUCT_COLUMNS, values, strict=True), start=1):
+        values = product_values(item.row_number, item.record, converted)
+        for column, (name, value) in enumerate(zip(names, values, strict=True), start=1):
             if value is None:
                 continue
             if name in _TEXT_COLUMNS:

@@ -975,3 +975,40 @@ input[type="file"] {
 .table--report .num {
   white-space: nowrap;
 }
+
+.fx {
+  border: 1px solid var(--rule, currentColor);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.fx__line {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 650;
+}
+
+.fx__detail {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.fx__required,
+.fx__error {
+  margin: 0;
+}
+
+.fx__manual {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.fx__manual input {
+  width: 12ch;
+}
+
+.cell--converted {
+  white-space: nowrap;
+}

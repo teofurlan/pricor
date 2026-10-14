@@ -15,6 +15,8 @@ function fakeApi(overrides: Partial<ApiClient> = {}): ApiClient {
     chooseHeader: vi.fn(unexpected("chooseHeader")),
     setRoles: vi.fn(unexpected("setRoles")),
     answer: vi.fn(unexpected("answer")),
+    setManualRate: vi.fn(unexpected("setManualRate")),
+    refreshRate: vi.fn(unexpected("refreshRate")),
     preview: vi.fn(unexpected("preview")),
     approve: vi.fn(unexpected("approve")),
     // A first import has no earlier list to compare with, which is the quiet default here.

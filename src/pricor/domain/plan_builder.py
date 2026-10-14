@@ -15,6 +15,8 @@ from typing import Any
 
 from pricor import __version__
 
+from .fx import DEFAULT_SIDE, TARGET_CURRENCY
+from .parsing import lookup_key
 from .plan import ImportPlan, column_header, parse_plan
 from .profile import ColumnProfile
 from .roles import ColumnRole
@@ -50,6 +52,19 @@ class ConstantSource:
 
 
 @dataclass(frozen=True)
+class FxChoice:
+    """Convert foreign prices to pesos with this rate type and side (`manual` = typed per run)."""
+
+    rate_type: str
+    side: str = DEFAULT_SIDE
+
+
+@dataclass(frozen=True)
+class KeepOriginalCurrency:
+    """The user chose not to convert: costs stay in the supplier's currency."""
+
+
+@dataclass(frozen=True)
 class PlanParameters:
     """What the model may hypothesise and the user confirms. `None` means unknown.
 
@@ -68,6 +83,7 @@ class PlanParameters:
     currency: ColumnSource | ConstantSource | None = None
     decimal_sep: str | None = None
     thousands_sep: str | None = None
+    fx: FxChoice | KeepOriginalCurrency | None = None
     confirmations: Sequence[str] = ()
 
 
@@ -177,7 +193,8 @@ def build_plan(assignments: Sequence[RoleAssignment], parameters: PlanParameters
     _discount_step(steps, parameters.discounts, discount_column)
     _vat_steps(steps, parameters, vat_column, missing)
     _per_unit_step(steps, parameters, units_column, missing)
-    _currency_step(steps, parameters.currency, currency_column, missing)
+    currencies = _currency_step(steps, parameters.currency, currency_column, missing)
+    _fx_step(steps, parameters.fx, currencies, missing)
 
     if missing:
         return PlanBuild(None, tuple(missing))
@@ -292,15 +309,63 @@ def _per_unit_step(
         )
 
 
+_CURRENCY_NAMES = {
+    "ARS": ("$", "ars", "$ars", "peso", "pesos", "peso argentino", "pesos argentinos"),
+    "USD": (
+        "u$s",
+        "us$",
+        "u$d",
+        "u$",
+        "usd",
+        "dolar",
+        "dolares",
+        "dólar",
+        "dólares",
+        "dolar estadounidense",
+        "dolares estadounidenses",
+    ),
+    "EUR": ("eur", "€", "euro", "euros"),
+}
+_CURRENCY_BY_NAME = {name: code for code, names in _CURRENCY_NAMES.items() for name in names}
+_COMPLETE_SAMPLES_BELOW = 5  # the profiler lists every distinct value only below this many
+
+
+def _currency_key(text: str) -> str:
+    return lookup_key(text).replace(".", "")
+
+
+def infer_currency_map(column: ColumnProfile) -> dict[str, str] | None:
+    """Read a currency column's values as ISO codes, only when every value is recognized.
+
+    `$` is pesos, `u$s` or `usd` dollars, and so on. Anything unknown, or a column with more
+    distinct values than the profiler listed, returns `None` so the user is asked instead.
+    """
+    if not column.samples or len(column.samples) >= _COMPLETE_SAMPLES_BELOW:
+        return None
+    table: dict[str, str] = {}
+    for sample in column.samples:
+        code = _CURRENCY_BY_NAME.get(_currency_key(sample))
+        if code is None:
+            return None
+        table.setdefault(lookup_key(sample), code)
+    return table
+
+
 def _currency_step(
     steps: list[dict[str, Any]],
     source: ColumnSource | ConstantSource | None,
     column: ColumnProfile | None,
     missing: list[UnresolvedParameter],
-) -> None:
+) -> set[str] | None:
+    """Add the step that sets the currency; return the currencies it can produce, if known."""
+    if source is None and column is not None:
+        inferred = infer_currency_map(column)
+        if inferred is not None:
+            source = ColumnSource(inferred)
     if isinstance(source, ConstantSource):
         steps.append({"op": "constant", "field": "currency", "value": str(source.value)})
-    elif isinstance(source, ColumnSource) and source.value_map and column is not None:
+        return {str(source.value)}
+    if isinstance(source, ColumnSource) and source.value_map and column is not None:
         steps.append(
             {
                 "op": "map_values",
@@ -309,7 +374,8 @@ def _currency_step(
                 "to": "currency",
             }
         )
-    elif column is not None:
+        return {str(value) for value in source.value_map.values()}
+    if column is not None:
         missing.append(
             UnresolvedParameter(
                 "currency", "a currency column exists but its values are not mapped to ISO codes"
@@ -317,3 +383,43 @@ def _currency_step(
         )
     else:
         missing.append(UnresolvedParameter("currency", "the currency of the prices is not known"))
+    return None
+
+
+def _fx_step(
+    steps: list[dict[str, Any]],
+    choice: FxChoice | KeepOriginalCurrency | None,
+    currencies: set[str] | None,
+    missing: list[UnresolvedParameter],
+) -> None:
+    """Conversion to pesos, asked only when the prices include a foreign currency."""
+    foreign = sorted((currencies or set()) - {TARGET_CURRENCY})
+    if not foreign:
+        return
+    if choice is None:
+        missing.append(
+            UnresolvedParameter(
+                "fx_conversion",
+                f"the prices include {', '.join(foreign)}; "
+                f"it is not known whether to convert them to {TARGET_CURRENCY}",
+            )
+        )
+    elif isinstance(choice, FxChoice):
+        if len(foreign) > 1:
+            missing.append(
+                UnresolvedParameter(
+                    "fx_currencies",
+                    f"the prices include {', '.join(foreign)}; "
+                    "one exchange rate cannot convert more than one currency",
+                )
+            )
+            return
+        steps.append(
+            {
+                "op": "convert_currency",
+                "from": foreign[0],
+                "to": TARGET_CURRENCY,
+                "rate_type": choice.rate_type,
+                "side": choice.side,
+            }
+        )

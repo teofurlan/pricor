@@ -46,6 +46,7 @@ def test_operation_catalog_is_closed():
         "map_values",
         "constant",
         "normalize_text",
+        "convert_currency",
     }
 
 

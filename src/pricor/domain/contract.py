@@ -58,3 +58,9 @@ class ContractRecord:
     units_per_pack: Decimal | None = None
     barcode: str | None = None
     suggested_retail_price: Decimal | None = None
+    # Filled only when the plan converts currency and the row is in the source currency.
+    # `unit_cost_net` and `currency` always keep the supplier's own values.
+    unit_cost_net_converted: Decimal | None = None
+    fx_rate: Decimal | None = None
+    fx_source: str | None = None
+    fx_date: str | None = None  # ISO date of the quote

@@ -22,6 +22,8 @@ CONTRACT_COLUMNS = (
     "barcode",
     "suggested_retail_price",
 )
+# Written between the contract and traceability columns, only when some record was converted.
+CONVERTED_COLUMNS = ("unit_cost_net_converted", "fx_rate", "fx_source", "fx_date")
 TRACEABILITY_COLUMNS = ("source_row",)  # 1-based row number in the supplier's file
 PRODUCT_COLUMNS = CONTRACT_COLUMNS + TRACEABILITY_COLUMNS
 

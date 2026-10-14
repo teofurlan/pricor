@@ -109,6 +109,8 @@ def advisor_system(language: str) -> str:
         "the answer explicitly (a units-per-pack column makes the per-pack question "
         "relevant).\n"
         "- Do not ask about parameters that do not apply to this sheet.\n"
+        "- Never hypothesize fx_conversion: whether to convert currency, and with which "
+        "exchange rate, is the user's own decision.\n"
         f"- Write question text and option labels in {LANGUAGES[language]}.\n"
         + UNTRUSTED_RULES
     )

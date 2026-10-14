@@ -1,4 +1,4 @@
-import type { PreviewPage } from "../../api/types";
+import type { FxState, PreviewPage } from "../../api/types";
 import { useI18n } from "../../i18n";
 import { Badge } from "../atoms/Badge";
 import { Button } from "../atoms/Button";
@@ -8,13 +8,16 @@ interface Props {
   page: PreviewPage;
   busy: boolean;
   onPage(offset: number): void;
+  /** The run's conversion, when the plan has one: adds the converted column. */
+  fx?: FxState | null;
 }
 
 /** Every data row: the file's own cells on the left, the path to the final cost on the right. */
-export function PreviewTable({ page, busy, onPage }: Props) {
+export function PreviewTable({ page, busy, onPage, fx = null }: Props) {
   const { t } = useI18n();
   const first = page.items.length === 0 ? 0 : page.offset + 1;
   const last = page.offset + page.items.length;
+  const showConverted = fx !== null;
   return (
     <div className="stack">
       <div className="table-wrap">
@@ -24,6 +27,7 @@ export function PreviewTable({ page, busy, onPage }: Props) {
               <th>{t("preview.row")}</th>
               <th>{t("preview.original")}</th>
               <th>{t("preview.steps")}</th>
+              {showConverted && <th>{t("preview.converted", { currency: fx.to })}</th>}
             </tr>
           </thead>
           <tbody>
@@ -42,9 +46,18 @@ export function PreviewTable({ page, busy, onPage }: Props) {
                       ))}
                     </div>
                   ) : (
-                    <StepTrace trace={item.trace} currency={item.record?.currency ?? null} />
+                    <StepTrace
+                      trace={item.trace}
+                      currency={item.record?.currency ?? null}
+                      convertedCurrency={fx?.to ?? null}
+                    />
                   )}
                 </td>
+                {showConverted && (
+                  <td className="cell--converted">
+                    {item.record?.unit_cost_net_converted ? `${item.record.unit_cost_net_converted} ${fx.to}` : "—"}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

@@ -26,6 +26,10 @@ export interface ApiClient {
   chooseHeader(id: string, rowIndex: number | null): Promise<SessionState>;
   setRoles(id: string, roles: Record<number, ColumnRole>): Promise<SessionState>;
   answer(id: string, questionId: string, option: string): Promise<SessionState>;
+  /** Use a rate the user typed for this run (`1420,50` and `1420.50` both work). */
+  setManualRate(id: string, rate: string): Promise<SessionState>;
+  /** Ask the live source for the plan's rate again. */
+  refreshRate(id: string): Promise<SessionState>;
   preview(id: string, offset: number, limit: number): Promise<PreviewPage>;
   approve(id: string): Promise<SessionState>;
   /** What changed since the supplier's previous approved import; `threshold` is a ratio ("0.30"). */
@@ -85,6 +89,8 @@ export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), 
     setRoles: (id, roles) => call(`${base(id)}/roles`, json("PUT", { roles })),
     answer: (id, questionId, option) =>
       call(`${base(id)}/answers`, json("POST", { question_id: questionId, option })),
+    setManualRate: (id, rate) => call(`${base(id)}/fx`, json("PUT", { rate })),
+    refreshRate: (id) => call(`${base(id)}/fx/refresh`, { method: "POST" }),
     preview: (id, offset, limit) => call(`${base(id)}/preview?offset=${offset}&limit=${limit}`),
     approve: (id) => call(`${base(id)}/approve`, { method: "POST" }),
     report: (id, threshold) =>

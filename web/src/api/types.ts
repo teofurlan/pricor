@@ -6,6 +6,7 @@ export type SessionStatus =
   | "header_choice_required"
   | "role_confirmation_required"
   | "questions_pending"
+  | "fx_rate_required"
   | "ready_for_preview"
   | "approved";
 
@@ -126,6 +127,33 @@ export interface PlanChange {
   new_value: string | null;
 }
 
+/** The exchange rate one run converts with (see `FxSnapshot` on the server). */
+export interface FxSnapshot {
+  /** Exact decimal text. */
+  rate: string;
+  /** The plan's rate type, or "manual" for a rate the user typed. */
+  rate_type: string;
+  side: "compra" | "venta";
+  /** "dolarapi" or "manual". */
+  source: string;
+  quoted_at: string;
+  /** ISO date of the quote. */
+  date: string;
+  /** A cached quote used because the live source could not be reached. */
+  stale: boolean;
+}
+
+/** `null` on a session whose plan does not convert currency. */
+export interface FxState {
+  from: string;
+  to: string;
+  rate_type: string;
+  side: "compra" | "venta";
+  /** Why no live rate could be obtained, when `snapshot` is null. */
+  error: string | null;
+  snapshot: FxSnapshot | null;
+}
+
 export type ImportMode = "first_import" | "reuse";
 
 export interface SessionState {
@@ -144,6 +172,7 @@ export interface SessionState {
   mode: ImportMode;
   based_on_plan_version: number | null;
   changes: PlanChange[];
+  fx: FxState | null;
 }
 
 export interface TraceStep {

@@ -1,5 +1,6 @@
 import type {
   ColumnState,
+  FxState,
   PlanChange,
   PreviewItem,
   PreviewPage,
@@ -72,6 +73,27 @@ export function session(overrides: Partial<SessionState> = {}): SessionState {
     mode: "first_import",
     based_on_plan_version: null,
     changes: [],
+    fx: null,
+    ...overrides,
+  };
+}
+
+export function fxState(overrides: Partial<FxState> = {}): FxState {
+  return {
+    from: "USD",
+    to: "ARS",
+    rate_type: "oficial",
+    side: "venta",
+    error: null,
+    snapshot: {
+      rate: "1535",
+      rate_type: "oficial",
+      side: "venta",
+      source: "dolarapi",
+      quoted_at: "2026-10-14T10:00:00+00:00",
+      date: "2026-10-14",
+      stale: false,
+    },
     ...overrides,
   };
 }

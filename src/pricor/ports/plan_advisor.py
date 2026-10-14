@@ -15,7 +15,14 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Protocol
 
-from pricor.domain.plan_builder import ColumnSource, ConstantSource, PlanParameters
+from pricor.domain.fx import DEFAULT_SIDE, MANUAL, MARKET_RATE_TYPES, SIDES
+from pricor.domain.plan_builder import (
+    ColumnSource,
+    ConstantSource,
+    FxChoice,
+    KeepOriginalCurrency,
+    PlanParameters,
+)
 from pricor.domain.profile import SheetProfile
 from pricor.ports.column_classifier import ColumnClassification
 
@@ -30,6 +37,7 @@ class ParameterId(StrEnum):
     DISCOUNTS = "discounts"
     CURRENCY = "currency"
     NUMBER_FORMAT = "number_format"
+    FX_CONVERSION = "fx_conversion"
 
 
 @dataclass(frozen=True)
@@ -38,7 +46,9 @@ class SeparatorChoice:
     thousands_sep: str
 
 
-ParameterValue = bool | ColumnSource | ConstantSource | SeparatorChoice
+ParameterValue = (
+    bool | ColumnSource | ConstantSource | SeparatorChoice | FxChoice | KeepOriginalCurrency
+)
 
 CURRENCIES = ("ARS", "USD", "EUR")
 _NUMBER = re.compile(r"[0-9]+(?:\.[0-9]+)?", re.ASCII)
@@ -53,6 +63,11 @@ VALUE_TOKENS: dict[ParameterId, str] = {
     ParameterId.DISCOUNTS: "column | none | constant:10+5 (chained percentages)",
     ParameterId.CURRENCY: " | ".join(CURRENCIES),
     ParameterId.NUMBER_FORMAT: "decimal_comma | decimal_point",
+    ParameterId.FX_CONVERSION: (
+        "keep | manual | <rate_type>:<side>, such as oficial:venta "
+        "(rate types: oficial, blue, bolsa, contadoconliqui, mayorista, cripto, tarjeta; "
+        "sides: compra, venta)"
+    ),
 }
 
 
@@ -99,6 +114,14 @@ def parse_value(parameter: ParameterId, token: str) -> ParameterValue:
         case ParameterId.CURRENCY:
             if token in CURRENCIES:
                 return ConstantSource(token)
+        case ParameterId.FX_CONVERSION:
+            if token == "keep":
+                return KeepOriginalCurrency()
+            if token == MANUAL:
+                return FxChoice(MANUAL, DEFAULT_SIDE)
+            rate_type, _, side = token.partition(":")
+            if rate_type in MARKET_RATE_TYPES and side in SIDES:
+                return FxChoice(rate_type, side)
         case ParameterId.NUMBER_FORMAT:
             if token == "decimal_comma":
                 return SeparatorChoice(",", ".")
@@ -124,6 +147,8 @@ def with_answer(
             return replace(parameters, discounts=value)
         case ParameterId.CURRENCY, ColumnSource() | ConstantSource():
             return replace(parameters, currency=value)
+        case ParameterId.FX_CONVERSION, FxChoice() | KeepOriginalCurrency():
+            return replace(parameters, fx=value)
         case ParameterId.NUMBER_FORMAT, SeparatorChoice():
             return replace(
                 parameters, decimal_sep=value.decimal_sep, thousands_sep=value.thousands_sep

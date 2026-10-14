@@ -8,6 +8,7 @@ always returned in the same shape (`id`, `status`, `header`, `columns`,
     header_choice_required      -> PUT  /imports/{id}/header
     role_confirmation_required  -> PUT  /imports/{id}/roles
     questions_pending           -> POST /imports/{id}/answers (one per question)
+    fx_rate_required            -> PUT  /imports/{id}/fx (type a rate) or POST /imports/{id}/fx/refresh
     ready_for_preview           -> GET  /imports/{id}/preview, POST /imports/{id}/approve
     approved                    -> frozen
 
@@ -19,12 +20,22 @@ Endpoints:
     PUT  /imports/{id}/header     {"row_index": 3 | null}   (null = the sheet has no header)
     PUT  /imports/{id}/roles      {"roles": {"2": "cost_price"}}   (column index -> role)
     POST /imports/{id}/answers    {"question_id": "currency", "option": "ARS"}
+    PUT  /imports/{id}/fx         {"rate": "1420,50"}  a manual exchange rate for this run
+    POST /imports/{id}/fx/refresh ask the live source for the plan's rate again
     GET  /imports/{id}/preview    ?offset=0&limit=50  -> per-row original, trace, final values
     POST /imports/{id}/approve    freezes the plan and the result
     GET  /imports/{id}/export     ?format=csv|xlsx (default csv)  -> the products file
     GET  /imports/{id}/rejected   ?format=csv|xlsx (default csv)  -> the rejected-rows report
     GET  /imports/{id}/report     ?threshold=0.30  -> what changed since the previous import
     GET  /imports/{id}/report/export  ?threshold=0.30&format=csv  -> the same, as a file
+
+Currency conversion: when the prices include a foreign currency the `fx_conversion` question
+asks whether to convert to ARS and with which rate (`keep`, `<rate_type>:<side>` such as
+`oficial:venta`, or `manual`). The plan stores only that choice; each run snapshots its own
+rate, reported as `fx` (`null` when the plan does not convert): `snapshot` is `null` until a
+rate is available (`error` says why the live source failed), and `snapshot.stale` flags a
+cached quote used offline. Converted values appear next to the originals, never in place of
+them. The price report keeps comparing in each record's own currency.
 
 A supplier with an approved plan is reused automatically: `mode` is `"reuse"`,
 `based_on_plan_version` names the plan, and `changes` lists what differs in the new file
@@ -122,6 +133,10 @@ class AnswerBody(BaseModel):
     option: str
 
 
+class RateBody(BaseModel):
+    rate: str
+
+
 # -- serialization ----------------------------------------------------------------
 
 
@@ -163,6 +178,31 @@ def _change(change: PlanChange) -> dict[str, Any]:
         "role": change.role,
         "old_value": change.old_value,
         "new_value": change.new_value,
+    }
+
+
+def _fx_state(session: ImportSession) -> dict[str, Any] | None:
+    step = session.conversion
+    if step is None:
+        return None
+    snapshot = session.fx_snapshot
+    return {
+        "from": step.from_currency,
+        "to": step.to_currency,
+        "rate_type": step.rate_type,
+        "side": step.side,
+        "error": session.fx_error,
+        "snapshot": None
+        if snapshot is None
+        else {
+            "rate": str(snapshot.rate),
+            "rate_type": snapshot.rate_type,
+            "side": snapshot.side,
+            "source": snapshot.source,
+            "quoted_at": snapshot.quoted_at.isoformat(),
+            "date": snapshot.date,
+            "stale": snapshot.stale,
+        },
     }
 
 
@@ -216,6 +256,7 @@ def session_state(session: ImportSession) -> dict[str, Any]:
         "mode": session.mode,
         "based_on_plan_version": session.based_on_plan_version,
         "changes": [_change(item) for item in session.changes],
+        "fx": _fx_state(session),
     }
 
 
@@ -465,6 +506,14 @@ def create_app(dependencies: ApiDependencies) -> FastAPI:
     @app.post("/imports/{session_id}/answers")
     def answer(session_id: str, body: AnswerBody) -> dict[str, Any]:
         return session_state(use_case.answer(session_id, body.question_id, body.option))
+
+    @app.put("/imports/{session_id}/fx")
+    def set_manual_rate(session_id: str, body: RateBody) -> dict[str, Any]:
+        return session_state(use_case.set_manual_rate(session_id, body.rate))
+
+    @app.post("/imports/{session_id}/fx/refresh")
+    def refresh_rate(session_id: str) -> dict[str, Any]:
+        return session_state(use_case.refresh_fx(session_id))
 
     @app.get("/imports/{session_id}/preview")
     def preview(session_id: str, offset: int = 0, limit: int = 50) -> dict[str, Any]:

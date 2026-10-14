@@ -16,6 +16,7 @@ from pricor.domain.fingerprint import FingerprintComparison, compare_fingerprint
 from pricor.domain.plan_roles import column_roles
 from pricor.domain.roles import ColumnRole
 from pricor.ports.approval_unit_of_work import ApprovalUnitOfWork
+from pricor.ports.fx_rates import FxRateProvider
 from pricor.ports.import_session import ColumnDecision, ImportSession, PlanChange
 from pricor.ports.import_session_repository import ImportSessionRepository
 from pricor.ports.plan_advisor import ParameterId, PlanAdvisor
@@ -56,13 +57,24 @@ class ReuseSupplierPlan(ImportFirstTime):
         id_factory: Callable[[], str] | None = None,
         approvals: ApprovalUnitOfWork | None = None,
         clock: Callable[[], datetime] | None = None,
+        fx: FxRateProvider | None = None,
+        default_fx_rate_type: str = "oficial",
     ):
         extra = {}
         if id_factory is not None:
             extra["id_factory"] = id_factory
         if clock is not None:
             extra["clock"] = clock
-        super().__init__(reader, repository, stages, advisor, approvals=approvals, **extra)
+        super().__init__(
+            reader,
+            repository,
+            stages,
+            advisor,
+            approvals=approvals,
+            fx=fx,
+            default_fx_rate_type=default_fx_rate_type,
+            **extra,
+        )
         self._plans = plans
 
     def start(

@@ -7,6 +7,7 @@ import { NoticeList } from "../components/molecules/NoticeList";
 import { ApprovePanel } from "../components/organisms/ApprovePanel";
 import { ColumnsTable } from "../components/organisms/ColumnsTable";
 import { ErrorBanner } from "../components/organisms/ErrorBanner";
+import { FxPanel } from "../components/organisms/FxPanel";
 import { HeaderChoice } from "../components/organisms/HeaderChoice";
 import { LanguageToggle } from "../components/organisms/LanguageToggle";
 import { PreviewTable } from "../components/organisms/PreviewTable";
@@ -30,7 +31,7 @@ const TITLES: Record<StepId, { title: TextKey; lede: TextKey }> = {
 
 function stepAfterColumns(session: SessionState): StepId {
   if (session.status === "role_confirmation_required") return "columns";
-  return session.status === "questions_pending" ? "questions" : "preview";
+  return session.status === "questions_pending" || session.status === "fx_rate_required" ? "questions" : "preview";
 }
 
 /** Owns the import session and the calls to the API; the steps themselves are presentational. */
@@ -101,6 +102,18 @@ export function ImportWizard({ api }: { api: ApiClient }) {
     run(async () => {
       if (!session) return;
       remember(await api.answer(session.id, questionId, option));
+    });
+
+  const setManualRate = (rate: string) =>
+    run(async () => {
+      if (!session) return;
+      remember(await api.setManualRate(session.id, rate));
+    });
+
+  const refreshRate = () =>
+    run(async () => {
+      if (!session) return;
+      remember(await api.refreshRate(session.id));
     });
 
   const approve = () =>
@@ -181,19 +194,33 @@ export function ImportWizard({ api }: { api: ApiClient }) {
             />
           )}
           {step === "questions" && session && (
-            <QuestionsPanel
-              questions={visibleQuestions}
-              answers={session.answers}
-              busy={busy}
-              onAnswer={answer}
-              onContinue={() => setStep("preview")}
-            />
+            <>
+              <QuestionsPanel
+                questions={visibleQuestions}
+                answers={session.answers}
+                busy={busy}
+                blocked={session.status === "fx_rate_required"}
+                onAnswer={answer}
+                onContinue={() => setStep("preview")}
+              />
+              {session.fx && (
+                <FxPanel fx={session.fx} busy={busy} onManual={setManualRate} onRefresh={refreshRate} />
+              )}
+            </>
           )}
           {step === "preview" &&
             (preview.page ? (
               <div className="stack">
                 <CountsSummary totals={preview.page.totals} />
-                <PreviewTable page={preview.page} busy={preview.loading} onPage={(offset) => void preview.load(offset)} />
+                {session?.fx && (
+                  <FxPanel fx={session.fx} busy={busy} onManual={setManualRate} onRefresh={refreshRate} />
+                )}
+                <PreviewTable
+                  page={preview.page}
+                  busy={preview.loading}
+                  onPage={(offset) => void preview.load(offset)}
+                  fx={session?.fx ?? null}
+                />
                 <section className="stack">
                   <h2 className="subtitle">{t("rejected.title", { count: preview.page.totals.rejected })}</h2>
                   <RejectedList rows={preview.page.totals.rejected_rows} />

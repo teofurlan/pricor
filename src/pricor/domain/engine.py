@@ -12,6 +12,7 @@ from decimal import ROUND_HALF_UP, Context, Decimal
 from typing import Any
 
 from .contract import REQUIRED_FIELDS, ContractRecord, TargetField
+from .fx import FxSnapshot, FxSnapshotMismatchError, FxSnapshotRequiredError, MANUAL
 from .parsing import (
     CellError,
     lookup_key,
@@ -26,6 +27,7 @@ from .plan import (
     ColumnDiscounts,
     ColumnRef,
     Constant,
+    ConvertCurrency,
     FromColumn,
     FromField,
     ImportPlan,
@@ -76,6 +78,26 @@ class RejectedRow:
 class ImportResult:
     accepted: tuple[AcceptedRow, ...]
     rejected: tuple[RejectedRow, ...]
+
+
+def _conversion_step(plan: ImportPlan, fx: FxSnapshot | None) -> ConvertCurrency | None:
+    """The plan's conversion, once the run's snapshot is known to fit it."""
+    step = next((item for item in plan.steps if isinstance(item, ConvertCurrency)), None)
+    if step is None:
+        return None
+    if fx is None:
+        raise FxSnapshotRequiredError(
+            f"the plan converts {step.from_currency} to {step.to_currency} "
+            f"({step.rate_type}, {step.side}) and the run has no exchange rate"
+        )
+    if (fx.from_currency, fx.to_currency) != (step.from_currency, step.to_currency) or (
+        fx.rate_type not in (step.rate_type, MANUAL) or fx.side != step.side
+    ):
+        raise FxSnapshotMismatchError(
+            f"the plan needs {step.from_currency}->{step.to_currency} {step.rate_type}/{step.side} "
+            f"but the snapshot is {fx.from_currency}->{fx.to_currency} {fx.rate_type}/{fx.side}"
+        )
+    return step
 
 
 def _normalize_header(header: str) -> str:
@@ -148,10 +170,20 @@ def _native_number(row: Sequence[Any], index: int) -> Decimal | None:
 class _RowRun:
     """Executes the plan over one row, collecting values, trace and reasons."""
 
-    def __init__(self, plan: ImportPlan, tables: dict[int, dict[str, Decimal | str]], row):
+    def __init__(
+        self,
+        plan: ImportPlan,
+        tables: dict[int, dict[str, Decimal | str]],
+        row,
+        conversion: ConvertCurrency | None = None,
+        fx: FxSnapshot | None = None,
+    ):
         self.plan = plan
         self.tables = tables
         self.row = row
+        self.conversion = conversion
+        self.fx = fx
+        self.converted: Decimal | None = None
         self.fields: dict[TargetField, Decimal | str] = {}
         self.failed: set[TargetField] = set()
         self.reasons: list[str] = []
@@ -308,6 +340,7 @@ class _RowRun:
 
     def _round(self) -> None:
         quantum = Decimal(1).scaleb(-self.plan.rounding.decimals)
+        unrounded = self.cost
         try:
             rounded = self.cost.quantize(quantum, rounding=ROUND_HALF_UP, context=_CONTEXT)
         except ArithmeticError:
@@ -315,6 +348,32 @@ class _RowRun:
             return
         self.cost = rounded
         self.trace.append(TraceStep("rounding", rounded))
+        self._convert(unrounded, quantum)
+
+    def _convert(self, unrounded: Decimal, quantum: Decimal) -> None:
+        """The converted cost comes from the unrounded one, so rounding still happens once."""
+        step = self.conversion
+        if step is None:
+            return
+        currency = str(self.fields.get(TargetField.CURRENCY, "")).upper()
+        if currency == step.to_currency:
+            return  # already in the target currency
+        if currency != step.from_currency:
+            self._reject(
+                None,
+                f"currency {currency} cannot be converted: "
+                f"the plan converts {step.from_currency} to {step.to_currency}",
+            )
+            return
+        try:
+            converted = _CONTEXT.multiply(unrounded, self.fx.rate).quantize(
+                quantum, rounding=ROUND_HALF_UP, context=_CONTEXT
+            )
+        except ArithmeticError:
+            self._reject(None, "converted unit cost out of range")
+            return
+        self.converted = converted
+        self.trace.append(TraceStep("convert_currency", converted))
 
     def record(self) -> ContractRecord:
         get = self.fields.get
@@ -327,6 +386,10 @@ class _RowRun:
             units_per_pack=get(TargetField.UNITS_PER_PACK),
             barcode=get(TargetField.BARCODE),
             suggested_retail_price=get(TargetField.SUGGESTED_RETAIL_PRICE),
+            unit_cost_net_converted=self.converted,
+            fx_rate=None if self.converted is None else self.fx.rate,
+            fx_source=None if self.converted is None else self.fx.label,
+            fx_date=None if self.converted is None else self.fx.date,
         )
 
 
@@ -342,6 +405,7 @@ def execute_numbered_rows(
     plan: ImportPlan,
     headers: Sequence[str],
     numbered_rows: Iterable[tuple[int, Sequence[Any]]],
+    fx: FxSnapshot | None = None,
 ) -> ImportResult:
     """Run `plan` over `(row_number, row)` pairs, which need not be contiguous.
 
@@ -349,16 +413,21 @@ def execute_numbered_rows(
     each carrying its real file row number. Every pair ends up accepted or
     rejected under that same number.
 
+    `fx` is the run's exchange-rate snapshot. A plan that converts currency refuses to run
+    without a fitting one (`FxSnapshotRequiredError`, `FxSnapshotMismatchError`); a plan that
+    does not convert ignores it.
+
     Raises `PlanIncompatibleError` before touching any row if the headers no
     longer match the plan.
     """
     check_compatibility(plan, headers)
+    conversion = _conversion_step(plan, fx)
     tables = _normalized_tables(plan)
 
     accepted: list[AcceptedRow] = []
     rejected: list[RejectedRow] = []
     for number, row in numbered_rows:
-        run = _RowRun(plan, tables, row)
+        run = _RowRun(plan, tables, row, conversion, fx)
         run.run()
         if run.reasons:
             rejected.append(RejectedRow(number, tuple(row), tuple(run.reasons)))
@@ -372,8 +441,9 @@ def execute_plan(
     headers: Sequence[str],
     rows: Sequence[Sequence[Any]],
     first_row_number: int = 1,
+    fx: FxSnapshot | None = None,
 ) -> ImportResult:
     """Run `plan` over contiguous `rows` numbered from `first_row_number`."""
     return execute_numbered_rows(
-        plan, headers, ((first_row_number + offset, row) for offset, row in enumerate(rows))
+        plan, headers, ((first_row_number + offset, row) for offset, row in enumerate(rows)), fx
     )

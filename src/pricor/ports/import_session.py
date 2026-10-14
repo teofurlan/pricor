@@ -7,7 +7,8 @@ from typing import Any
 
 from pricor.ports.question_model import Question
 from pricor.domain.engine import ImportResult
-from pricor.domain.plan import ImportPlan
+from pricor.domain.fx import FxSnapshot
+from pricor.domain.plan import ConvertCurrency, ImportPlan
 from pricor.domain.profile import SheetProfile
 from pricor.domain.roles import ColumnRole
 from pricor.ports.plan_advisor import ParameterId, PlanProposal
@@ -17,6 +18,7 @@ class SessionStatus(StrEnum):
     HEADER_CHOICE_REQUIRED = "header_choice_required"
     ROLE_CONFIRMATION_REQUIRED = "role_confirmation_required"
     QUESTIONS_PENDING = "questions_pending"
+    FX_RATE_REQUIRED = "fx_rate_required"
     READY_FOR_PREVIEW = "ready_for_preview"
     APPROVED = "approved"
 
@@ -137,6 +139,15 @@ class ImportSession:
     mode: str = "first_import"  # "first_import" or "reuse" (a saved plan seeded the session)
     based_on_plan_version: int | None = None
     changes: tuple[PlanChange, ...] = ()
+    fx_snapshot: FxSnapshot | None = None  # the exchange rate of this run
+    fx_error: str | None = None  # why no rate could be obtained automatically
+
+    @property
+    def conversion(self) -> ConvertCurrency | None:
+        """The plan's currency conversion, if it has one."""
+        if self.plan is None:
+            return None
+        return next((s for s in self.plan.steps if isinstance(s, ConvertCurrency)), None)
 
     @property
     def columns(self) -> tuple[ColumnDecision, ...]:
@@ -152,6 +163,8 @@ class ImportSession:
             return SessionStatus.ROLE_CONFIRMATION_REQUIRED
         if self.questions or self.plan is None:
             return SessionStatus.QUESTIONS_PENDING
+        if self.conversion is not None and self.fx_snapshot is None:
+            return SessionStatus.FX_RATE_REQUIRED
         return SessionStatus.READY_FOR_PREVIEW
 
     def add_notice(self, notice: Notice) -> None:

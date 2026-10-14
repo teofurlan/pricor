@@ -12,7 +12,14 @@ from dataclasses import replace
 from decimal import Decimal
 
 from pricor.application.errors import InvalidInputError
-from pricor.domain.plan_builder import ColumnSource, ConstantSource, UnresolvedParameter
+from pricor.domain.fx import MANUAL, MARKET_RATE_TYPES, SIDES
+from pricor.domain.plan_builder import (
+    ColumnSource,
+    ConstantSource,
+    FxChoice,
+    KeepOriginalCurrency,
+    UnresolvedParameter,
+)
 from pricor.ports.plan_advisor import (
     ParameterId,
     ParameterValue,
@@ -35,6 +42,47 @@ def _constants(values: Sequence[str], suffix: str = "") -> tuple[Option, ...]:
     return tuple(
         Option(f"constant:{value}", _text(f"{value}{suffix}", f"{value}{suffix}")) for value in values
     )
+
+
+_RATE_NAMES = {
+    "oficial": _text("Official", "Oficial"),
+    "blue": _text("Blue", "Blue"),
+    "bolsa": _text("MEP (bolsa)", "MEP (bolsa)"),
+    "contadoconliqui": _text("CCL (contado con liqui)", "CCL (contado con liqui)"),
+    "mayorista": _text("Wholesale (mayorista)", "Mayorista"),
+    "cripto": _text("Crypto", "Cripto"),
+    "tarjeta": _text("Card (tarjeta)", "Tarjeta"),
+}
+_SIDE_NAMES = {
+    "venta": _text("sell rate (venta)", "venta"),
+    "compra": _text("buy rate (compra)", "compra"),
+}
+
+
+def _fx_options() -> tuple[Option, ...]:
+    keep = Option(
+        "keep",
+        _text(
+            "Keep the original currency (no conversion)",
+            "Mantener la moneda original (sin conversión)",
+        ),
+    )
+    rates = tuple(
+        Option(
+            f"{rate}:{side}",
+            _text(
+                f"Convert to ARS: {_RATE_NAMES[rate].en}, {_SIDE_NAMES[side].en}",
+                f"Convertir a ARS: {_RATE_NAMES[rate].es}, {_SIDE_NAMES[side].es}",
+            ),
+        )
+        for rate in MARKET_RATE_TYPES
+        for side in SIDES
+    )
+    manual = Option(
+        MANUAL,
+        _text("Convert to ARS with a rate I type in", "Convertir a ARS con una cotización que escribo yo"),
+    )
+    return (keep, *rates, manual)
 
 
 _TEXTS: dict[ParameterId, LocalizedText] = {
@@ -62,6 +110,10 @@ _TEXTS: dict[ParameterId, LocalizedText] = {
         "In which currency are the prices?",
         "¿En qué moneda están los precios?",
     ),
+    ParameterId.FX_CONVERSION: _text(
+        "Some prices are in a foreign currency. Convert them to ARS, and with which exchange rate?",
+        "Hay precios en moneda extranjera. ¿Se convierten a ARS y con qué cotización?",
+    ),
 }
 
 _OPTIONS: dict[ParameterId, tuple[Option, ...]] = {
@@ -84,6 +136,7 @@ _OPTIONS: dict[ParameterId, tuple[Option, ...]] = {
         Option("USD", _text("US dollars (USD)", "Dólares estadounidenses (USD)")),
         Option("EUR", _text("Euros (EUR)", "Euros (EUR)")),
     ),
+    ParameterId.FX_CONVERSION: _fx_options(),
 }
 
 _CUSTOM = frozenset({ParameterId.VAT_RATE, ParameterId.UNITS_PER_PACK})
@@ -150,6 +203,12 @@ def value_token(parameter: ParameterId, value: ParameterValue) -> str | None:
             return text
         case ColumnSource():
             return "column"
+        case KeepOriginalCurrency():
+            return "keep"
+        case FxChoice(rate_type=rate_type) if rate_type == MANUAL:
+            return MANUAL
+        case FxChoice(rate_type=rate_type, side=side):
+            return f"{rate_type}:{side}"
     return None
 
 

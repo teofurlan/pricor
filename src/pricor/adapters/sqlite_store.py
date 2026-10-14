@@ -24,8 +24,10 @@ from pathlib import Path
 
 from pricor.adapters.session_codec import decode, encode
 from pricor.domain.contract import ContractRecord
+from pricor.domain.fx import FxSnapshot
 from pricor.domain.parsing import lookup_key
 from pricor.domain.plan import ImportPlan, parse_plan, plan_to_dict
+from pricor.ports.fx_rates import CachedQuote
 from pricor.ports.import_session import ImportSession
 from pricor.ports.import_session_repository import SessionNotFoundError
 from pricor.ports.plan_repository import ColumnFingerprint, SheetFingerprint, StoredPlan
@@ -90,6 +92,33 @@ MIGRATIONS: tuple[Migration, ...] = (
             )""",
         ],
     ),
+    (
+        2,
+        [
+            "alter table price_records add column unit_cost_net_converted text",
+            "alter table price_records add column fx_rate text",
+            "alter table price_records add column fx_source text",
+            "alter table price_records add column fx_date text",
+            """create table price_import_fx (
+                import_id text primary key references price_imports(import_id),
+                rate text not null,
+                rate_type text not null,
+                side text not null,
+                source text not null,
+                quoted_at text not null,
+                from_currency text not null,
+                to_currency text not null,
+                stale integer not null
+            )""",
+            """create table fx_quotes (
+                rate_type text primary key,
+                compra text not null,
+                venta text not null,
+                quoted_at text not null,
+                saved_at text not null
+            )""",
+        ],
+    ),
 )
 
 
@@ -118,6 +147,7 @@ class SqliteDatabase:
         self.sessions = SqliteImportSessionRepository(self)
         self.plans = SqlitePlanRepository(self)
         self.history = SqlitePriceHistory(self)
+        self.fx_quotes = SqliteFxQuoteCache(self)
 
     def close(self) -> None:
         with self._lock:
@@ -316,6 +346,7 @@ class SqlitePriceHistory:
         supplier: str,
         imported_at: datetime,
         records: Sequence[ImportedRecord],
+        fx: FxSnapshot | None = None,
     ) -> None:
         with self._db.transaction() as connection:
             try:
@@ -329,7 +360,8 @@ class SqlitePriceHistory:
             connection.executemany(
                 "insert into price_records (import_id, row_number, supplier_code, description, "
                 "unit_cost_net, currency, vat_rate, units_per_pack, barcode, "
-                "suggested_retail_price) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "suggested_retail_price, unit_cost_net_converted, fx_rate, fx_source, fx_date) "
+                "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 [
                     (
                         import_id,
@@ -342,10 +374,55 @@ class SqlitePriceHistory:
                         _text(item.record.units_per_pack),
                         item.record.barcode,
                         _text(item.record.suggested_retail_price),
+                        _text(item.record.unit_cost_net_converted),
+                        _text(item.record.fx_rate),
+                        item.record.fx_source,
+                        item.record.fx_date,
                     )
                     for item in records
                 ],
             )
+            if fx is not None:
+                connection.execute(
+                    "insert into price_import_fx (import_id, rate, rate_type, side, source, "
+                    "quoted_at, from_currency, to_currency, stale) values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        import_id,
+                        str(fx.rate),
+                        fx.rate_type,
+                        fx.side,
+                        fx.source,
+                        fx.quoted_at.isoformat(),
+                        fx.from_currency,
+                        fx.to_currency,
+                        int(fx.stale),
+                    ),
+                )
+
+    def fx_of(self, import_id: str) -> FxSnapshot | None:
+        with self._db.transaction() as connection:
+            if connection.execute(
+                "select 1 from price_imports where import_id = ?", (import_id,)
+            ).fetchone() is None:
+                raise ImportNotFoundError(f"no stored import {import_id!r}")
+            row = connection.execute(
+                "select rate, rate_type, side, source, quoted_at, from_currency, to_currency, "
+                "stale from price_import_fx where import_id = ?",
+                (import_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        rate, rate_type, side, source, quoted_at, source_currency, target_currency, stale = row
+        return FxSnapshot(
+            Decimal(rate),
+            rate_type,
+            side,
+            source,
+            datetime.fromisoformat(quoted_at),
+            source_currency,
+            target_currency,
+            bool(stale),
+        )
 
     def imports_for(self, supplier: str) -> tuple[ImportSummary, ...]:
         with self._db.transaction() as connection:
@@ -369,7 +446,8 @@ class SqlitePriceHistory:
                 raise ImportNotFoundError(f"no stored import {import_id!r}")
             rows = connection.execute(
                 "select row_number, supplier_code, description, unit_cost_net, currency, "
-                "vat_rate, units_per_pack, barcode, suggested_retail_price "
+                "vat_rate, units_per_pack, barcode, suggested_retail_price, "
+                "unit_cost_net_converted, fx_rate, fx_source, fx_date "
                 "from price_records where import_id = ? order by row_number",
                 (import_id,),
             ).fetchall()
@@ -385,7 +463,60 @@ class SqlitePriceHistory:
                     _decimal(units),
                     barcode,
                     _decimal(retail),
+                    _decimal(converted),
+                    _decimal(fx_rate),
+                    fx_source,
+                    fx_date,
                 ),
             )
-            for number, code, description, cost, currency, vat, units, barcode, retail in rows
+            for (
+                number,
+                code,
+                description,
+                cost,
+                currency,
+                vat,
+                units,
+                barcode,
+                retail,
+                converted,
+                fx_rate,
+                fx_source,
+                fx_date,
+            ) in rows
+        )
+
+
+# -- exchange-rate quote cache ------------------------------------------------------
+
+
+class SqliteFxQuoteCache:
+    """The last successful quote per rate type, for offline conversions."""
+
+    def __init__(self, database: SqliteDatabase):
+        self._db = database
+
+    def save(self, quote: CachedQuote) -> None:
+        with self._db.transaction() as connection:
+            connection.execute(
+                "insert or replace into fx_quotes (rate_type, compra, venta, quoted_at, saved_at) "
+                "values (?, ?, ?, ?, ?)",
+                (
+                    quote.rate_type,
+                    str(quote.compra),
+                    str(quote.venta),
+                    quote.quoted_at.isoformat(),
+                    _now(),
+                ),
+            )
+
+    def last(self, rate_type: str) -> CachedQuote | None:
+        with self._db.transaction() as connection:
+            row = connection.execute(
+                "select compra, venta, quoted_at from fx_quotes where rate_type = ?", (rate_type,)
+            ).fetchone()
+        if row is None:
+            return None
+        return CachedQuote(
+            rate_type, Decimal(row[0]), Decimal(row[1]), datetime.fromisoformat(row[2])
         )

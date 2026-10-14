@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Protocol
 
 from pricor.domain.contract import ContractRecord
+from pricor.domain.fx import FxSnapshot
 
 
 class ImportNotFoundError(Exception):
@@ -43,8 +44,13 @@ class PriceHistory(Protocol):
         supplier: str,
         imported_at: datetime,
         records: Sequence[ImportedRecord],
+        fx: FxSnapshot | None = None,
     ) -> None:
-        """Store the accepted records of one import. An id can be stored only once."""
+        """Store the accepted records of one import, and the exchange-rate snapshot its run used.
+
+        An id can be stored only once. Records keep the supplier's own values; converted
+        values travel as optional extra fields of each record.
+        """
         ...
 
     def imports_for(self, supplier: str) -> tuple[ImportSummary, ...]:
@@ -53,4 +59,8 @@ class PriceHistory(Protocol):
 
     def records_of(self, import_id: str) -> tuple[ImportedRecord, ...]:
         """Records in file order, or raise `ImportNotFoundError`."""
+        ...
+
+    def fx_of(self, import_id: str) -> FxSnapshot | None:
+        """The snapshot the import's run converted with, `None` if it converted nothing."""
         ...

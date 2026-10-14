@@ -378,3 +378,26 @@ def test_empty_lists_give_an_empty_report():
 )
 def test_percent_text_rounds_half_up_to_two_places_for_display_only(ratio, text):
     assert percent_text(ratio) == text
+
+
+# -- exchange rates never count as supplier price changes --
+
+
+def converted(code, rate):
+    return ContractRecord(
+        code,
+        f"Producto {code}",
+        D("2.50"),
+        "USD",
+        unit_cost_net_converted=D("2.50") * D(rate),
+        fx_rate=D(rate),
+        fx_source="dolarapi:oficial:venta",
+        fx_date="2026-10-14",
+    )
+
+
+def test_a_moving_exchange_rate_alone_is_not_a_price_change():
+    report = compare_price_lists([converted("A1", "1500")], [converted("A1", "2000")])
+
+    assert report.summary.unchanged == 1
+    assert (report.increases, report.decreases, report.anomalies) == ((), (), ())

@@ -30,11 +30,14 @@ from pricor.domain.cells import display
 from pricor.domain.contract import ContractRecord
 from pricor.domain.engine import ImportResult, execute_numbered_rows
 from pricor.domain.fingerprint import fingerprint_of
+from pricor.domain.fx import MANUAL, FxSnapshot, manual_snapshot
+from pricor.domain.fx import FxInvalidRateError
 from pricor.domain.plan import PlanValidationError
 from pricor.domain.plan_builder import PlanParameters, RoleAssignment, build_plan
 from pricor.domain.profile import HEADER_SEARCH_ROWS, RowClass, SheetProfile, profile_sheet
 from pricor.domain.roles import ColumnRole
 from pricor.ports.column_classifier import ColumnClassification
+from pricor.ports.fx_rates import FxError, FxRateProvider
 from pricor.ports.import_session import (
     ColumnDecision,
     HeaderCandidate,
@@ -50,6 +53,7 @@ from pricor.ports.import_session_repository import ImportSessionRepository
 from pricor.ports.model_errors import ModelError, ModelTimeoutError, ModelUnavailableError
 from pricor.ports.plan_advisor import ParameterId, PlanAdvisor, parse_value, with_answer
 from pricor.ports.price_history import ImportedRecord
+from pricor.ports.question_model import Suggestion
 from pricor.ports.spreadsheet import SpreadsheetReader
 
 __all__ = ["UNCALIBRATED_THRESHOLD", "ClassifierStage", "ImportFirstTime"]
@@ -99,6 +103,8 @@ class ImportFirstTime:
         id_factory: Callable[[], str] = lambda: uuid.uuid4().hex,
         approvals: ApprovalUnitOfWork | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        fx: FxRateProvider | None = None,
+        default_fx_rate_type: str = "oficial",
     ):
         self._reader = reader
         self._repository = repository
@@ -107,6 +113,8 @@ class ImportFirstTime:
         self._new_id = id_factory
         self._approvals = approvals
         self._clock = clock
+        self._fx = fx
+        self._default_fx_rate_type = default_fx_rate_type
 
     # -- operations ------------------------------------------------------------
 
@@ -261,10 +269,80 @@ class ImportFirstTime:
                 session.supplier_name,
                 now,
                 [ImportedRecord(item.row_number, item.record) for item in result.accepted],
+                fx=session.fx_snapshot if session.conversion is not None else None,
             )
             transaction.sessions.save(session)
 
+    def set_manual_rate(self, session_id: str, rate_text: str) -> ImportSession:
+        """Use a rate the user typed in for this run (any plan rate type accepts it)."""
+        session = self._open(session_id)
+        step = session.conversion
+        if step is None:
+            raise InvalidOperationError("this import does not convert currency")
+        try:
+            snapshot = manual_snapshot(
+                rate_text, step.from_currency, step.to_currency, step.side, self._clock()
+            )
+        except FxInvalidRateError as error:
+            raise InvalidInputError(str(error)) from error
+        session.fx_snapshot, session.fx_error, session.result = snapshot, None, None
+        self._repository.save(session)
+        return session
+
+    def refresh_fx(self, session_id: str) -> ImportSession:
+        """Ask the live source for the plan's rate again, replacing the run's snapshot."""
+        session = self._open(session_id)
+        if session.conversion is None:
+            raise InvalidOperationError("this import does not convert currency")
+        session.fx_snapshot, session.result = None, None
+        self._ensure_fx(session)
+        self._repository.save(session)
+        return session
+
     # -- internals -------------------------------------------------------------
+
+    def _ensure_fx(self, session: ImportSession) -> None:
+        """Give the run the exchange rate its plan needs: kept, fetched fresh, or still missing.
+
+        Nothing is guessed: with no usable rate the session stays in `fx_rate_required`.
+        """
+        step = session.conversion
+        current = session.fx_snapshot
+        if step is None:
+            session.fx_snapshot, session.fx_error = None, None
+            return
+        pair = (step.from_currency, step.to_currency)
+        if current is not None and (current.from_currency, current.to_currency) == pair:
+            if current.source == MANUAL:
+                session.fx_snapshot = replace(current, side=step.side)
+                return
+            if (current.rate_type, current.side) == (step.rate_type, step.side):
+                return
+        session.fx_snapshot, session.fx_error = None, None
+        session.result = None
+        if step.rate_type == MANUAL:
+            return  # the user types the rate; the live source is never asked
+        if self._fx is None:
+            session.fx_error = "no exchange-rate source is configured; enter a rate"
+            return
+        try:
+            session.fx_snapshot = self._fx.snapshot(*pair, step.rate_type, step.side)
+        except FxError as error:
+            session.fx_error = str(error)
+
+    def _with_default_fx(self, questions: tuple) -> tuple:
+        """Offer the configured default rate type on the conversion question, as a suggestion."""
+        return tuple(
+            replace(
+                question,
+                suggestion=Suggestion(
+                    f"{self._default_fx_rate_type}:venta", 1.0, suggested_by="setting", calibrated=True
+                ),
+            )
+            if question.id is ParameterId.FX_CONVERSION and question.suggestion is None
+            else question
+            for question in questions
+        )
 
     def _open(self, session_id: str) -> ImportSession:
         session = self._repository.get(session_id)
@@ -310,6 +388,7 @@ class ImportFirstTime:
             return
         if built.plan is not None:
             session.plan = built.plan
+            self._ensure_fx(session)
             return
         questions, issues = build_questions(built.unresolved)
         session.role_issues = issues
@@ -317,7 +396,7 @@ class ImportFirstTime:
             return  # questions wait until the column roles are consistent
         if questions:
             self._ensure_proposal(session, assignments)
-        session.questions = decorate(questions, session.proposal)
+        session.questions = self._with_default_fx(decorate(questions, session.proposal))
 
     def _ensure_proposal(self, session: ImportSession, assignments: list[RoleAssignment]) -> None:
         if self._advisor is None or session.model_unreachable:
@@ -359,7 +438,9 @@ class ImportFirstTime:
             profile = session.profile
             headers = [column.plan_header for column in profile.columns]
             data = [(index + 1, session.rows[index]) for index in profile.indexes_of(RowClass.DATA)]
-            session.result = execute_numbered_rows(session.plan, headers, data)
+            session.result = execute_numbered_rows(
+                session.plan, headers, data, session.fx_snapshot
+            )
         return session.result
 
     def _preview_rows(self, session: ImportSession) -> list[PreviewRow]:

@@ -6,6 +6,7 @@ the input. `parse_plan` is the only door through which a dict (for example one
 proposed by a language model) becomes an `ImportPlan`.
 """
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
@@ -13,6 +14,7 @@ from enum import StrEnum
 from typing import Any
 
 from .contract import REQUIRED_FIELDS, TEXT_FIELDS, TargetField
+from .fx import DEFAULT_SIDE, RATE_TYPES, SIDES
 from .parsing import lookup_key
 
 SUPPORTED_CONTRACT_VERSIONS = frozenset({"1"})
@@ -31,6 +33,7 @@ class Operation(StrEnum):
     MAP_VALUES = "map_values"
     CONSTANT = "constant"
     NORMALIZE_TEXT = "normalize_text"
+    CONVERT_CURRENCY = "convert_currency"
 
 
 # Fixed execution order of the cost pipeline.
@@ -39,6 +42,7 @@ COST_PIPELINE = (
     Operation.APPLY_DISCOUNTS,
     Operation.STRIP_VAT,
     Operation.PER_UNIT,
+    Operation.CONVERT_CURRENCY,
 )
 
 _NUMERIC_TARGETS = frozenset(TargetField) - TEXT_FIELDS - {TargetField.UNIT_COST_NET}
@@ -131,6 +135,17 @@ class PerUnit:
 
 
 @dataclass(frozen=True)
+class ConvertCurrency:
+    """Add the cost in another currency. The rate is a run input, never part of the plan."""
+
+    from_currency: str
+    to_currency: str
+    rate_type: str
+    side: str
+    op = Operation.CONVERT_CURRENCY
+
+
+@dataclass(frozen=True)
 class MapValues:
     column: ColumnRef
     table: Mapping[str, Decimal | str]
@@ -146,7 +161,14 @@ class Constant:
 
 
 Step = (
-    NormalizeText | ParseNumber | ApplyDiscounts | StripVat | PerUnit | MapValues | Constant
+    NormalizeText
+    | ParseNumber
+    | ApplyDiscounts
+    | StripVat
+    | PerUnit
+    | ConvertCurrency
+    | MapValues
+    | Constant
 )
 
 
@@ -371,6 +393,37 @@ def _parse_per_unit(step: dict, path: str, problems: _Problems) -> Step | None:
     return PerUnit(source) if source else None
 
 
+_CURRENCY_CODE = re.compile(r"[A-Z]{3}", re.ASCII)
+
+
+def _parse_currency_code(value: Any, path: str, problems: _Problems) -> str | None:
+    if isinstance(value, str) and _CURRENCY_CODE.fullmatch(value):
+        return value
+    problems.add(path, "must be a three-letter uppercase currency code such as 'USD'")
+    return None
+
+
+def _parse_convert_currency(step: dict, path: str, problems: _Problems) -> Step | None:
+    if not _check_keys(
+        step, {"from", "to", "rate_type"}, {"op", "side"}, path, problems, "parameter"
+    ):
+        return None
+    source = _parse_currency_code(step["from"], f"{path}.from", problems)
+    target = _parse_currency_code(step["to"], f"{path}.to", problems)
+    valid = source is not None and target is not None
+    if valid and source == target:
+        problems.add(path, "'from' and 'to' must differ")
+        valid = False
+    rate_type, side = step["rate_type"], step.get("side", DEFAULT_SIDE)
+    if not _is_one_of(rate_type, RATE_TYPES):
+        problems.add(f"{path}.rate_type", f"must be one of: {', '.join(sorted(RATE_TYPES))}")
+        valid = False
+    if not _is_one_of(side, frozenset(SIDES)):
+        problems.add(f"{path}.side", "must be 'compra' or 'venta'")
+        valid = False
+    return ConvertCurrency(source, target, rate_type, side) if valid else None
+
+
 def _parse_table_value(value: Any, target: TargetField, path: str, problems: _Problems):
     if target in _NUMERIC_TARGETS:
         number = _to_decimal(value)
@@ -437,6 +490,7 @@ _STEP_PARSERS = {
     Operation.APPLY_DISCOUNTS: _parse_apply_discounts,
     Operation.STRIP_VAT: _parse_strip_vat,
     Operation.PER_UNIT: _parse_per_unit,
+    Operation.CONVERT_CURRENCY: _parse_convert_currency,
     Operation.MAP_VALUES: _parse_map_values,
     Operation.CONSTANT: _parse_constant,
 }
@@ -610,6 +664,13 @@ def _step_dict(step: Step) -> dict[str, Any]:
             data["rate_from"] = _source_dict(step.rate_from)
         case PerUnit():
             data["units_from"] = _source_dict(step.units_from)
+        case ConvertCurrency():
+            data |= {
+                "from": step.from_currency,
+                "to": step.to_currency,
+                "rate_type": step.rate_type,
+                "side": step.side,
+            }
         case MapValues():
             data |= {
                 "column": _column_dict(step.column),

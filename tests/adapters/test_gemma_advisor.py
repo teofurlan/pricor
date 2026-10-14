@@ -242,3 +242,10 @@ def test_only_a_few_samples_reach_the_prompt():
     client, _ = propose(rows=rows)
 
     assert client.calls[0]["user"].count("ROW-") <= 12
+
+
+def test_the_exchange_rate_choice_is_left_to_the_user():
+    client, _ = propose()
+
+    system = client.calls[0]["system"].lower()
+    assert "never hypothesize fx_conversion" in system
