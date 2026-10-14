@@ -15,7 +15,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from .cells import (
     CellKind,
@@ -356,9 +356,19 @@ def _profile_column(index: int, raw_header: str, data: list[tuple[int, Row]]) ->
 # -- entry points ---------------------------------------------------------------
 
 
-def profile_sheet(rows: Sequence[Row]) -> SheetProfile:
-    """Profile the rows of one sheet."""
-    header_row, confidence, ambiguous = _detect_header(rows)
+def profile_sheet(rows: Sequence[Row], header_row: int | None | Literal["auto"] = "auto") -> SheetProfile:
+    """Profile the rows of one sheet.
+
+    By default the header row is detected. Pass an index to force the row the
+    user chose, or `None` to declare the sheet header-less (columns then get
+    synthesized `column_N` headers).
+    """
+    if header_row == "auto":
+        header_row, confidence, ambiguous = _detect_header(rows)
+    else:
+        if header_row is not None and not 0 <= header_row < len(rows):
+            raise ValueError(f"header row {header_row} is outside the sheet ({len(rows)} rows)")
+        confidence, ambiguous = (1.0, False) if header_row is not None else (0.0, False)
     if header_row is not None:
         table_width = len(_non_blank(rows[header_row]))
     else:

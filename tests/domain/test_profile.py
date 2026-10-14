@@ -383,3 +383,27 @@ def test_lone_code_like_cell_is_a_sparse_data_row_not_a_section():
     rows = [("Código", "Marca"), ("A1", "X"), ("A3", None)]
     by_index = {item.index: item.kind for item in profile_sheet(rows).row_classes}
     assert by_index[2] is RowClass.DATA
+
+
+# -- user-chosen header row --
+
+
+def test_forced_header_row_overrides_detection():
+    rows = _sheet()
+    profile = profile_sheet(rows, header_row=0)
+    assert profile.header_row == 0
+    assert profile.header_confidence == 1.0
+    assert profile.header_ambiguous is False
+
+
+def test_forced_header_row_none_means_header_less():
+    rows = [("A-001", "Producto 1", "10,50"), ("A-002", "Producto 2", "11,50")]
+    profile = profile_sheet(rows, header_row=None)
+    assert profile.header_row is None
+    assert [c.plan_header for c in profile.columns] == ["column_0", "column_1", "column_2"]
+    assert profile.class_counts[RowClass.DATA] == 2
+
+
+def test_forced_header_row_out_of_range_is_rejected():
+    with pytest.raises(ValueError, match="header row"):
+        profile_sheet(_sheet(), header_row=99)
