@@ -41,6 +41,19 @@ describe("UploadForm", () => {
     expect(onSubmit).toHaveBeenCalledWith({ file, supplierName: "Acme", sheet: "Hoja1", language: "es" });
   });
 
+  it("can ask to ignore the saved plan and start from scratch", async () => {
+    const onSubmit = vi.fn();
+    renderWithI18n(<UploadForm busy={false} onSubmit={onSubmit} />);
+    const fresh = "Start from scratch instead of reusing the saved plan";
+    await userEvent.type(screen.getByLabelText("Supplier name"), "Acme");
+    await userEvent.upload(screen.getByLabelText("Price list file"), new File(["a"], "lista.csv"));
+    expect(screen.getByLabelText(fresh)).not.toBeChecked();
+    await userEvent.click(screen.getByLabelText(fresh));
+    await userEvent.click(screen.getByRole("button", { name: "Start import" }));
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ supplierName: "Acme", forceFirstImport: true }));
+  });
+
   it("defaults the question language to the interface language", () => {
     renderWithI18n(<UploadForm busy={false} onSubmit={vi.fn()} />, "es");
     expect(screen.getByLabelText("Idioma de las preguntas")).toHaveValue("es");

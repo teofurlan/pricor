@@ -58,7 +58,7 @@ export interface ColumnState {
   index: number;
   header: string;
   role: ColumnRole | null;
-  /** A cascade stage name ("heuristics", "gemma"), "user", or null while undecided. */
+  /** A cascade stage name ("heuristics", "gemma"), "user", "saved_plan", or null while undecided. */
   decided_by: string | null;
   score: number;
   rationale: string;
@@ -101,6 +101,33 @@ export interface Notice {
   stage: string | null;
 }
 
+export type PlanChangeKind =
+  | "moved"
+  | "retyped"
+  | "new"
+  | "missing"
+  | "sheet_changed"
+  | "header_row_changed";
+
+/** One difference between a new file and the saved plan it reuses. */
+export interface PlanChange {
+  kind: PlanChangeKind;
+  /** Normalized column header; empty for sheet and header-row changes. */
+  header: string;
+  old_index: number | null;
+  new_index: number | null;
+  old_type: string | null;
+  new_type: string | null;
+  /** For a missing column: the saved plan read it. */
+  used_by_plan: boolean;
+  /** What the saved plan used the column for. */
+  role: string | null;
+  old_value: string | null;
+  new_value: string | null;
+}
+
+export type ImportMode = "first_import" | "reuse";
+
 export interface SessionState {
   id: string;
   status: SessionStatus;
@@ -114,6 +141,9 @@ export interface SessionState {
   answers: Record<string, string>;
   notices: Notice[];
   approved: boolean;
+  mode: ImportMode;
+  based_on_plan_version: number | null;
+  changes: PlanChange[];
 }
 
 export interface TraceStep {
@@ -154,4 +184,6 @@ export interface CreateImportInput {
   supplierName: string;
   sheet?: string;
   language: Language;
+  /** Ignore the supplier's saved plan and run a first import. */
+  forceFirstImport?: boolean;
 }

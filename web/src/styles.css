@@ -395,6 +395,7 @@ input[type="file"] {
 .badge--heuristics { background: var(--heuristics-wash); color: var(--heuristics); }
 .badge--gemma { background: var(--gemma-wash); color: var(--gemma); }
 .badge--user { background: var(--user-wash); color: var(--user); }
+.badge--saved { background: var(--good-wash); color: var(--good); }
 .badge--good { background: var(--good-wash); color: var(--good); }
 .badge--bad { background: var(--bad-wash); color: var(--bad); }
 .badge--pending {
@@ -882,4 +883,55 @@ input[type="file"] {
   * {
     transition: none !important;
   }
+}
+
+/* -- plan reuse ------------------------------------------------------------ */
+
+.reuse {
+  display: grid;
+  gap: 10px;
+  padding: 16px 20px;
+  border-left: 4px solid var(--good);
+  background: var(--good-wash);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  max-width: 72ch;
+}
+
+.reuse__title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.reuse__changes {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.change--attention {
+  font-weight: 600;
+  color: var(--user);
+}
+
+.check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  max-width: 62ch;
+}
+
+.check input {
+  margin-top: 0.3em;
+}
+
+.check > div {
+  display: grid;
+}
+
+.check__label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.92rem;
 }

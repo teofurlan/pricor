@@ -15,6 +15,7 @@ describe("ProvenanceBadge", () => {
     ["heuristics", "Heuristics"],
     ["gemma", "Gemma"],
     ["user", "You"],
+    ["saved_plan", "Saved plan"],
   ])("names who decided: %s", (decidedBy, label) => {
     renderWithI18n(<ProvenanceBadge decidedBy={decidedBy} />);
     expect(screen.getByText(label)).toBeInTheDocument();

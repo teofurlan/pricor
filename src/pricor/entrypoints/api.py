@@ -2,7 +2,8 @@
 
 All bodies are JSON except the upload, which is multipart. Session state is
 always returned in the same shape (`id`, `status`, `header`, `columns`,
-`role_issues`, `questions`, `answers`, `notices`, `approved`); follow `status`:
+`role_issues`, `questions`, `answers`, `notices`, `approved`, `mode`,
+`based_on_plan_version`, `changes`); follow `status`:
 
     header_choice_required      -> PUT  /imports/{id}/header
     role_confirmation_required  -> PUT  /imports/{id}/roles
@@ -12,7 +13,8 @@ always returned in the same shape (`id`, `status`, `header`, `columns`,
 
 Endpoints:
 
-    POST /imports                 multipart: file, supplier_name, [sheet], [language]  -> 201 state
+    POST /imports                 multipart: file, supplier_name, [sheet], [language],
+                                  [force_first_import]  -> 201 state
     GET  /imports/{id}            current state
     PUT  /imports/{id}/header     {"row_index": 3 | null}   (null = the sheet has no header)
     PUT  /imports/{id}/roles      {"roles": {"2": "cost_price"}}   (column index -> role)
@@ -21,6 +23,12 @@ Endpoints:
     POST /imports/{id}/approve    freezes the plan and the result
     GET  /imports/{id}/export     ?format=csv|xlsx (default csv)  -> the products file
     GET  /imports/{id}/rejected   ?format=csv|xlsx (default csv)  -> the rejected-rows report
+
+A supplier with an approved plan is reused automatically: `mode` is `"reuse"`,
+`based_on_plan_version` names the plan, and `changes` lists what differs in the new file
+(`moved`, `retyped`, `new`, `missing` columns, `sheet_changed`, `header_row_changed`).
+Columns the plan settled have `decided_by: "saved_plan"`. Send `force_first_import=true` to
+start from scratch instead; `mode` is then `"first_import"`.
 
 Both downloads are attachments (`Content-Disposition`) and exist only for approved
 sessions (409 otherwise); an unknown `format` is a 422. The XLSX export carries the
@@ -58,7 +66,7 @@ from pricor.application.export_import import ExportedFile, ExportImport
 from pricor.application.import_first_time import ImportFirstTime
 from pricor.application.questions import Question
 from pricor.domain.roles import ColumnRole
-from pricor.ports.import_session import ImportSession, PreviewPage
+from pricor.ports.import_session import ImportSession, PlanChange, PreviewPage
 from pricor.ports.import_session_repository import SessionNotFoundError
 from pricor.entrypoints.web_app import install_web_app
 from pricor.ports.spreadsheet import (
@@ -125,6 +133,21 @@ def _question(question: Question) -> dict[str, Any]:
     }
 
 
+def _change(change: PlanChange) -> dict[str, Any]:
+    return {
+        "kind": change.kind,
+        "header": change.header,
+        "old_index": change.old_index,
+        "new_index": change.new_index,
+        "old_type": change.old_type,
+        "new_type": change.new_type,
+        "used_by_plan": change.used_by_plan,
+        "role": change.role,
+        "old_value": change.old_value,
+        "new_value": change.new_value,
+    }
+
+
 def session_state(session: ImportSession) -> dict[str, Any]:
     profile = session.profile
     samples = {column.index: list(column.samples) for column in profile.columns}
@@ -172,6 +195,9 @@ def session_state(session: ImportSession) -> dict[str, Any]:
             for item in session.notices
         ],
         "approved": session.approved,
+        "mode": session.mode,
+        "based_on_plan_version": session.based_on_plan_version,
+        "changes": [_change(item) for item in session.changes],
     }
 
 
@@ -302,6 +328,7 @@ def create_app(dependencies: ApiDependencies) -> FastAPI:
         supplier_name: str = Form(...),
         sheet: str | None = Form(None),
         language: str = Form("en"),
+        force_first_import: bool = Form(False),
     ) -> dict[str, Any]:
         if language not in ("en", "es"):
             raise InvalidInputError("language must be 'en' or 'es'")
@@ -309,7 +336,9 @@ def create_app(dependencies: ApiDependencies) -> FastAPI:
         directory = Path(tempfile.mkdtemp(prefix="pricor-upload-", dir=parent))
         try:
             path = _store_upload(file, directory, dependencies.max_upload_bytes)
-            session = use_case.start(path, supplier_name, sheet or None, language)
+            session = use_case.start(
+                path, supplier_name, sheet or None, language, force_first_import
+            )
         finally:
             shutil.rmtree(directory, ignore_errors=True)
         return session_state(session)

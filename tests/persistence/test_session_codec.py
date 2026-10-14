@@ -55,3 +55,35 @@ def test_encoded_form_is_json():
 def test_untrusted_or_corrupt_payloads_are_refused(payload):
     with pytest.raises(SessionCodecError):
         decode(payload)
+
+
+def test_a_reuse_session_round_trips_with_its_change_list():
+    from dataclasses import replace
+
+    from pricor.ports.import_session import PlanChange
+
+    session = replace(
+        Flow().start(),
+        mode="reuse",
+        based_on_plan_version=2,
+        changes=(PlanChange("moved", "codigo", 0, 1, "code", "code", role="code"),),
+    )
+
+    restored = decode(encode(session))
+
+    assert restored == session
+    assert restored.changes[0].role == "code"
+
+
+def test_a_session_stored_before_reuse_existed_still_loads():
+    document = json.loads(encode(Flow().start()))
+    for name in ("mode", "based_on_plan_version", "changes"):
+        document["f"].pop(name)
+
+    restored = decode(json.dumps(document))
+
+    assert (restored.mode, restored.based_on_plan_version, restored.changes) == (
+        "first_import",
+        None,
+        (),
+    )

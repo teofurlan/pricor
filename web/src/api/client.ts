@@ -67,12 +67,13 @@ export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), 
   const base = (id: string) => `/imports/${encodeURIComponent(id)}`;
 
   return {
-    createImport({ file, supplierName, sheet, language }) {
+    createImport({ file, supplierName, sheet, language, forceFirstImport }) {
       const form = new FormData();
       form.set("file", file);
       form.set("supplier_name", supplierName);
       if (sheet?.trim()) form.set("sheet", sheet.trim());
       form.set("language", language);
+      if (forceFirstImport) form.set("force_first_import", "true");
       return call("/imports", { method: "POST", body: form });
     },
     getImport: (id) => call(base(id)),

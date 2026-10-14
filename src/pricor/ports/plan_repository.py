@@ -2,28 +2,17 @@
 
 Plans are never overwritten: every approval adds a version, and `latest_for`
 returns the newest. Each version carries the fingerprint of the sheet it was
-approved against (what T14 compares when the supplier sends a new file).
+approved against (what `domain.fingerprint` compares when the supplier sends a new file).
 """
 
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
+from pricor.domain.fingerprint import ColumnFingerprint, SheetFingerprint
 from pricor.domain.plan import ImportPlan
 
-
-@dataclass(frozen=True)
-class ColumnFingerprint:
-    index: int
-    header: str  # normalized: trimmed, whitespace collapsed, case-folded
-    apparent_type: str  # `ColumnType` value
-
-
-@dataclass(frozen=True)
-class SheetFingerprint:
-    sheet_name: str
-    header_row: int | None
-    columns: tuple[ColumnFingerprint, ...]
+__all__ = ["ColumnFingerprint", "PlanRepository", "SheetFingerprint", "StoredPlan"]
 
 
 @dataclass(frozen=True)

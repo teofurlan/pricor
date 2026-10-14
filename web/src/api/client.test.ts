@@ -34,6 +34,19 @@ describe("api client", () => {
     expect((fetchMock.mock.calls[0][1].body as FormData).has("sheet")).toBe(false);
   });
 
+  it("asks for a fresh import only when told to", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => jsonResponse({ id: "s1" }, 201));
+    const api = createApiClient(fetchMock);
+    const file = new File(["a"], "a.csv");
+
+    await api.createImport({ file, supplierName: "Acme", language: "en" });
+    await api.createImport({ file, supplierName: "Acme", language: "en", forceFirstImport: true });
+
+    const forms = fetchMock.mock.calls.map(([, init]) => init.body as FormData);
+    expect(forms[0].has("force_first_import")).toBe(false);
+    expect(forms[1].get("force_first_import")).toBe("true");
+  });
+
   it("sends header, roles and answers as JSON", async () => {
     const fetchMock = vi.fn().mockImplementation(async () => jsonResponse({ id: "s1" }));
     const api = createApiClient(fetchMock);

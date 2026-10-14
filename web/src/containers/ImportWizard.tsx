@@ -11,6 +11,7 @@ import { HeaderChoice } from "../components/organisms/HeaderChoice";
 import { LanguageToggle } from "../components/organisms/LanguageToggle";
 import { PreviewTable } from "../components/organisms/PreviewTable";
 import { QuestionsPanel } from "../components/organisms/QuestionsPanel";
+import { ReuseBanner } from "../components/organisms/ReuseBanner";
 import { RejectedList } from "../components/organisms/RejectedList";
 import { Stepper, type StepId, type StepItem } from "../components/organisms/Stepper";
 import { UploadForm } from "../components/organisms/UploadForm";
@@ -161,6 +162,13 @@ export function ImportWizard({ api }: { api: ApiClient }) {
           {step === "upload" && <UploadForm busy={busy} onSubmit={upload} />}
           {step === "header" && session && (
             <HeaderChoice candidates={session.header.candidates} busy={busy} onChoose={chooseHeader} />
+          )}
+          {step === "columns" && session?.mode === "reuse" && session.based_on_plan_version !== null && (
+            <ReuseBanner
+              version={session.based_on_plan_version}
+              supplier={session.supplier_name}
+              changes={session.changes}
+            />
           )}
           {step === "columns" && session && (
             <ColumnsTable

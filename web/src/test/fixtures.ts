@@ -1,4 +1,20 @@
-import type { ColumnState, PreviewItem, PreviewPage, Question, SessionState } from "../api/types";
+import type { ColumnState, PlanChange, PreviewItem, PreviewPage, Question, SessionState } from "../api/types";
+
+export function change(overrides: Partial<PlanChange> = {}): PlanChange {
+  return {
+    kind: "moved",
+    header: "codigo",
+    old_index: 0,
+    new_index: 1,
+    old_type: "code",
+    new_type: "code",
+    used_by_plan: false,
+    role: "code",
+    old_value: null,
+    new_value: null,
+    ...overrides,
+  };
+}
 
 export function column(overrides: Partial<ColumnState> = {}): ColumnState {
   return {
@@ -44,6 +60,9 @@ export function session(overrides: Partial<SessionState> = {}): SessionState {
     answers: {},
     notices: [],
     approved: false,
+    mode: "first_import",
+    based_on_plan_version: null,
+    changes: [],
     ...overrides,
   };
 }

@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ApiError, type ApiClient } from "../api/client";
 import type { SessionState } from "../api/types";
-import { column, previewPage, question, session } from "../test/fixtures";
+import { change, column, previewPage, question, session } from "../test/fixtures";
 import { renderWithI18n } from "../test/render";
 import { ImportWizard } from "./ImportWizard";
 
@@ -201,6 +201,34 @@ describe("ImportWizard", () => {
     finish(withQuestion);
     await screen.findByRole("button", { name: "Confirm columns" });
     expect(screen.queryByText(/Working. Local models can take up to a minute/)).toBeNull();
+  });
+
+  it("shows the reused plan and what changed on the columns step", async () => {
+    const reused = session({
+      status: "ready_for_preview",
+      mode: "reuse",
+      based_on_plan_version: 2,
+      columns: [column({ decided_by: "saved_plan" })],
+      changes: [change({ kind: "moved", header: "codigo", old_index: 0, new_index: 1 })],
+    });
+    const api = fakeApi({ createImport: vi.fn().mockResolvedValue(reused) });
+    renderWithI18n(<ImportWizard api={api} />);
+
+    await startImport();
+
+    expect(await screen.findByRole("heading", { name: "Reusing plan v2 for Ferreteria Ejemplo" })).toBeInTheDocument();
+    expect(screen.getByText(/moved from column 1 to column 2/)).toBeInTheDocument();
+    expect(screen.getByText("Saved plan")).toBeInTheDocument();
+  });
+
+  it("shows no reuse banner for a first import", async () => {
+    const api = fakeApi({ createImport: vi.fn().mockResolvedValue(withQuestion) });
+    renderWithI18n(<ImportWizard api={api} />);
+
+    await startImport();
+
+    await screen.findByRole("button", { name: "Confirm columns" });
+    expect(screen.queryByText(/Reusing plan/)).not.toBeInTheDocument();
   });
 
   it("switches the whole interface to Spanish", async () => {

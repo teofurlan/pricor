@@ -5,6 +5,7 @@ const KNOWN: Record<string, { tone: BadgeTone; key: TextKey }> = {
   heuristics: { tone: "heuristics", key: "provenance.heuristics" },
   gemma: { tone: "gemma", key: "provenance.gemma" },
   user: { tone: "user", key: "provenance.user" },
+  saved_plan: { tone: "saved", key: "provenance.saved_plan" },
 };
 
 /** Who settled a column's role: a cascade stage, the user, or nobody yet. */

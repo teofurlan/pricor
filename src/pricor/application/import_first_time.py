@@ -29,6 +29,7 @@ from pricor.application.questions import build_questions, decorate, parse_answer
 from pricor.domain.cells import display
 from pricor.domain.contract import ContractRecord
 from pricor.domain.engine import ImportResult, execute_numbered_rows
+from pricor.domain.fingerprint import fingerprint_of
 from pricor.domain.plan import PlanValidationError
 from pricor.domain.plan_builder import PlanParameters, RoleAssignment, build_plan
 from pricor.domain.profile import HEADER_SEARCH_ROWS, RowClass, SheetProfile, profile_sheet
@@ -48,7 +49,6 @@ from pricor.ports.approval_unit_of_work import ApprovalUnitOfWork
 from pricor.ports.import_session_repository import ImportSessionRepository
 from pricor.ports.model_errors import ModelError, ModelTimeoutError, ModelUnavailableError
 from pricor.ports.plan_advisor import ParameterId, PlanAdvisor, parse_value, with_answer
-from pricor.ports.plan_repository import ColumnFingerprint, SheetFingerprint
 from pricor.ports.price_history import ImportedRecord
 from pricor.ports.spreadsheet import SpreadsheetReader
 
@@ -89,19 +89,6 @@ def _record_dict(record: ContractRecord) -> dict[str, str | None]:
     }
 
 
-def _fingerprint(session: ImportSession) -> SheetFingerprint:
-    """What T14 compares against the next file of the supplier."""
-    profile = session.profile
-    return SheetFingerprint(
-        session.sheet_name,
-        profile.header_row,
-        tuple(
-            ColumnFingerprint(column.index, column.header, column.apparent_type.value)
-            for column in profile.columns
-        ),
-    )
-
-
 class ImportFirstTime:
     def __init__(
         self,
@@ -129,13 +116,26 @@ class ImportFirstTime:
         supplier_name: str,
         sheet: str | None = None,
         language: str = "en",
+        force_first_import: bool = False,
+    ) -> ImportSession:
+        """Open a session for a file.
+
+        `force_first_import` has no effect here: a first import is all this use case does.
+        It exists so callers can use `ReuseSupplierPlan` in its place.
+        """
+        session = self._new_session(file_path, supplier_name, sheet, language)
+        self._begin(session)
+        return session
+
+    def _new_session(
+        self, file_path: str | Path, supplier_name: str, sheet: str | None, language: str
     ) -> ImportSession:
         if not supplier_name.strip():
             raise InvalidInputError("the supplier name is required")
         path = Path(file_path)
         data = self._reader.read_sheet(path, sheet)
         profile = profile_sheet(data.rows)
-        session = ImportSession(
+        return ImportSession(
             id=self._new_id(),
             supplier_name=supplier_name.strip(),
             file_name=path.name,
@@ -146,10 +146,11 @@ class ImportFirstTime:
             header_confirmed=profile.header_row is not None and not profile.header_ambiguous,
             header_candidates=_header_candidates(data.rows, profile),
         )
+
+    def _begin(self, session: ImportSession) -> None:
         if session.header_confirmed:
             self._classify(session)
         self._repository.add(session)
-        return session
 
     def get(self, session_id: str) -> ImportSession:
         return self._repository.get(session_id)
@@ -253,7 +254,7 @@ class ImportFirstTime:
         now = self._clock()
         with self._approvals.approval() as transaction:
             transaction.plans.save(
-                session.supplier_name, session.plan, _fingerprint(session), now
+                session.supplier_name, session.plan, fingerprint_of(session.profile, session.sheet_name), now
             )
             transaction.history.record_import(
                 session.id,

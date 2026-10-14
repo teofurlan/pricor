@@ -1,4 +1,4 @@
-"""State of one first-import session and the views the use case returns."""
+"""State of one import session and the views the use cases return."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -63,6 +63,29 @@ class Notice:
 
 
 @dataclass(frozen=True)
+class PlanChange:
+    """One difference between the new file and the saved plan it reuses.
+
+    `kind` is one of `moved`, `retyped`, `new`, `missing`, `sheet_changed` or
+    `header_row_changed`. `header` is the normalized column header; `role` is what the saved
+    plan used the column for (only known for columns it read); `used_by_plan` flags a missing
+    column the plan depended on. Sheet changes carry `old_value`/`new_value`, header-row
+    changes carry 0-based `old_index`/`new_index`.
+    """
+
+    kind: str
+    header: str = ""
+    old_index: int | None = None
+    new_index: int | None = None
+    old_type: str | None = None
+    new_type: str | None = None
+    used_by_plan: bool = False
+    role: str | None = None
+    old_value: str | None = None
+    new_value: str | None = None
+
+
+@dataclass(frozen=True)
 class PreviewTraceStep:
     step: str
     value: str
@@ -111,6 +134,9 @@ class ImportSession:
     approved: bool = False
     approved_plan: ImportPlan | None = None
     approved_result: ImportResult | None = None
+    mode: str = "first_import"  # "first_import" or "reuse" (a saved plan seeded the session)
+    based_on_plan_version: int | None = None
+    changes: tuple[PlanChange, ...] = ()
 
     @property
     def columns(self) -> tuple[ColumnDecision, ...]:

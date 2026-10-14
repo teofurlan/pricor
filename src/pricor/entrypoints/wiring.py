@@ -28,7 +28,7 @@ from pricor.adapters.ollama_client import (
 from pricor.adapters.spreadsheet_reader import FileSpreadsheetReader
 from pricor.adapters.sqlite_store import SqliteDatabase
 from pricor.application.cascade import ClassifierStage
-from pricor.application.import_first_time import ImportFirstTime
+from pricor.application.reuse_supplier_plan import ReuseSupplierPlan
 from pricor.entrypoints.api import ApiDependencies, create_app
 from pricor.entrypoints.web_app import DEFAULT_WEB_DIST
 
@@ -68,11 +68,12 @@ def dependencies_from_env(env: Mapping[str, str]) -> ApiDependencies:
         ClassifierStage("heuristics", HeuristicColumnClassifier()),
         ClassifierStage("gemma", GemmaColumnClassifier(client)),
     ]
-    use_case = ImportFirstTime(
+    use_case = ReuseSupplierPlan(
         FileSpreadsheetReader(),
         database.sessions,
         stages,
         GemmaPlanAdvisor(client),
+        plans=database.plans,
         approvals=database,
     )
     return ApiDependencies(use_case, web_dist=DEFAULT_WEB_DIST)
