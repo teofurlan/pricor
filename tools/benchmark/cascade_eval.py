@@ -4,8 +4,10 @@ from collections.abc import Mapping, Sequence
 
 from pricor.application.cascade import ClassifierStage, run_cascade
 
+from .calibrate import AGREEMENT_MEMBERS, AGREEMENT_STAGE, STAGE_OF, agreement_answers
 from .datasets import SheetCase
 from .metrics import Answer, CascadeOutcome, simulate_cascade, summarize_cascade
+from .records import Record
 
 DEFAULT_ORDER = "laya>gemma"
 # Every order worth comparing; "heuristics" is the keyword stage, "laya" the fine-tuned model.
@@ -17,7 +19,26 @@ ORDERS = (
     "laya",
     "heuristics",
     "gemma",
+    # Only replayed when the agreement stage has a calibrated threshold.
+    "agreement>laya>gemma",
+    "agreement>heuristics>laya>gemma",
+    "agreement>laya>heuristics>gemma",
+    "agreement>gemma",
 )
+
+
+def stage_outputs(records: Mapping[str, Sequence[Record]], agreement: bool) -> dict[str, list[Answer]]:
+    """Per cascade stage, what it said about each column; the agreement stage is derived from its
+    two members when `agreement` is on."""
+    outputs = {
+        STAGE_OF[name]: [Answer(r.predicted, r.score) for r in items]
+        for name, items in records.items()
+        if name in STAGE_OF
+    }
+    first, second = (STAGE_OF[name] for name in AGREEMENT_MEMBERS)
+    if agreement and first in outputs and second in outputs:
+        outputs[AGREEMENT_STAGE] = agreement_answers(outputs[first], outputs[second])
+    return outputs
 
 
 def variant_summaries(

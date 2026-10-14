@@ -60,3 +60,16 @@ def test_a_missing_file_means_no_calibration(tmp_path):
 
     assert calibration.threshold_for("laya") == (0.75, False)
     assert calibration.calibrated_on is None
+
+
+def test_the_cascade_order_chosen_on_validation_is_read_when_present(tmp_path):
+    calibration = load_calibration(write(tmp_path, {**DOCUMENT, "cascade_order": "agreement>laya>gemma"}))
+
+    assert calibration.cascade_order == "agreement>laya>gemma"
+    assert load_calibration(write(tmp_path, DOCUMENT)).cascade_order is None
+
+
+@pytest.mark.parametrize("order", [3, "", ["laya"]])
+def test_a_malformed_cascade_order_is_refused(tmp_path, order):
+    with pytest.raises(CalibrationFileError, match="cascade_order"):
+        load_calibration(write(tmp_path, {**DOCUMENT, "cascade_order": order}))

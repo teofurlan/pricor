@@ -23,6 +23,8 @@ class Calibration:
     calibrated_on: str | None
     method: str | None
     thresholds: dict[str, float]
+    # Stage order decided on the validation set, e.g. "laya>gemma"; None means the built-in order.
+    cascade_order: str | None = None
 
     def threshold_for(self, stage: str) -> tuple[float, bool]:
         """The stage's threshold and whether it was calibrated (else the placeholder)."""
@@ -59,4 +61,7 @@ def load_calibration(path: Path = DEFAULT_CALIBRATION_PATH) -> Calibration:
         value = _threshold(stage, entry)
         if value is not None:
             thresholds[stage] = value
-    return Calibration(document["calibrated_on"], document.get("method"), thresholds)
+    order = document.get("cascade_order")
+    if order is not None and (not isinstance(order, str) or not order):
+        raise CalibrationFileError("cascade_order must be a non-empty text like 'laya>gemma'")
+    return Calibration(document["calibrated_on"], document.get("method"), thresholds, order)

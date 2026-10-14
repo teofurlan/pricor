@@ -41,7 +41,7 @@ from pricor.adapters.laya_classifier import (
 from pricor.adapters.report_csv_exporter import ReportCsvExporter
 from pricor.adapters.spreadsheet_reader import FileSpreadsheetReader
 from pricor.adapters.sqlite_store import SqliteDatabase
-from pricor.application.cascade import ClassifierStage
+from pricor.application.cascade import AgreementStage, ClassifierStage, Member, Stage
 from pricor.application.report_price_changes import ReportPriceChanges
 from pricor.application.reuse_supplier_plan import ReuseSupplierPlan
 from pricor.entrypoints.calibration_file import DEFAULT_CALIBRATION_PATH, load_calibration
@@ -70,29 +70,57 @@ def laya_settings_from_env(env: Mapping[str, str]) -> tuple[Path, str]:
     return Path(env.get("PRICOR_LAYA_MODEL") or DEFAULT_MODEL_PATH), device
 
 
+DEFAULT_ORDER = "laya>gemma"
+STAGE_NAMES = ("agreement", "laya", "heuristics", "gemma")
+
+
 def build_stages(
     env: Mapping[str, str],
     client: OllamaClient,
     laya_unavailable_reason: Callable[[Path], str | None] = laya_unavailable_reason,
-) -> list[ClassifierStage]:
-    """The classification cascade: Laya, then Gemma, then the user.
+) -> list[Stage]:
+    """The classification cascade in the order the calibration file decided, then the user.
 
-    When the `laya` extra or the fine-tuned model is missing the Laya stage is kept but marked
-    skipped (the session shows why), and the keyword heuristics take its place as the first
-    local stage so the app still proposes roles.
+    The shipped order lives in `thresholds.json` (`cascade_order`, chosen on the validation set);
+    without one it is Laya, then Gemma. When the `laya` extra or the fine-tuned model is missing
+    the Laya stage is kept but marked skipped (the session shows why), and the keyword heuristics
+    take its place as the first local stage so the app still proposes roles. An `agreement` stage
+    (heuristics and Laya must pick the same role) is only built when it has a calibrated
+    threshold.
     """
     model_path, device = laya_settings_from_env(env)
     reason = laya_unavailable_reason(model_path)
     calibration = load_calibration(Path(env.get("PRICOR_CALIBRATION") or DEFAULT_CALIBRATION_PATH))
+    order = (calibration.cascade_order or DEFAULT_ORDER).split(">")
+    unknown = [name for name in order if name not in STAGE_NAMES]
+    if unknown:
+        raise ValueError(f"cascade_order names unknown stages {unknown}; known: {', '.join(STAGE_NAMES)}")
 
-    def stage(name: str, classifier, skipped_reason: str | None = None) -> ClassifierStage:
+    laya = LayaColumnClassifier(model_path, device)
+    heuristics = HeuristicColumnClassifier()
+
+    def classifier_stage(name: str, classifier, skipped_reason: str | None = None) -> ClassifierStage:
         threshold, calibrated = calibration.threshold_for(name)
         return ClassifierStage(name, classifier, threshold, calibrated, skipped_reason)
 
-    stages = [stage("laya", LayaColumnClassifier(model_path, device), reason)]
-    if reason is not None:
-        stages.append(stage("heuristics", HeuristicColumnClassifier()))
-    stages.append(stage("gemma", GemmaColumnClassifier(client)))
+    stages: list[Stage] = []
+    for name in order:
+        if name == "agreement":
+            threshold, calibrated = calibration.threshold_for(name)
+            if calibrated:
+                stages.append(
+                    AgreementStage(
+                        name, Member("heuristics", heuristics), Member("laya", laya), threshold, True, reason
+                    )
+                )
+        elif name == "laya":
+            stages.append(classifier_stage(name, laya, reason))
+            if reason is not None and "heuristics" not in order:
+                stages.append(classifier_stage("heuristics", heuristics))
+        elif name == "heuristics":
+            stages.append(classifier_stage(name, heuristics))
+        else:
+            stages.append(classifier_stage(name, GemmaColumnClassifier(client)))
     return stages
 
 

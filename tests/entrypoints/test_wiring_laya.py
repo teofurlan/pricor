@@ -80,3 +80,66 @@ def test_the_committed_calibration_is_valid_and_covers_the_default_cascade():
     laya, gemma = stages({})
 
     assert laya.threshold_calibrated and gemma.threshold_calibrated
+
+
+def calibration_file(tmp_path, order, agreement_threshold=0.97):
+    import json
+
+    path = tmp_path / "thresholds.json"
+    path.write_text(
+        json.dumps(
+            {
+                "calibrated_on": "2026-10-14",
+                "cascade_order": order,
+                "stages": {
+                    "laya": {"threshold": 0.9},
+                    "gemma": {"threshold": 0.8},
+                    "agreement": {"threshold": agreement_threshold},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return {"PRICOR_CALIBRATION": str(path)}
+
+
+def test_an_agreement_stage_leads_the_cascade_when_the_calibrated_order_says_so(tmp_path):
+    from pricor.application.cascade import AgreementStage
+
+    built = stages(calibration_file(tmp_path, "agreement>laya>gemma"))
+
+    assert [stage.name for stage in built] == ["agreement", "laya", "gemma"]
+    agreement = built[0]
+    assert isinstance(agreement, AgreementStage)
+    assert (agreement.first.name, agreement.second.name) == ("heuristics", "laya")
+    assert isinstance(agreement.first.classifier, HeuristicColumnClassifier)
+    assert isinstance(agreement.second.classifier, LayaColumnClassifier)
+    assert (agreement.min_confidence, agreement.min_confidence_calibrated) == (0.97, True)
+    assert agreement.skipped_reason is None
+
+
+def test_the_agreement_stage_is_skipped_with_the_reason_when_laya_is_unavailable(tmp_path):
+    built = stages(calibration_file(tmp_path, "agreement>laya>gemma"), unavailable="no model")
+
+    assert [stage.name for stage in built] == ["agreement", "laya", "heuristics", "gemma"]
+    assert built[0].skipped_reason == "no model"
+
+
+def test_an_agreement_stage_without_a_calibrated_threshold_is_not_enabled(tmp_path):
+    env = calibration_file(tmp_path, "agreement>laya>gemma", agreement_threshold=None)
+
+    assert [stage.name for stage in stages(env)] == ["laya", "gemma"]
+
+
+def test_an_order_naming_an_unknown_stage_stops_the_startup(tmp_path):
+    with pytest.raises(ValueError, match="oracle"):
+        stages(calibration_file(tmp_path, "oracle>gemma"))
+
+
+def test_the_committed_calibration_decides_the_shipped_order():
+    from pricor.entrypoints.calibration_file import load_calibration
+
+    order = load_calibration().cascade_order
+
+    assert order is not None
+    assert [stage.name for stage in stages({})] == order.split(">")

@@ -10,7 +10,7 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
-from pricor.application.cascade import ClassifierStage, run_cascade
+from pricor.application.cascade import Stage, run_cascade
 from pricor.application.import_first_time import ImportFirstTime
 from pricor.domain.fingerprint import FingerprintComparison, compare_fingerprint
 from pricor.domain.plan_roles import column_roles
@@ -50,7 +50,7 @@ class ReuseSupplierPlan(ImportFirstTime):
         self,
         reader: SpreadsheetReader,
         repository: ImportSessionRepository,
-        stages: Sequence[ClassifierStage],
+        stages: Sequence[Stage],
         advisor: PlanAdvisor | None = None,
         *,
         plans: PlanRepository,

@@ -114,3 +114,53 @@ def test_the_limits_section_is_always_present():
 
     assert "## Limits" in text
     assert "never used for calibration" in text
+
+
+AGREEMENT_ENTRY = {
+    "threshold": 0.996, "members": ["heuristics", "laya"], "n": 108, "agreed": 108,
+    "agreed_precision": 0.88, "support": 29, "precision": 1.0, "reason": "met",
+}
+
+
+def test_the_agreement_stage_is_calibrated_with_its_agreed_count_and_unconditional_precision():
+    calibration = {**CALIBRATION, "stages": {**CALIBRATION["stages"], "agreement": AGREEMENT_ENTRY}}
+
+    text = render_report(collected(), None, calibration, CASCADE)
+
+    assert "| agreement | 0.9960 | 108 agreed | 29 | 100.0% |" in text
+    assert "88.0% without a confidence bar" in text
+
+
+def test_a_not_enabled_agreement_stage_says_why():
+    entry = {**AGREEMENT_ENTRY, "threshold": None, "support": 0, "precision": None,
+             "reason": "no threshold meets the target precision with the minimum support"}
+    calibration = {**CALIBRATION, "stages": {**CALIBRATION["stages"], "agreement": entry}}
+
+    text = render_report(collected(), None, calibration, CASCADE)
+
+    assert "| agreement | not calibrated |" in text
+    assert "not enabled" in text
+
+
+def test_the_cascade_table_names_the_agreement_stage():
+    summary = {**SUMMARY, "resolved_by": {"agreement": 2, "laya": 1, "gemma": 0, "user": 1}}
+    cascade = {**CASCADE, "real_held_out": {**CASCADE["real_held_out"], "summary": summary}}
+
+    text = render_report(collected(), None, CALIBRATION, cascade)
+
+    assert "| Agreement (heuristics + Laya) | 2 |" in text
+
+
+def test_a_previous_run_section_keeps_the_earlier_headline_numbers():
+    text = render_report(collected(), None, CALIBRATION, CASCADE, previous_run=["Heuristics 26/29."])
+
+    assert "## Previous run" in text
+    assert "- Heuristics 26/29." in text
+    assert "## Previous run" not in render_report(collected(), None, CALIBRATION, CASCADE)
+
+
+def test_the_limits_disclose_that_the_heuristics_are_not_a_clean_baseline():
+    text = render_report(collected(), None, CALIBRATION, CASCADE)
+
+    assert "heuristics are not a clean baseline" in text
+    assert "the agreement stage included" in text

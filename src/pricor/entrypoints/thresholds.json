@@ -37,6 +37,20 @@
         "support": 6,
         "precision": 1.0
       }
+    },
+    "agreement": {
+      "threshold": 0.9959,
+      "members": [
+        "heuristics",
+        "laya"
+      ],
+      "n": 108,
+      "agreed": 108,
+      "agreed_precision": 0.8796296296296297,
+      "support": 31,
+      "precision": 0.967741935483871,
+      "reason": "met"
     }
-  }
+  },
+  "cascade_order": "laya>gemma"
 }

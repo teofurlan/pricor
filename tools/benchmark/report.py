@@ -12,7 +12,13 @@ NAMES = {
     "laya_finetuned": "Laya fine-tuned",
     "gemma": "Gemma",
 }
-STAGE_NAMES = {"laya": "Laya", "heuristics": "Heuristics", "gemma": "Gemma", "user": "User"}
+STAGE_NAMES = {
+    "agreement": "Agreement (heuristics + Laya)",
+    "laya": "Laya",
+    "heuristics": "Heuristics",
+    "gemma": "Gemma",
+    "user": "User",
+}
 
 
 def _pct(value: float | None) -> str:
@@ -86,15 +92,24 @@ def _calibration_section(calibration: Mapping) -> str:
     for stage, entry in calibration["stages"].items():
         real = entry.get("real_only")
         threshold = "not calibrated" if entry["threshold"] is None else f"{entry['threshold']:.4f}"
+        validated, note = str(entry["n"]), entry["reason"]
+        if "members" in entry:  # the agreement stage: only agreed columns are candidates
+            validated = f"{entry['agreed']} agreed"
+            note += (
+                f"; precision of the agreed answers is {_pct(entry['agreed_precision'])} without a confidence "
+                "bar, and the threshold is a bar the higher of the two scores must reach"
+            )
+            if entry["threshold"] is None:
+                note += "; the stage is not enabled"
         rows.append(
             [
                 stage,
                 threshold,
-                str(entry["n"]),
+                validated,
                 str(entry["support"]),
                 _pct(entry["precision"]),
                 "n/a" if real is None else f"{real['support']} / {_pct(real['precision'])}",
-                entry["reason"],
+                note,
             ]
         )
     validation = calibration["validation"]
@@ -221,11 +236,16 @@ def _data_section(collected: Mapping) -> str:
     )
 
 
+def _bullets(lines: Sequence[str]) -> str:
+    return "\n".join(f"- {line}" for line in lines)
+
+
 LIMITS = """\
 - The held-out set is small (see its size above), so every accuracy has a wide uncertainty: one column is several percentage points. Treat the numbers as a signal, not a precise estimate.
 - It has no column for several roles (listed above), so nothing here says how any classifier does on them. The training pool has no real `retail_price` or `vat_rate` column either.
 - Dipel's files share most of their columns, so the number of distinct columns is smaller than the count; DistriLap's lists have no header row, which is a hard case by construction.
 - The validation set is partly synthetic and its synthetic share comes from the same generator as the training data, so thresholds calibrated on it can be optimistic for real lists. The real-only precision at each threshold is shown next to it. The held-out test set was never used for calibration or for any choice of threshold or stage order.
+- **The heuristics are not a clean baseline on this held-out set.** Their keyword rules, such as the cost-vs-retail modifiers `lista`, `venta` and `sugerido`, were written after the Dipel headers had been seen during exploration and smoke runs. Their held-out score is therefore optimistic. On the synthetic-heavy validation set, no confidence threshold reached the precision target. Laya and Gemma never saw the held-out distributors. Any stage that leans on the heuristics, the agreement stage included, inherits that advantage.
 - The reference labels are one person's judgment (ambiguous columns are noted in `tools/laya/labels.json`).
 - Gemma runs at temperature 0 through Ollama with `think: false`; its reported confidence is the model's own number, not a probability.
 - Latency depends on this machine (an 8 GB laptop GPU) and on what else it was running.
@@ -251,6 +271,7 @@ Each classifier assigns one of ten roles to every labeled column of a supplier p
 - **Laya zero-shot:** the `multilingual` base checkpoint, no fine-tuning.
 - **Laya fine-tuned:** that checkpoint fine-tuned on the training distributors plus synthetic columns (`tools/laya`).
 - **Gemma:** `gemma4:e4b` through Ollama, one request per sheet.
+- **Agreement:** a cascade stage that runs the heuristics and fine-tuned Laya together and settles a column only when both pick the same role (optionally also requiring that at least one of them reaches a calibrated confidence).
 - **Cascade:** the application's own stages with calibrated thresholds; a column a stage scores at or above its threshold is settled, the rest go on, and what is left goes to the user.
 """
 
@@ -261,6 +282,7 @@ def render_report(
     calibration: Mapping,
     cascade: Mapping,
     post_hoc_notes: Sequence[str] = (),
+    previous_run: Sequence[str] = (),
 ) -> str:
     meta = collected["meta"]
     notes = (
@@ -288,6 +310,7 @@ def render_report(
         _latency_section(collected, cpu),
         "## Changes made after seeing held-out numbers",
         notes,
+        *(["## Previous run", _bullets(previous_run)] if previous_run else []),
         "## Limits",
         LIMITS,
         "## Reproduce",

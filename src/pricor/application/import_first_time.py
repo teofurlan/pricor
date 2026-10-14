@@ -19,7 +19,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from pricor.application.cascade import UNCALIBRATED_THRESHOLD, ClassifierStage, run_cascade
+from pricor.application.cascade import UNCALIBRATED_THRESHOLD, ClassifierStage, Stage, run_cascade
 from pricor.application.errors import (
     InvalidInputError,
     InvalidOperationError,
@@ -98,7 +98,7 @@ class ImportFirstTime:
         self,
         reader: SpreadsheetReader,
         repository: ImportSessionRepository,
-        stages: Sequence[ClassifierStage],
+        stages: Sequence[Stage],
         advisor: PlanAdvisor | None = None,
         id_factory: Callable[[], str] = lambda: uuid.uuid4().hex,
         approvals: ApprovalUnitOfWork | None = None,

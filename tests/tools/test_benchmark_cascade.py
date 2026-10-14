@@ -74,3 +74,48 @@ def test_when_no_order_meets_the_target_the_default_is_kept():
     summaries = {"laya>gemma": {"auto_accuracy": 0.8, "escalation_rate": 0.1}}
 
     assert choose_order(summaries, 0.95, "laya>gemma") == "laya>gemma"
+
+
+def test_agreement_orders_are_replayed_when_the_stage_has_answers():
+    expected = ["code", "code", "code"]
+    outputs = {
+        "agreement": answers_for([("code", 0.99), ("code", -1.0), ("code", -1.0)]),
+        "laya": answers_for([("code", 0.99), ("code", 0.99), ("ignore", 0.2)]),
+        "gemma": answers_for([("code", 0.9), ("code", 0.9), ("code", 0.9)]),
+    }
+    thresholds = {"agreement": 0.9, "laya": 0.95, "gemma": 0.5}
+
+    summaries = variant_summaries(expected, outputs, thresholds)
+
+    assert summaries["agreement>laya>gemma"]["resolved_by"] == {"agreement": 1, "laya": 1, "gemma": 1, "user": 0}
+    assert summaries["agreement>gemma"]["resolved_by"] == {"agreement": 1, "gemma": 2, "user": 0}
+
+
+def test_orders_with_an_agreement_stage_are_left_out_when_it_is_not_enabled():
+    outputs = {"laya": answers_for([("code", 0.99)]), "gemma": answers_for([("code", 0.9)])}
+
+    summaries = variant_summaries(["code"], outputs, {"laya": 0.9, "gemma": 0.5})
+
+    assert not [label for label in summaries if "agreement" in label]
+
+
+def test_stage_outputs_pair_the_two_members_into_the_agreement_stage_when_it_is_enabled():
+    from tools.benchmark.cascade_eval import stage_outputs
+    from tools.benchmark.records import Record
+
+    def rec(predicted, score):
+        return Record("code", predicted, score, None, "real", "s", "h", "x")
+
+    records = {
+        "heuristics": [rec("code", 0.6), rec("ignore", 0.6)],
+        "laya_finetuned": [rec("code", 0.9), rec("code", 0.9)],
+        "gemma": [rec("code", 0.8)] * 2,
+        "laya_zero_shot": [rec("code", 0.8)] * 2,
+    }
+
+    enabled = stage_outputs(records, agreement=True)
+    disabled = stage_outputs(records, agreement=False)
+
+    assert [(a.role, a.score) for a in enabled["agreement"]] == [("code", 0.9), ("ignore", -1.0)]
+    assert set(enabled) == {"agreement", "heuristics", "laya", "gemma"}
+    assert "agreement" not in disabled
