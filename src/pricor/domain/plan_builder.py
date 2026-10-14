@@ -113,12 +113,22 @@ def _separators(
     if column is None:
         return None
     fmt = column.number_format
-    if fmt is not None and fmt.ambiguous:
+    if fmt is None:
+        missing.append(
+            UnresolvedParameter(
+                "number_format",
+                f"column '{column.plan_header}' does not read as numbers, "
+                "so its decimal and thousands separators are unknown",
+            )
+        )
+        return None
+    if fmt.ambiguous:
         missing.append(UnresolvedParameter("number_format", fmt.evidence))
         return None
-    if fmt is not None and fmt.decimal_sep is not None:
+    if fmt.decimal_sep is not None:
         return fmt.decimal_sep, fmt.thousands_sep or ""
-    # No separators appear in any value, so either convention reads them the same.
+    # The profiler saw numbers and no separator in any of them, so either convention reads
+    # them the same.
     return ".", ""
 
 

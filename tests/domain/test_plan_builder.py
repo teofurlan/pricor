@@ -263,3 +263,26 @@ def test_explicit_empty_discounts_omit_the_step_even_with_a_discount_column():
 
     assert result.unresolved == ()
     assert "apply_discounts" not in op_names(result)
+
+
+def test_cost_column_typed_text_leaves_number_format_unresolved():
+    rows = [
+        ["A1", "X", "12.100,00", "10", "", "21"],
+        ["A2", "Y", "1.500,50", "5", "", "21"],
+        ["A3", "Z", "980,00", "1", "", "21"],
+        ["A4", "W", "consultar", "1", "", "21"],
+    ]
+
+    profile, result = build(rows=rows)
+
+    assert profile.columns[2].apparent_type.value == "text"
+    assert result.plan is None
+    assert "number_format" in unresolved_ids(result)
+
+
+def test_numeric_cost_column_without_any_separator_still_builds():
+    rows = [["A1", "X", "100", "10", "", "21"], ["A2", "Y", "250", "5", "", "21"]]
+
+    _, result = build(rows=rows)
+
+    assert result.plan is not None
