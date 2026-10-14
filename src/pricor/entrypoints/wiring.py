@@ -6,6 +6,8 @@ Environment variables:
     PRICOR_OLLAMA_MODEL    model name                      (default gemma4:e4b)
     PRICOR_OLLAMA_TIMEOUT  seconds per model call          (default 180)
     PRICOR_DB              path of the SQLite file          (default: see `database_path_from_env`)
+    PRICOR_LAYA_MODEL      folder of the fine-tuned Laya model (default models/laya-pricor)
+    PRICOR_LAYA_DEVICE     auto | cpu | cuda               (default auto: CUDA when available)
     PRICOR_FX_RATE_TYPE    rate type suggested for currency conversion (default oficial)
     PRICOR_FX_TIMEOUT      seconds per DolarAPI request      (default 10)
 
@@ -13,7 +15,7 @@ Run with: uv run uvicorn pricor.entrypoints.wiring:app_from_env --factory
 """
 
 import os
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -28,6 +30,12 @@ from pricor.adapters.ollama_client import (
     DEFAULT_MODEL,
     DEFAULT_TIMEOUT_SECONDS,
     OllamaClient,
+)
+from pricor.adapters.laya_classifier import (
+    DEFAULT_MODEL_PATH,
+    DEVICES,
+    LayaColumnClassifier,
+    laya_unavailable_reason,
 )
 from pricor.adapters.report_csv_exporter import ReportCsvExporter
 from pricor.adapters.spreadsheet_reader import FileSpreadsheetReader
@@ -50,6 +58,38 @@ def ollama_client_from_env(env: Mapping[str, str]) -> OllamaClient:
         model=env.get("PRICOR_OLLAMA_MODEL", DEFAULT_MODEL),
         timeout=timeout,
     )
+
+
+def laya_settings_from_env(env: Mapping[str, str]) -> tuple[Path, str]:
+    """Where the fine-tuned Laya model lives and the device it runs on."""
+    device = env.get("PRICOR_LAYA_DEVICE", "auto")
+    if device not in DEVICES:
+        raise ValueError(f"PRICOR_LAYA_DEVICE must be one of: {', '.join(DEVICES)}")
+    return Path(env.get("PRICOR_LAYA_MODEL") or DEFAULT_MODEL_PATH), device
+
+
+def build_stages(
+    env: Mapping[str, str],
+    client: OllamaClient,
+    laya_unavailable_reason: Callable[[Path], str | None] = laya_unavailable_reason,
+) -> list[ClassifierStage]:
+    """The classification cascade: Laya, then Gemma, then the user.
+
+    When the `laya` extra or the fine-tuned model is missing the Laya stage is kept but marked
+    skipped (the session shows why), and the keyword heuristics take its place as the first
+    local stage so the app still proposes roles.
+    """
+    model_path, device = laya_settings_from_env(env)
+    reason = laya_unavailable_reason(model_path)
+    stages = [
+        ClassifierStage(
+            "laya", LayaColumnClassifier(model_path, device), skipped_reason=reason
+        )
+    ]
+    if reason is not None:
+        stages.append(ClassifierStage("heuristics", HeuristicColumnClassifier()))
+    stages.append(ClassifierStage("gemma", GemmaColumnClassifier(client)))
+    return stages
 
 
 def fx_settings_from_env(env: Mapping[str, str]) -> tuple[str, float]:
@@ -86,10 +126,7 @@ def dependencies_from_env(env: Mapping[str, str]) -> ApiDependencies:
     client = ollama_client_from_env(env)
     rate_type, fx_timeout = fx_settings_from_env(env)
     database = SqliteDatabase(database_path_from_env(env))
-    stages = [
-        ClassifierStage("heuristics", HeuristicColumnClassifier()),
-        ClassifierStage("gemma", GemmaColumnClassifier(client)),
-    ]
+    stages = build_stages(env, client)
     use_case = ReuseSupplierPlan(
         FileSpreadsheetReader(),
         database.sessions,

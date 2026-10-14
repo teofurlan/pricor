@@ -95,6 +95,15 @@ uv run python -c "import torch; print(torch.cuda.is_available())"
 
 How the training data is built, how the split by distributor works and how to train and evaluate are in `tools/laya/README.md`.
 
+With the extra installed and a fine-tuned model in place, Laya is the first stage of the cascade (Laya, then Gemma, then the user):
+
+| Variable | Default |
+|---|---|
+| `PRICOR_LAYA_MODEL` | `models/laya-pricor` |
+| `PRICOR_LAYA_DEVICE` | `auto` (CUDA when available, otherwise CPU; `cpu` and `cuda` force one) |
+
+Without the extra or the model the Laya stage is skipped, the session shows a `model_unavailable` notice saying why, and the keyword heuristics take its place as the first stage.
+
 ## License
 
 Copyright 2026 The Pricor Authors. Licensed under Apache-2.0; see `LICENSE`.

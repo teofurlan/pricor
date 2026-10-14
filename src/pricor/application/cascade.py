@@ -1,6 +1,6 @@
 """Classification cascade: heuristics, then a model, then the user.
 
-Stages run in order. A column a stage classifies with a score at or above that
+Stages run in order (a stage that cannot run here is skipped with a notice). A column a stage classifies with a score at or above that
 stage's threshold is settled and is not shown to later stages. Columns still
 unsettled after the last stage get no role: the user decides.
 """
@@ -11,7 +11,12 @@ from dataclasses import dataclass, replace
 from pricor.domain.profile import SheetProfile
 from pricor.ports.column_classifier import ColumnClassifier
 from pricor.ports.import_session import ColumnDecision, Notice, StageProposal
-from pricor.ports.model_errors import ModelError, ModelTimeoutError, ModelUnavailableError
+from pricor.ports.model_errors import (
+    ModelError,
+    ModelNotInstalledError,
+    ModelTimeoutError,
+    ModelUnavailableError,
+)
 
 # PLACEHOLDER: not calibrated on held-out data. It is calibrated in T21 (Q24);
 # until then it only decides which columns are shown to the user for confirmation.
@@ -24,10 +29,17 @@ class ClassifierStage:
     classifier: ColumnClassifier
     threshold: float = UNCALIBRATED_THRESHOLD
     threshold_calibrated: bool = False
+    # Set when the stage cannot run in this installation (missing extra or weights). The cascade
+    # skips it and tells the user why, instead of failing.
+    skipped_reason: str | None = None
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.threshold <= 1.0:
             raise ValueError(f"threshold must be between 0 and 1, got {self.threshold}")
+
+
+def _skipped_notice(stage: ClassifierStage, reason: str) -> Notice:
+    return Notice("model_unavailable", f"stage '{stage.name}' was skipped: {reason}", stage.name)
 
 
 def run_cascade(
@@ -47,9 +59,15 @@ def run_cascade(
     for stage in stages:
         if not remaining:
             break
+        if stage.skipped_reason is not None:
+            notices.append(_skipped_notice(stage, stage.skipped_reason))
+            continue
         subset = replace(profile, columns=tuple(remaining))
         try:
             results = stage.classifier.classify_sheet(subset)
+        except ModelNotInstalledError as error:
+            notices.append(_skipped_notice(stage, str(error)))
+            continue
         except ModelError as error:
             notices.append(
                 Notice(

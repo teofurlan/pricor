@@ -23,3 +23,11 @@ class ModelInvalidJsonError(ModelError):
 
 class ModelSchemaError(ModelError):
     """The reply is JSON but violates the schema or the closed vocabularies."""
+
+
+class ModelNotInstalledError(ModelError):
+    """A local model or its optional dependency is not installed.
+
+    Unlike an unreachable server, this is permanent for the process and says nothing about
+    other models, so a cascade skips the stage and carries on with the next one.
+    """
