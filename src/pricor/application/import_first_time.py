@@ -19,7 +19,11 @@ from pathlib import Path
 from typing import Any
 
 from pricor.application.cascade import UNCALIBRATED_THRESHOLD, ClassifierStage, run_cascade
-from pricor.application.errors import InvalidInputError, InvalidOperationError
+from pricor.application.errors import (
+    InvalidInputError,
+    InvalidOperationError,
+    NoAcceptedRowsError,
+)
 from pricor.application.import_session import (
     ColumnDecision,
     HeaderCandidate,
@@ -200,8 +204,13 @@ class ImportFirstTime:
             raise InvalidOperationError(
                 f"the session is {session.status.value}; it cannot be approved yet"
             )
+        result = self._execute(session)
+        if not result.accepted:
+            raise NoAcceptedRowsError(
+                "the plan accepts none of the data rows; review the column roles and answers"
+            )
         session.approved_plan = session.plan
-        session.approved_result = self._execute(session)
+        session.approved_result = result
         session.approved = True
         self._repository.save(session)
         return session

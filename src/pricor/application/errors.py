@@ -11,3 +11,7 @@ class InvalidInputError(ApplicationError):
 
 class InvalidOperationError(ApplicationError):
     """The operation is not allowed in the session's current state."""
+
+
+class NoAcceptedRowsError(InvalidOperationError):
+    """Approval was requested but the plan accepts none of the data rows."""

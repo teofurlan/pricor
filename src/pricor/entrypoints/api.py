@@ -39,7 +39,12 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from pricor.application.errors import ApplicationError, InvalidInputError, InvalidOperationError
+from pricor.application.errors import (
+    ApplicationError,
+    InvalidInputError,
+    InvalidOperationError,
+    NoAcceptedRowsError,
+)
 from pricor.application.import_first_time import ImportFirstTime
 from pricor.application.import_session import ImportSession, PreviewPage
 from pricor.application.questions import Question
@@ -196,6 +201,10 @@ def _install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(SessionNotFoundError)
     async def not_found(_: Request, error: SessionNotFoundError) -> JSONResponse:
         return _error(404, "session_not_found", str(error))
+
+    @app.exception_handler(NoAcceptedRowsError)
+    async def no_accepted_rows(_: Request, error: NoAcceptedRowsError) -> JSONResponse:
+        return _error(409, "no_accepted_rows", str(error))
 
     @app.exception_handler(InvalidOperationError)
     async def conflict(_: Request, error: InvalidOperationError) -> JSONResponse:

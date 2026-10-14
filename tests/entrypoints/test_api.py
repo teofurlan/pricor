@@ -257,3 +257,21 @@ def test_wiring_reads_ollama_settings_from_the_environment():
     with pytest.raises(ValueError, match="PRICOR_OLLAMA_TIMEOUT"):
         ollama_client_from_env({"PRICOR_OLLAMA_TIMEOUT": "soon"})
     assert dependencies_from_env({}).max_upload_bytes == 20 * 1024 * 1024
+
+
+def test_approving_with_no_accepted_rows_is_a_409():
+    rows = [
+        ["Codigo", "Descripcion", "Precio lista", "IVA"],
+        ["", "Tornillo", "1.210,00", "21%"],
+        ["", "Tuerca", "968,00", "21%"],
+    ]
+    client = make_client()
+    session_id = upload(client, rows=rows).json()["id"]
+    answer(client, session_id, "price_includes_vat", "yes")
+    answer(client, session_id, "currency", "ARS")
+
+    response = client.post(f"/imports/{session_id}/approve")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "no_accepted_rows"
+    assert client.get(f"/imports/{session_id}").json()["approved"] is False

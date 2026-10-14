@@ -3,7 +3,11 @@ from decimal import Decimal
 import pytest
 
 from pricor.adapters.memory_session_repository import InMemoryImportSessionRepository
-from pricor.application.errors import InvalidInputError, InvalidOperationError
+from pricor.application.errors import (
+    InvalidInputError,
+    InvalidOperationError,
+    NoAcceptedRowsError,
+)
 from pricor.application.import_first_time import (
     UNCALIBRATED_THRESHOLD,
     ClassifierStage,
@@ -451,3 +455,17 @@ def test_role_problems_are_reported_when_the_builder_cannot_find_a_column():
     session = use_case.set_roles(session.id, {0: R.CODE})
     assert session.role_issues == ()
     assert session.status is SessionStatus.QUESTIONS_PENDING
+
+
+def test_approve_refuses_a_session_without_accepted_rows():
+    # Every data row lacks its product code, so the engine rejects all of them.
+    rows = [HEADER, ("", "Tornillo", "1.210,00", "21%"), (None, "Tuerca", "968,00", "21%")]
+    use_case, _ = make(rows=rows)
+    session = start(use_case)
+    answer_all(use_case, session.id)
+    assert use_case.get(session.id).status is SessionStatus.READY_FOR_PREVIEW
+
+    with pytest.raises(NoAcceptedRowsError):
+        use_case.approve(session.id)
+
+    assert use_case.get(session.id).status is SessionStatus.READY_FOR_PREVIEW
