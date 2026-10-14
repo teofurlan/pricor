@@ -6,7 +6,7 @@ every input row into exactly one of two buckets (accepted or rejected with
 reasons). All money math uses `Decimal`; rounding happens once, at the end.
 """
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Context, Decimal
 from typing import Any
@@ -334,13 +334,16 @@ def _normalized_tables(plan: ImportPlan) -> dict[int, dict[str, Decimal | str]]:
     }
 
 
-def execute_plan(
+def execute_numbered_rows(
     plan: ImportPlan,
     headers: Sequence[str],
-    rows: Sequence[Sequence[Any]],
-    first_row_number: int = 1,
+    numbered_rows: Iterable[tuple[int, Sequence[Any]]],
 ) -> ImportResult:
-    """Run `plan` over `rows`. Every input row ends up accepted or rejected.
+    """Run `plan` over `(row_number, row)` pairs, which need not be contiguous.
+
+    This is the shape the profiler's `engine_input` returns: only data rows,
+    each carrying its real file row number. Every pair ends up accepted or
+    rejected under that same number.
 
     Raises `PlanIncompatibleError` before touching any row if the headers no
     longer match the plan.
@@ -350,8 +353,7 @@ def execute_plan(
 
     accepted: list[AcceptedRow] = []
     rejected: list[RejectedRow] = []
-    for offset, row in enumerate(rows):
-        number = first_row_number + offset
+    for number, row in numbered_rows:
         run = _RowRun(plan, tables, row)
         run.run()
         if run.reasons:
@@ -359,3 +361,15 @@ def execute_plan(
         else:
             accepted.append(AcceptedRow(number, run.record(), tuple(run.trace)))
     return ImportResult(tuple(accepted), tuple(rejected))
+
+
+def execute_plan(
+    plan: ImportPlan,
+    headers: Sequence[str],
+    rows: Sequence[Sequence[Any]],
+    first_row_number: int = 1,
+) -> ImportResult:
+    """Run `plan` over contiguous `rows` numbered from `first_row_number`."""
+    return execute_numbered_rows(
+        plan, headers, ((first_row_number + offset, row) for offset, row in enumerate(rows))
+    )

@@ -360,7 +360,7 @@ def test_engine_input_requires_a_header():
 
 
 def test_engine_input_feeds_the_engine_with_original_row_numbers():
-    from pricor.domain.engine import execute_plan
+    from pricor.domain.engine import execute_numbered_rows
     from pricor.domain.plan import parse_plan
 
     from .golden import GOLDEN_HEADERS, golden_plan_dict
@@ -374,9 +374,7 @@ def test_engine_input_feeds_the_engine_with_original_row_numbers():
     ]
     headers, data = engine_input(rows, profile_sheet(rows))
     plan = parse_plan(golden_plan_dict())
-    accepted = []
-    for number, row in data:
-        accepted += execute_plan(plan, headers, [row], first_row_number=number).accepted
+    accepted = execute_numbered_rows(plan, headers, data).accepted
     assert [row.row_number for row in accepted] == [3]
     assert accepted[0].record.unit_cost_net == Decimal("855.00")
 
