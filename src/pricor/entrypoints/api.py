@@ -186,6 +186,7 @@ def _question(question: Question) -> dict[str, Any]:
             "option": suggestion.option,
             "confidence": suggestion.confidence,
             "calibrated": suggestion.calibrated,
+            "memory_ids": suggestion.memory_ids,
             "evidence": [
                 {"column_index": item.column_index, "sample": item.sample}
                 for item in suggestion.evidence

@@ -58,6 +58,10 @@ ADVISOR_SCHEMA: dict[str, Any] = {
                     "value": {"type": "string"},
                     "confidence": {"type": "number"},
                     "evidence": _EVIDENCE_SCHEMA,
+                    "memory_refs": {
+                        "type": "array",
+                        "items": {"type": "integer", "minimum": 1},
+                    },
                 },
                 "required": ["parameter", "value", "confidence", "evidence"],
             },
@@ -111,6 +115,8 @@ def advisor_system(language: str) -> str:
         "- Do not ask about parameters that do not apply to this sheet.\n"
         "- Never hypothesize fx_conversion: whether to convert currency, and with which "
         "exchange rate, is the user's own decision.\n"
+        "- When a hypothesis relies on an earlier-import note, cite its shown 1-based "
+        "number in memory_refs; never cite a number not shown.\n"
         f"- Write question text and option labels in {LANGUAGES[language]}.\n"
         + UNTRUSTED_RULES
     )
@@ -145,12 +151,28 @@ def _value(parameter: ParameterId, raw: Any, path: str):
         raise fail(path, str(error)) from error
 
 
-def _hypotheses(raw: Any, valid_columns: set[int]) -> tuple[ParameterHypothesis, ...]:
+def _memory_refs(raw: Any, path: str, memory_count: int) -> tuple[int, ...]:
+    items = expect_list(raw, path, max_items=memory_count)
+    refs = []
+    for position, item in enumerate(items):
+        item_path = f"{path}[{position}]"
+        if isinstance(item, bool) or not isinstance(item, int) or not 1 <= item <= memory_count:
+            raise fail(item_path, f"must name a shown memory from 1 to {memory_count}")
+        refs.append(item)
+    return tuple(refs)
+
+
+def _hypotheses(
+    raw: Any, valid_columns: set[int], memory_count: int
+) -> tuple[ParameterHypothesis, ...]:
     items = expect_list(raw, "$.hypotheses", max_items=len(_IDS))
     result: dict[ParameterId, ParameterHypothesis] = {}
     for position, item in enumerate(items):
         path = f"$.hypotheses[{position}]"
-        obj = expect_object(item, path, ("parameter", "value", "confidence", "evidence"))
+        keys = ("parameter", "value", "confidence", "evidence")
+        if isinstance(item, dict) and "memory_refs" in item:
+            keys = (*keys, "memory_refs")
+        obj = expect_object(item, path, keys)
         parameter = _parameter(obj["parameter"], f"{path}.parameter")
         if parameter in result:
             raise fail(path, f"more than one hypothesis for '{parameter.value}'")
@@ -159,6 +181,7 @@ def _hypotheses(raw: Any, valid_columns: set[int]) -> tuple[ParameterHypothesis,
             _value(parameter, obj["value"], f"{path}.value"),
             expect_unit_interval(obj["confidence"], f"{path}.confidence"),
             _evidence(obj["evidence"], f"{path}.evidence", valid_columns),
+            _memory_refs(obj.get("memory_refs", []), f"{path}.memory_refs", memory_count),
         )
     return tuple(result.values())
 
@@ -210,13 +233,14 @@ class GemmaPlanAdvisor:
             raise ValueError(f"unsupported language {language!r}; use one of {sorted(LANGUAGES)}")
         user = (
             "Propose parameter hypotheses and questions for the sheet described in the data "
-            "block below.\n" + render_data_block(sheet.columns, classifications)
+            "block below.\n"
+            + render_data_block(sheet.columns, classifications, memory_context=memory_context)
         )
         reply = self._client.chat_json(advisor_system(language), user, ADVISOR_SCHEMA)
         root = expect_object(reply.content, "$", ("hypotheses", "questions"))
         valid_columns = {column.index for column in sheet.columns}
         return PlanProposal(
-            hypotheses=_hypotheses(root["hypotheses"], valid_columns),
+            hypotheses=_hypotheses(root["hypotheses"], valid_columns, len(memory_context or ())),
             questions=_questions(root["questions"], valid_columns),
             latency_seconds=reply.latency_seconds,
         )

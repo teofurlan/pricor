@@ -25,6 +25,7 @@ from pricor.application.errors import (
     InvalidOperationError,
     NoAcceptedRowsError,
 )
+from pricor.application.manage_memory import ManageMemory
 from pricor.application.questions import build_questions, decorate, parse_answer, question_for
 from pricor.domain.cells import display
 from pricor.domain.contract import ContractRecord
@@ -105,6 +106,8 @@ class ImportFirstTime:
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         fx: FxRateProvider | None = None,
         default_fx_rate_type: str = "oficial",
+        memory: ManageMemory | None = None,
+        memory_top_k: int = 3,
     ):
         self._reader = reader
         self._repository = repository
@@ -115,6 +118,8 @@ class ImportFirstTime:
         self._clock = clock
         self._fx = fx
         self._default_fx_rate_type = default_fx_rate_type
+        self._memory = memory
+        self._memory_top_k = memory_top_k
 
     # -- operations ------------------------------------------------------------
 
@@ -416,9 +421,30 @@ class ImportFirstTime:
             )
             for item in assignments
         ]
+        memories = []
+        if self._memory is not None:
+            query = " ".join(
+                (session.supplier_name, *(column.header for column in session.profile.columns))
+            )
+            try:
+                memories = self._memory.relevant(query, self._memory_top_k)
+            except Exception as error:
+                session.add_notice(
+                    Notice(
+                        "memory_unavailable",
+                        f"semantic memory could not be retrieved ({type(error).__name__}): {error}",
+                        "memory",
+                    )
+                )
         try:
-            session.proposal = self._advisor.propose(
-                session.profile, classifications, language=session.language
+            proposal = self._advisor.propose(
+                session.profile,
+                classifications,
+                memory_context=[item.text for item in memories] or None,
+                language=session.language,
+            )
+            session.proposal = replace(
+                proposal, memory_ids=tuple(item.id for item in memories)
             )
         except ModelError as error:
             if isinstance(error, ModelUnavailableError | ModelTimeoutError):

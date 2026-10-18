@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from pricor.application.manage_memory import ManageMemory
-from pricor.entrypoints.api import ApiDependencies, create_app
+from pricor.entrypoints.api import ApiDependencies, _question, create_app
 from pricor.ports.import_session_repository import SessionNotFoundError
 from pricor.ports.memory import MemoryNotFoundError
 from pricor.ports.model_errors import ModelUnavailableError
@@ -67,6 +67,14 @@ def question(suggestion=Suggestion("yes", 0.9, suggested_by="gemma")):
         "required",
         suggestion=suggestion,
     )
+
+
+def test_question_json_exposes_suggestion_memory_ids():
+    body = _question(
+        question(Suggestion("yes", 0.9, suggested_by="gemma", memory_ids=["memory-1"]))
+    )
+
+    assert body["suggestion"]["memory_ids"] == ["memory-1"]
 
 
 @pytest.fixture

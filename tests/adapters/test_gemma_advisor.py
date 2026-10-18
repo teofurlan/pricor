@@ -37,13 +37,16 @@ def evidence(index=2, sample="1.234,50"):
     return {"column_index": index, "sample": sample}
 
 
-def hypothesis(parameter="price_is_per_pack", value="yes", confidence=0.8, ev=None):
-    return {
+def hypothesis(parameter="price_is_per_pack", value="yes", confidence=0.8, ev=None, memory_refs=None):
+    result = {
         "parameter": parameter,
         "value": value,
         "confidence": confidence,
         "evidence": [evidence()] if ev is None else ev,
     }
+    if memory_refs is not None:
+        result["memory_refs"] = memory_refs
+    return result
 
 
 def question(qid="price_includes_vat", options=None, text="Does the price include VAT?", ev=None):
@@ -204,11 +207,44 @@ def test_language_selects_the_user_facing_language_only():
         propose(language="fr")
 
 
-def test_memory_context_is_accepted_but_not_used_yet():
-    client, _ = propose(memory_context=["SECRET-MEMORY prices include VAT"])
+def test_memory_context_is_numbered_untrusted_user_data_and_never_system_data():
+    long_note = "X" * 80
+    client, _ = propose(
+        memory_context=["ACME-MEMORY-VAT", "ACME-MEMORY-PACK-12", long_note]
+    )
 
     call = client.calls[0]
-    assert "SECRET-MEMORY" not in call["system"] + call["user"]
+    assert "ACME-MEMORY-VAT" not in call["system"]
+    assert "ACME-MEMORY-PACK-12" not in call["system"]
+    assert "memory_refs" in call["system"]
+    assert "never cite a number not shown" in call["system"]
+    assert "notes from earlier imports" in call["user"].lower()
+    assert "may be wrong" in call["user"].lower()
+    assert "[M1] ACME-MEMORY-VAT" in call["user"]
+    assert "[M2] ACME-MEMORY-PACK-12" in call["user"]
+    assert f"[M3] {long_note}" in call["user"]
+
+
+def test_no_memory_keeps_the_existing_user_prompt_identical():
+    without_argument, _ = propose()
+    explicit_none, _ = propose(memory_context=None)
+
+    assert without_argument.calls[0]["user"] == explicit_none.calls[0]["user"]
+
+
+def test_memory_refs_are_parsed_when_they_only_name_shown_memories():
+    reply = {"hypotheses": [hypothesis(memory_refs=[2, 1])], "questions": []}
+
+    _, proposal = propose(reply, memory_context=["first", "second"])
+
+    assert proposal.hypotheses[0].memory_refs == (2, 1)
+
+
+def test_memory_ref_outside_the_shown_range_rejects_the_whole_reply():
+    reply = {"hypotheses": [hypothesis(memory_refs=[2])], "questions": []}
+
+    with pytest.raises(ModelSchemaError, match="memory_refs"):
+        propose(reply, memory_context=["only one"])
 
 
 def test_prompt_carries_the_classified_roles_inside_the_data_block():

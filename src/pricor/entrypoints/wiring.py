@@ -177,6 +177,14 @@ def dependencies_from_env(env: Mapping[str, str]) -> ApiDependencies:
     memory_top_k = memory_top_k_from_env(env)
     database = SqliteDatabase(database_path_from_env(env))
     stages = build_stages(env, client)
+    embedder = OllamaEmbedder(
+        base_url=client.base_url,
+        model=env.get("PRICOR_EMBED_MODEL", DEFAULT_EMBED_MODEL),
+        timeout=client.timeout,
+    )
+    memory = ManageMemory(
+        SqliteMemoryStore(database, embedder.model), embedder, database.sessions.get
+    )
     use_case = ReuseSupplierPlan(
         FileSpreadsheetReader(),
         database.sessions,
@@ -186,16 +194,10 @@ def dependencies_from_env(env: Mapping[str, str]) -> ApiDependencies:
         approvals=database,
         fx=DolarApiProvider(cache=database.fx_quotes, timeout=fx_timeout),
         default_fx_rate_type=rate_type,
+        memory=memory,
+        memory_top_k=memory_top_k,
     )
     reports = ReportPriceChanges(use_case.get, database.history, ReportCsvExporter())
-    embedder = OllamaEmbedder(
-        base_url=client.base_url,
-        model=env.get("PRICOR_EMBED_MODEL", DEFAULT_EMBED_MODEL),
-        timeout=client.timeout,
-    )
-    memory = ManageMemory(
-        SqliteMemoryStore(database, embedder.model), embedder, use_case.get
-    )
     return ApiDependencies(
         use_case,
         web_dist=DEFAULT_WEB_DIST,

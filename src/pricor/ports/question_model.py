@@ -4,7 +4,7 @@ They live at the ports level because the stored import session holds its open
 questions; building the questions stays in `application.questions`.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .plan_advisor import Evidence, ParameterId
 
@@ -33,6 +33,7 @@ class Suggestion:
     evidence: tuple[Evidence, ...] = ()
     suggested_by: str = "model"
     calibrated: bool = False
+    memory_ids: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

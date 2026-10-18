@@ -198,6 +198,7 @@ class ParameterHypothesis:
     value: ParameterValue
     confidence: float  # as reported by the model; not calibrated
     evidence: tuple[Evidence, ...] = ()
+    memory_refs: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -219,6 +220,7 @@ class PlanProposal:
     hypotheses: tuple[ParameterHypothesis, ...]
     questions: tuple[PlanQuestion, ...]
     latency_seconds: float | None = None
+    memory_ids: tuple[str, ...] = ()
 
 
 class PlanAdvisor(Protocol):
@@ -231,7 +233,7 @@ class PlanAdvisor(Protocol):
     ) -> PlanProposal:
         """Propose parameter hypotheses and questions; `language` is for user-facing text.
 
-        `memory_context` is reserved for retrieved memories and is currently unused.
+        `memory_context` contains untrusted notes retrieved from earlier imports.
         Raises a `ModelError` subclass when the model cannot be trusted.
         """
         ...

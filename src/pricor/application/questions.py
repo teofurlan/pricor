@@ -265,7 +265,16 @@ def decorate(questions: Sequence[Question], proposal: PlanProposal | None) -> tu
         if suggestion is None and hypothesis is not None:
             token = value_token(question.id, hypothesis.value)
             if token is not None and accepted_value(question, token) is not None:
-                suggestion = Suggestion(token, hypothesis.confidence, hypothesis.evidence)
+                memory_ids = [
+                    proposal.memory_ids[reference - 1]
+                    for reference in hypothesis.memory_refs
+                ]
+                suggestion = Suggestion(
+                    token,
+                    hypothesis.confidence,
+                    hypothesis.evidence,
+                    memory_ids=memory_ids,
+                )
         decorated.append(
             replace(question, suggestion=suggestion, model_phrasing=phrasings.get(question.id))
         )

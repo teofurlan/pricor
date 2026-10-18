@@ -12,6 +12,7 @@ from pathlib import Path
 
 from pricor.application.cascade import Stage, run_cascade
 from pricor.application.import_first_time import ImportFirstTime
+from pricor.application.manage_memory import ManageMemory
 from pricor.domain.fingerprint import FingerprintComparison, compare_fingerprint
 from pricor.domain.plan_roles import column_roles
 from pricor.domain.roles import ColumnRole
@@ -59,6 +60,8 @@ class ReuseSupplierPlan(ImportFirstTime):
         clock: Callable[[], datetime] | None = None,
         fx: FxRateProvider | None = None,
         default_fx_rate_type: str = "oficial",
+        memory: ManageMemory | None = None,
+        memory_top_k: int = 3,
     ):
         extra = {}
         if id_factory is not None:
@@ -73,6 +76,8 @@ class ReuseSupplierPlan(ImportFirstTime):
             approvals=approvals,
             fx=fx,
             default_fx_rate_type=default_fx_rate_type,
+            memory=memory,
+            memory_top_k=memory_top_k,
             **extra,
         )
         self._plans = plans
