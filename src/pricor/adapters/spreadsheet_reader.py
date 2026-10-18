@@ -3,11 +3,14 @@
 Safety: size and row limits are enforced, macros are never loaded (XLSX is
 opened read-only with cached values, `keep_vba` off), nothing in a cell is
 ever evaluated, and numeric cells become `Decimal(str(value))`, never float.
+Percent-formatted numbers cross the boundary as percentage-point text (21%).
 """
 
 import csv
 import io
 import math
+import operator
+import re
 import zipfile
 from collections.abc import Callable, Iterable
 from datetime import date, datetime, time, timedelta
@@ -56,6 +59,44 @@ def _decimal_from_float(value: float) -> Cell:
 
 def _text_cell(value: str) -> Cell:
     return value if value.strip() else None
+
+
+_FORMAT_LITERALS = re.compile(r'"[^"]*"|\\.|_.|\*.')
+_FORMAT_CONDITION = re.compile(
+    r"\[(<=|>=|<>|=|<|>)([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][+-]?\d+)?)\]"
+)
+_FORMAT_COMPARISONS = {
+    "<": operator.lt, "<=": operator.le, "=": operator.eq,
+    "<>": operator.ne, ">=": operator.ge, ">": operator.gt,
+}
+
+
+def _formatted_number(value: Cell, number_format: str) -> Cell:
+    """Keep Excel percentage semantics without rounding to display precision.
+
+    Only an active, unescaped percent token scales the stored fraction. Quoted
+    literals, layout escapes and color/currency tags are not percent tokens.
+    Format sections select positive/negative/zero values or explicit conditions.
+    """
+    if not isinstance(value, int | Decimal):
+        return value
+    sections = _FORMAT_LITERALS.sub("", number_format).split(";")[:3]
+    conditions = [_FORMAT_CONDITION.search(section) for section in sections]
+    if any(conditions):
+        for section, condition in zip(sections, conditions, strict=True):
+            if condition is None or _FORMAT_COMPARISONS[condition[1]](
+                value, Decimal(condition[2])
+            ):
+                active = section
+                break
+        else:
+            return value
+    else:
+        index = 2 if value == 0 and len(sections) > 2 else int(value < 0 and len(sections) > 1)
+        active = sections[index]
+    if "%" not in re.sub(r"\[[^\]]*\]", "", active):
+        return value
+    return f"{Decimal(value) * 100:f}%"
 
 
 def _collect(rows: Iterable[Row], max_rows: int) -> tuple[Row, ...]:
@@ -228,8 +269,8 @@ class FileSpreadsheetReader:
                     try:
                         cache[name] = _collect(
                             (
-                                tuple(self._xlsx_cell(value) for value in raw)
-                                for raw in worksheet.iter_rows(values_only=True)
+                                tuple(self._xlsx_cell(cell.value, cell.number_format) for cell in raw)
+                                for raw in worksheet.iter_rows()
                             ),
                             self.max_rows,
                         )
@@ -243,15 +284,15 @@ class FileSpreadsheetReader:
             workbook.close()
 
     @staticmethod
-    def _xlsx_cell(value: Any) -> Cell:
+    def _xlsx_cell(value: Any, number_format: str = "General") -> Cell:
         if value is None:
             return None
         if isinstance(value, bool):
             return "TRUE" if value else "FALSE"
         if isinstance(value, int | Decimal):
-            return value
+            return _formatted_number(value, number_format)
         if isinstance(value, float):
-            return _decimal_from_float(value)
+            return _formatted_number(_decimal_from_float(value), number_format)
         if isinstance(value, datetime | date):
             return value
         if isinstance(value, time | timedelta):
@@ -264,7 +305,7 @@ class FileSpreadsheetReader:
     def _open_xls(path: Path):
         try:
             return xlrd.open_workbook(
-                path, on_demand=True, formatting_info=False, logfile=io.StringIO()
+                path, on_demand=True, formatting_info=True, logfile=io.StringIO()
             )
         except Exception as error:  # xlrd raises XLRDError, struct.error, OSError...
             if _ENCRYPTED_MARKER in path.read_bytes():
@@ -310,6 +351,6 @@ class FileSpreadsheetReader:
             except (xlrd.xldate.XLDateError, OverflowError, ValueError):
                 return _decimal_from_float(value)
         # XLS stores every number as a float; integral values are plain integers.
-        if float(value).is_integer() and abs(value) < 1e15:
-            return int(value)
-        return _decimal_from_float(value)
+        number = int(value) if float(value).is_integer() and abs(value) < 1e15 else _decimal_from_float(value)
+        format_key = book.xf_list[cell.xf_index].format_key
+        return _formatted_number(number, book.format_map[format_key].format_str)

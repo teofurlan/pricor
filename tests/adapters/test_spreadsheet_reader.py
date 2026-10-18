@@ -6,6 +6,8 @@ import pytest
 import xlwt
 
 from pricor.adapters.spreadsheet_reader import FileSpreadsheetReader
+from pricor.domain.engine import execute_plan
+from pricor.domain.plan import parse_plan
 from pricor.ports.spreadsheet import (
     FileTooLargeError,
     SheetNotFoundError,
@@ -198,6 +200,115 @@ def test_xls_reader_does_not_write_to_stdout(tmp_path, capsys):
     _write_xls(path)
     FileSpreadsheetReader().read_sheet(path)
     assert capsys.readouterr().out == ""
+
+
+# -- percentage semantics through the public reader and engine --
+
+
+def _write_formatted_cells(path, values, formats):
+    if path.suffix == ".xls":
+        workbook = xlwt.Workbook()
+        sheet = workbook.add_sheet("Prices")
+        for index, (value, number_format) in enumerate(zip(values, formats, strict=True)):
+            sheet.write(0, index, value, xlwt.easyxf(num_format_str=number_format))
+        workbook.save(str(path))
+    else:
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        for index, (value, number_format) in enumerate(zip(values, formats, strict=True), 1):
+            cell = sheet.cell(1, index, value)
+            cell.number_format = number_format
+        workbook.save(path)
+
+
+@pytest.mark.parametrize("extension", [".xlsx", ".xlsm", ".xls"])
+@pytest.mark.parametrize(
+    "price,discount,vat,expected",
+    [(121, 0, 0.21, "100.00"), (100, 0.21, 0, "79.00")],
+    ids=["vat", "discount"],
+)
+def test_native_excel_percentages_produce_correct_costs(
+    tmp_path, capsys, extension, price, discount, vat, expected
+):
+    path = tmp_path / f"percentages{extension}"
+    _write_formatted_cells(
+        path,
+        ["00123", "Widget", price, discount, vat],
+        ["General", "General", "General", "0%", "0.00%"],
+    )
+    sheet = FileSpreadsheetReader().read_sheet(path)
+    assert sheet.rows[0][3:] == (
+        f"{Decimal(str(discount)) * 100:f}%",
+        f"{Decimal(str(vat)) * 100:f}%",
+    )
+    _assert_no_float(sheet.rows)
+    headers = ["Code", "Description", "Price", "Discount", "VAT"]
+    plan = parse_plan({
+        "contract_version": "1",
+        "engine_version": "0.1.0",
+        "supplier": "Percentage fixture",
+        "steps": [
+            {"op": "normalize_text", "column": {"index": 0, "header": "Code"},
+             "to": "supplier_code"},
+            {"op": "normalize_text", "column": {"index": 1, "header": "Description"},
+             "to": "description"},
+            {"op": "parse_number", "column": {"index": 2, "header": "Price"},
+             "decimal_sep": ".", "thousands_sep": ""},
+            {"op": "apply_discounts", "from": {
+                "column": {"index": 3, "header": "Discount"}, "format": "plus_separated"}},
+            {"op": "strip_vat", "rate_from": {"column": {"index": 4, "header": "VAT"}}},
+            {"op": "constant", "field": "currency", "value": "ARS"},
+        ],
+        "rounding": {"decimals": 2, "mode": "half_up"},
+        "confirmed_by_user": ["VAT and discount columns confirmed"],
+    })
+    result = execute_plan(plan, headers, sheet.rows)
+    assert result.rejected == ()
+    assert len(result.accepted) == 1
+    record = result.accepted[0].record
+    assert (record.supplier_code, record.description, record.currency) == ("00123", "Widget", "ARS")
+    assert record.unit_cost_net == Decimal(expected)
+    assert capsys.readouterr() == ("", "")
+
+
+@pytest.mark.parametrize("extension", [".xlsx", ".xlsm", ".xls"])
+def test_percent_formats_leave_unformatted_decimals_and_text_unchanged(tmp_path, extension):
+    path = tmp_path / f"mixed{extension}"
+    values = [0.21, "21%", 0.21, 0.21]
+    _write_formatted_cells(path, values, ["General", "0%", '0"%"', r"0\%"])
+    rows = FileSpreadsheetReader().read_sheet(path).rows
+    assert rows == ((Decimal("0.21"), "21%", Decimal("0.21"), Decimal("0.21")),)
+    _assert_no_float(rows)
+
+
+@pytest.mark.parametrize("extension", [".xlsx", ".xls"])
+@pytest.mark.parametrize(
+    "value,number_format,expected",
+    [
+        (0.21, '"rate;"0.0%', "21.00%"),
+        (0.21, "0%;0.00", "21.00%"),
+        (-0.21, "0%;0.00", Decimal("-0.21")),
+        (0.21, "0.00;0%", Decimal("0.21")),
+        (-0.21, "0.00;0%", "-21.00%"),
+        (0, "0%;0%;0", 0),
+        (0.21, "[>=1]0%;0.00", Decimal("0.21")),
+        (2, "[>=1]0%;0.00", "200%"),
+        (0.105, "[Red]0%", "10.500%"),
+    ],
+)
+def test_only_the_active_numeric_format_section_sets_percentage_semantics(
+    tmp_path, extension, value, number_format, expected
+):
+    path = tmp_path / f"sections{extension}"
+    _write_formatted_cells(path, [value], [number_format])
+    assert FileSpreadsheetReader().read_sheet(path).rows == ((expected,),)
+
+
+def test_csv_text_percentages_remain_unchanged(tmp_path):
+    path = tmp_path / "percentages.csv"
+    path.write_text("price;vat;discount\n0.21;21%;10%+5%\n", encoding="utf-8")
+    rows = FileSpreadsheetReader().read_sheet(path).rows
+    assert rows == (("price", "vat", "discount"), ("0.21", "21%", "10%+5%"))
 
 
 # -- limits and safety --

@@ -45,6 +45,14 @@ uv run uvicorn pricor.entrypoints.wiring:app_from_env --factory --port 8000
 The endpoints and the session flow are documented in the docstring of `src/pricor/entrypoints/api.py`.
 Uploads accept `.csv`, `.xlsx`, `.xlsm` and `.xls` up to 20 MB.
 
+### Excel percentages
+
+Native Excel percentage cells retain their meaning in XLSX, XLSM and XLS: a
+stored `0.21` with a percentage format is read as `21.00%`, not `0.21%`. The
+conversion uses the stored value without rounding to the displayed precision.
+Ordinary decimal prices, text percentages and CSV cells are unchanged. A literal
+percent sign (quoted or escaped in a number format) does not scale a number.
+
 ### Storage (SQLite)
 
 Sessions, approved supplier plans and the price history live in one SQLite file (standard library `sqlite3`, no server). Settings:

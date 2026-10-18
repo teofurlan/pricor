@@ -3,6 +3,8 @@
 Cell values are restricted to `str`, `Decimal`, `int`, `date`/`datetime` and
 `None`. A `float` never crosses this boundary: adapters convert numeric cells
 to `Decimal(str(value))` so prices keep their shortest exact representation.
+Numeric cells with an active Excel percentage format become percentage-point
+text (stored `0.21` becomes `21.00%`); ordinary numbers remain unchanged.
 File contents are untrusted data.
 """
 
