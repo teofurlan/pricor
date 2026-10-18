@@ -72,19 +72,24 @@ from typing import Any
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from pricor.application.errors import (
+    AcceptedSuggestionConflictError,
     ApplicationError,
+    EmbedderUnavailableError,
     InvalidInputError,
     InvalidOperationError,
+    MemoryUnavailableError,
     NoAcceptedRowsError,
     NoPreviousImportError,
+    QuestionNotFoundError,
 )
 from pricor.adapters.csv_exporter import CsvExporter
 from pricor.adapters.xlsx_exporter import XlsxExporter
 from pricor.application.export_import import ExportedFile, ExportImport
 from pricor.application.import_first_time import ImportFirstTime
+from pricor.application.manage_memory import InvalidMemoryTextError, ManageMemory
 from pricor.application.questions import Question
 from pricor.application.report_price_changes import (
     ImportComparison,
@@ -95,6 +100,7 @@ from pricor.domain.price_report import PriceChange, ProductPrice, percent_text
 from pricor.domain.roles import ColumnRole
 from pricor.ports.import_session import ImportSession, PlanChange, PreviewPage
 from pricor.ports.import_session_repository import SessionNotFoundError
+from pricor.ports.memory import Memory, MemoryNotFoundError
 from pricor.ports.price_history import ImportSummary
 from pricor.entrypoints.web_app import install_web_app
 from pricor.ports.spreadsheet import (
@@ -118,6 +124,8 @@ class ApiDependencies:
     exports: ExportImport | None = None  # CSV and XLSX exporters over the use case if None
     web_dist: Path | None = None  # built web app to serve at `/`; API only if None
     reports: ReportPriceChanges | None = None  # price-change reports; unavailable if None
+    memory: ManageMemory | None = None  # semantic memory; unavailable if None
+    memory_top_k: int = 3  # retrieval count used by the later Gemma integration
 
 
 class HeaderBody(BaseModel):
@@ -135,6 +143,26 @@ class AnswerBody(BaseModel):
 
 class RateBody(BaseModel):
     rate: str
+
+
+class MemoryNoteBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    text: str
+    supplier_name: str | None = None
+
+
+class AcceptedSuggestionMemoryBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    session_id: str
+    question_id: str
+
+
+class EditMemoryBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    text: str
 
 
 # -- serialization ----------------------------------------------------------------
@@ -178,6 +206,17 @@ def _change(change: PlanChange) -> dict[str, Any]:
         "role": change.role,
         "old_value": change.old_value,
         "new_value": change.new_value,
+    }
+
+
+def memory_body(memory: Memory) -> dict[str, Any]:
+    return {
+        "id": memory.id,
+        "text": memory.text,
+        "supplier_name": memory.supplier_name,
+        "source": memory.source,
+        "created_at": memory.created_at.isoformat(),
+        "updated_at": memory.updated_at.isoformat(),
     }
 
 
@@ -396,6 +435,32 @@ def _install_error_handlers(app: FastAPI) -> None:
     async def not_found(_: Request, error: SessionNotFoundError) -> JSONResponse:
         return _error(404, "session_not_found", str(error))
 
+    @app.exception_handler(MemoryNotFoundError)
+    async def memory_not_found(_: Request, error: MemoryNotFoundError) -> JSONResponse:
+        return _error(404, "memory_not_found", str(error))
+
+    @app.exception_handler(QuestionNotFoundError)
+    async def question_not_found(_: Request, error: QuestionNotFoundError) -> JSONResponse:
+        return _error(404, "question_not_found", str(error))
+
+    @app.exception_handler(AcceptedSuggestionConflictError)
+    async def suggestion_conflict(
+        _: Request, error: AcceptedSuggestionConflictError
+    ) -> JSONResponse:
+        return _error(409, "accepted_suggestion_conflict", str(error))
+
+    @app.exception_handler(InvalidMemoryTextError)
+    async def invalid_memory_text(_: Request, error: InvalidMemoryTextError) -> JSONResponse:
+        return _error(422, "invalid_memory_text", str(error))
+
+    @app.exception_handler(MemoryUnavailableError)
+    async def memory_unavailable(_: Request, error: MemoryUnavailableError) -> JSONResponse:
+        return _error(503, "memory_unavailable", str(error))
+
+    @app.exception_handler(EmbedderUnavailableError)
+    async def embedder_unavailable(_: Request, error: EmbedderUnavailableError) -> JSONResponse:
+        return _error(503, "embedder_unavailable", str(error))
+
     @app.exception_handler(NoPreviousImportError)
     async def no_previous_import(_: Request, error: NoPreviousImportError) -> JSONResponse:
         return _error(409, "no_previous_import", str(error))
@@ -469,6 +534,35 @@ def create_app(dependencies: ApiDependencies) -> FastAPI:
         use_case.get, [CsvExporter(), XlsxExporter()]
     )
     _install_error_handlers(app)
+
+    def memories() -> ManageMemory:
+        if dependencies.memory is None:
+            raise MemoryUnavailableError("semantic memory is not configured")
+        return dependencies.memory
+
+    @app.get("/memories")
+    def list_memories() -> list[dict[str, Any]]:
+        return [memory_body(item) for item in memories().list()]
+
+    @app.post("/memories", status_code=201)
+    def create_memory(
+        body: MemoryNoteBody | AcceptedSuggestionMemoryBody,
+    ) -> dict[str, Any]:
+        manager = memories()
+        if isinstance(body, MemoryNoteBody):
+            created = manager.create_note(body.text, body.supplier_name)
+        else:
+            created = manager.create_accepted_suggestion(body.session_id, body.question_id)
+        return memory_body(created)
+
+    @app.patch("/memories/{memory_id}")
+    def edit_memory(memory_id: str, body: EditMemoryBody) -> dict[str, Any]:
+        return memory_body(memories().edit(memory_id, body.text))
+
+    @app.delete("/memories/{memory_id}", status_code=204)
+    def delete_memory(memory_id: str) -> Response:
+        memories().delete(memory_id)
+        return Response(status_code=204)
 
     @app.post("/imports", status_code=201)
     def create_import(

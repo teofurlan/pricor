@@ -5,6 +5,8 @@ Environment variables:
     PRICOR_OLLAMA_URL      base URL of the Ollama server   (default http://localhost:11434)
     PRICOR_OLLAMA_MODEL    model name                      (default gemma4:e4b)
     PRICOR_OLLAMA_TIMEOUT  seconds per model call          (default 180)
+    PRICOR_EMBED_MODEL     embedding model                 (default bge-m3)
+    PRICOR_MEMORY_TOP_K    memories retrieved for Gemma    (default 3)
     PRICOR_DB              path of the SQLite file          (default: see `database_path_from_env`)
     PRICOR_LAYA_MODEL      folder of the fine-tuned Laya model (default models/laya-pricor)
     PRICOR_LAYA_DEVICE     auto | cpu | cuda               (default auto: CUDA when available)
@@ -38,10 +40,14 @@ from pricor.adapters.laya_classifier import (
     LayaColumnClassifier,
     laya_unavailable_reason,
 )
+from pricor.adapters.ollama_embedder import DEFAULT_MODEL as DEFAULT_EMBED_MODEL
+from pricor.adapters.ollama_embedder import OllamaEmbedder
 from pricor.adapters.report_csv_exporter import ReportCsvExporter
 from pricor.adapters.spreadsheet_reader import FileSpreadsheetReader
+from pricor.adapters.sqlite_memory_store import SqliteMemoryStore
 from pricor.adapters.sqlite_store import SqliteDatabase
 from pricor.application.cascade import AgreementStage, ClassifierStage, Member, Stage
+from pricor.application.manage_memory import ManageMemory
 from pricor.application.report_price_changes import ReportPriceChanges
 from pricor.application.reuse_supplier_plan import ReuseSupplierPlan
 from pricor.entrypoints.calibration_file import DEFAULT_CALIBRATION_PATH, load_calibration
@@ -154,9 +160,21 @@ def database_path_from_env(env: Mapping[str, str]) -> Path:
     return Path("pricor.db")
 
 
+def memory_top_k_from_env(env: Mapping[str, str]) -> int:
+    raw = env.get("PRICOR_MEMORY_TOP_K", "3")
+    try:
+        value = int(raw)
+    except ValueError as error:
+        raise ValueError("PRICOR_MEMORY_TOP_K must be a positive integer") from error
+    if value <= 0:
+        raise ValueError("PRICOR_MEMORY_TOP_K must be a positive integer")
+    return value
+
+
 def dependencies_from_env(env: Mapping[str, str]) -> ApiDependencies:
     client = ollama_client_from_env(env)
     rate_type, fx_timeout = fx_settings_from_env(env)
+    memory_top_k = memory_top_k_from_env(env)
     database = SqliteDatabase(database_path_from_env(env))
     stages = build_stages(env, client)
     use_case = ReuseSupplierPlan(
@@ -170,9 +188,22 @@ def dependencies_from_env(env: Mapping[str, str]) -> ApiDependencies:
         default_fx_rate_type=rate_type,
     )
     reports = ReportPriceChanges(use_case.get, database.history, ReportCsvExporter())
-    return ApiDependencies(use_case, web_dist=DEFAULT_WEB_DIST, reports=reports)
+    embedder = OllamaEmbedder(
+        base_url=client.base_url,
+        model=env.get("PRICOR_EMBED_MODEL", DEFAULT_EMBED_MODEL),
+        timeout=client.timeout,
+    )
+    memory = ManageMemory(
+        SqliteMemoryStore(database, embedder.model), embedder, use_case.get
+    )
+    return ApiDependencies(
+        use_case,
+        web_dist=DEFAULT_WEB_DIST,
+        reports=reports,
+        memory=memory,
+        memory_top_k=memory_top_k,
+    )
 
 
 def app_from_env() -> FastAPI:
     return create_app(dependencies_from_env(os.environ))
-

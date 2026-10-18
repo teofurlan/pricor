@@ -1,8 +1,13 @@
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 
+from pricor.application.errors import AcceptedSuggestionConflictError, QuestionNotFoundError
 from pricor.application.manage_memory import InvalidMemoryTextError, ManageMemory
+from pricor.ports.import_session_repository import SessionNotFoundError
+from pricor.ports.plan_advisor import ParameterHypothesis, ParameterId, PlanProposal
+from pricor.ports.question_model import LocalizedText, Option, Question, Suggestion
 from pricor.ports.memory import MemoryNotFoundError
 
 
@@ -53,11 +58,19 @@ class FakeStore:
 def managed():
     embedder = FakeEmbedder()
     store = FakeStore()
-    return ManageMemory(store, embedder), store, embedder
+    sessions = {}
+
+    def get_session(session_id):
+        try:
+            return sessions[session_id]
+        except KeyError as error:
+            raise SessionNotFoundError(session_id) from error
+
+    return ManageMemory(store, embedder, get_session), store, embedder, sessions
 
 
 def test_create_user_note_trims_and_embeds_explicit_text(managed):
-    use_case, store, embedder = managed
+    use_case, store, embedder, _ = managed
 
     created = use_case.create_note("  VAT is included  ", supplier_name="Acme")
 
@@ -69,18 +82,83 @@ def test_create_user_note_trims_and_embeds_explicit_text(managed):
     assert embedder.calls == [["VAT is included"]]
 
 
-def test_create_from_an_explicitly_accepted_suggestion_sets_its_source(managed):
-    use_case, store, _ = managed
+def test_create_from_an_accepted_gemma_suggestion_builds_deterministic_english_text(managed):
+    use_case, store, embedder, sessions = managed
+    question = Question(
+        ParameterId.PRICE_INCLUDES_VAT,
+        LocalizedText("Do prices include VAT?", "¿Los precios incluyen IVA?"),
+        (
+            Option("yes", LocalizedText("Yes, VAT is included", "Sí, incluyen IVA")),
+            Option("no", LocalizedText("No, prices are net", "No, son precios netos")),
+        ),
+        "required",
+        suggestion=Suggestion("yes", 0.8, suggested_by="gemma"),
+    )
+    sessions["session-1"] = SimpleNamespace(
+        supplier_name="Acme",
+        questions=(),
+        answers={question.id: "yes"},
+        proposal=PlanProposal(
+            (ParameterHypothesis(question.id, True, 0.8, ()),), ()
+        ),
+    )
 
-    created = use_case.create_accepted_suggestion("Acme: VAT? -> Included", "Acme")
+    created = use_case.create_accepted_suggestion("session-1", "price_includes_vat")
 
+    assert (
+        created.text
+        == "Acme: Do the prices in this list already include VAT? -> Yes, VAT is included"
+    )
+    assert created.supplier_name == "Acme"
     assert created.source == "accepted_suggestion"
     assert store.get(created.id) == created
+    assert embedder.calls == [[created.text]]
+
+
+@pytest.mark.parametrize(
+    ("suggestion", "answer"),
+    [
+        (Suggestion("yes", 0.8, suggested_by="heuristics"), "yes"),
+        (Suggestion("yes", 0.8, suggested_by="gemma"), "no"),
+        (None, "yes"),
+    ],
+)
+def test_accepted_suggestion_requires_an_answer_matching_a_gemma_suggestion(
+    managed, suggestion, answer
+):
+    use_case, store, embedder, sessions = managed
+    question = Question(
+        ParameterId.PRICE_INCLUDES_VAT,
+        LocalizedText("Do prices include VAT?", "¿Los precios incluyen IVA?"),
+        (Option("yes", LocalizedText("Yes", "Sí")), Option("no", LocalizedText("No", "No"))),
+        "required",
+        suggestion=suggestion,
+    )
+    sessions["session-1"] = SimpleNamespace(
+        supplier_name="Acme", questions=(question,), answers={question.id: answer}
+    )
+
+    with pytest.raises(AcceptedSuggestionConflictError):
+        use_case.create_accepted_suggestion("session-1", "price_includes_vat")
+
+    assert store.items == {}
+    assert embedder.calls == []
+
+
+def test_accepted_suggestion_rejects_an_unknown_question(managed):
+    use_case, store, embedder, sessions = managed
+    sessions["session-1"] = SimpleNamespace(supplier_name="Acme", questions=(), answers={})
+
+    with pytest.raises(QuestionNotFoundError):
+        use_case.create_accepted_suggestion("session-1", "missing")
+
+    assert store.items == {}
+    assert embedder.calls == []
 
 
 @pytest.mark.parametrize("text", ["", "  \n\t  ", "x" * 1001])
 def test_create_rejects_empty_or_over_1000_character_notes(managed, text):
-    use_case, store, embedder = managed
+    use_case, store, embedder, _ = managed
 
     with pytest.raises(InvalidMemoryTextError):
         use_case.create_note(text)
@@ -90,7 +168,7 @@ def test_create_rejects_empty_or_over_1000_character_notes(managed, text):
 
 
 def test_edit_re_embeds_the_trimmed_text_and_preserves_identity(managed):
-    use_case, store, embedder = managed
+    use_case, store, embedder, _ = managed
     created = use_case.create_note("old", "Acme")
 
     changed = use_case.edit(created.id, "  replacement  ")
@@ -103,7 +181,7 @@ def test_edit_re_embeds_the_trimmed_text_and_preserves_identity(managed):
 
 @pytest.mark.parametrize("text", [" ", "x" * 1001])
 def test_edit_uses_the_same_note_validation(managed, text):
-    use_case, store, embedder = managed
+    use_case, store, embedder, _ = managed
     created = use_case.create_note("old")
 
     with pytest.raises(InvalidMemoryTextError):
@@ -114,7 +192,7 @@ def test_edit_uses_the_same_note_validation(managed, text):
 
 
 def test_list_delete_and_unknown_id_are_exposed(managed):
-    use_case, _, _ = managed
+    use_case, _, _, _ = managed
     created = use_case.create_note("temporary")
 
     assert use_case.list() == [created]
@@ -125,10 +203,9 @@ def test_list_delete_and_unknown_id_are_exposed(managed):
 
 
 def test_relevant_embeds_the_query_and_uses_k(managed):
-    use_case, _, embedder = managed
+    use_case, _, embedder, _ = managed
     first = use_case.create_note("first")
     use_case.create_note("second")
 
     assert use_case.relevant("  supplier headers  ", 1) == [first]
     assert embedder.calls[-1] == ["supplier headers"]
-

@@ -88,6 +88,28 @@ Column classification and question suggestions use Gemma through a local [Ollama
 OLLAMA_FLASH_ATTENTION=0 ollama serve
 ```
 
+### Semantic memory
+
+Semantic memories are created only when you explicitly save a note or accept a Gemma
+suggestion; Pricor never creates them automatically. Pull the local embedding model once:
+
+```text
+ollama pull bge-m3
+```
+
+| Variable | Default |
+|---|---|
+| `PRICOR_EMBED_MODEL` | `bge-m3` |
+| `PRICOR_MEMORY_TOP_K` | `3` (must be a positive integer) |
+
+The memory API uses the standard JSON error envelope:
+
+- `GET /memories` lists memories.
+- `POST /memories` creates a note with `{"text": "...", "supplier_name": "..."}` or
+  saves an accepted Gemma suggestion with `{"session_id": "...", "question_id": "..."}`.
+- `PATCH /memories/{id}` replaces its text with `{"text": "..."}`.
+- `DELETE /memories/{id}` deletes it and returns 204.
+
 If Ollama is down, slow or returns something invalid, the import continues with the stages that still work (Laya or the heuristics): the user confirms the uncertain columns, every open plan parameter is asked, and the session shows a `model_unavailable` notice.
 
 **Model output is never executed.** A model can only pick a role for a column from a closed list and suggest an answer to a question. Questions and their options are deterministic, a suggestion is never applied until the user answers, and the import plan is built and run by deterministic code with exact decimal math. The confidence thresholds that decide which columns are shown to the user are calibrated on a validation set (`src/pricor/entrypoints/thresholds.json`); a stage without a calibrated threshold keeps a 0.75 placeholder. Method, results and limits are in `docs/benchmark.md`.

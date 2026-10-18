@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import uuid4
 
+from pricor.application.errors import (
+    AcceptedSuggestionConflictError,
+    EmbedderUnavailableError,
+    QuestionNotFoundError,
+)
+from pricor.application.questions import decorate, question_for
 from pricor.ports.embedder import Embedder
+from pricor.ports.import_session import ImportSession
 from pricor.ports.memory import Memory, MemorySource, MemoryStore
-from pricor.ports.model_errors import ModelSchemaError
+from pricor.ports.model_errors import ModelError, ModelSchemaError
+from pricor.ports.plan_advisor import ParameterId
 
 MAX_MEMORY_TEXT_LENGTH = 1_000
 
@@ -28,17 +38,61 @@ def _validated_text(text: str) -> str:
 
 
 class ManageMemory:
-    def __init__(self, store: MemoryStore, embedder: Embedder):
+    def __init__(
+        self,
+        store: MemoryStore,
+        embedder: Embedder,
+        get_session: Callable[[str], ImportSession],
+    ):
         self._store = store
         self._embedder = embedder
+        self._get_session = get_session
 
     def create_note(self, text: str, supplier_name: str | None = None) -> Memory:
         return self._create(text, supplier_name, "user_note")
 
     def create_accepted_suggestion(
-        self, text: str, supplier_name: str | None = None
+        self, session_id: str, question_id: str
     ) -> Memory:
-        return self._create(text, supplier_name, "accepted_suggestion")
+        session = self._get_session(session_id)
+        question = next(
+            (item for item in session.questions if item.id.value == question_id), None
+        )
+        if question is None:
+            try:
+                parameter = ParameterId(question_id)
+            except ValueError:
+                parameter = None
+            base = None if parameter is None else question_for(parameter)
+            if base is None or parameter not in session.answers:
+                raise QuestionNotFoundError(
+                    f"session {session_id!r} has no question {question_id!r}"
+                )
+            # Answered questions leave the pending tuple. Rebuild the deterministic
+            # question and restore its Gemma proposal from the session snapshot.
+            question = decorate((base,), session.proposal)[0]
+            if question.suggestion is not None and question.suggestion.suggested_by == "model":
+                question = replace(
+                    question,
+                    suggestion=replace(question.suggestion, suggested_by="gemma"),
+                )
+        suggestion = question.suggestion
+        answer = session.answers.get(question.id)
+        if (
+            suggestion is None
+            or suggestion.suggested_by != "gemma"
+            or answer != suggestion.option
+        ):
+            raise AcceptedSuggestionConflictError(
+                "the session answer must accept the option suggested by Gemma"
+            )
+        option = next((item for item in question.options if item.token == answer), None)
+        if option is None:
+            raise AcceptedSuggestionConflictError(
+                "the accepted Gemma suggestion has no labeled question option"
+            )
+        text = f"{session.supplier_name}: {question.text.en} -> {option.label.en}"
+        return self._create(text, session.supplier_name, "accepted_suggestion")
 
     def list(self) -> list[Memory]:
         return self._store.list()
@@ -76,7 +130,10 @@ class ManageMemory:
         return memory
 
     def _embed_one(self, text: str) -> list[float]:
-        vectors = self._embedder.embed([text])
-        if len(vectors) != 1:
-            raise ModelSchemaError("the embedding model did not return one vector")
-        return vectors[0]
+        try:
+            vectors = self._embedder.embed([text])
+            if len(vectors) != 1:
+                raise ModelSchemaError("the embedding model did not return one vector")
+            return vectors[0]
+        except ModelError as error:
+            raise EmbedderUnavailableError(str(error)) from error
