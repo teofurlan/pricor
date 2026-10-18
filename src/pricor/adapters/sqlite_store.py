@@ -119,6 +119,21 @@ MIGRATIONS: tuple[Migration, ...] = (
             )""",
         ],
     ),
+    (
+        3,
+        [
+            """create table memories (
+                id text primary key,
+                text text not null,
+                supplier_name text,
+                source text not null check (source in ('user_note', 'accepted_suggestion')),
+                created_at text not null,
+                updated_at text not null,
+                embedding text not null,
+                embedding_model text not null
+            )""",
+        ],
+    ),
 )
 
 
