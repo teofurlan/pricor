@@ -9,6 +9,8 @@ import { ProvenanceBadge } from "./ProvenanceBadge";
 import { QuestionCard } from "./QuestionCard";
 import { StepTrace } from "./StepTrace";
 import { SuggestionBadge } from "./SuggestionBadge";
+import { MemoryCitation } from "./MemoryCitation";
+import type { Memory } from "../../api/types";
 
 describe("ProvenanceBadge", () => {
   it.each([
@@ -55,6 +57,29 @@ describe("SuggestionBadge", () => {
   it("drops the warning once the confidence is calibrated", () => {
     renderWithI18n(<SuggestionBadge suggestion={{ ...suggestion, calibrated: true }} />);
     expect(screen.getByText("Suggested by Gemma (calibrated: 0.6)")).toBeInTheDocument();
+  });
+});
+
+describe("MemoryCitation", () => {
+  const memories: Memory[] = [{
+    id: "m1",
+    text: "Prices include VAT",
+    supplier_name: "Acme",
+    source: "user_note",
+    created_at: "2026-10-18T10:00:00Z",
+    updated_at: "2026-10-18T10:00:00Z",
+  }];
+
+  it("shows cited text and a deleted-memory fallback", () => {
+    renderWithI18n(<MemoryCitation memoryIds={["m1", "gone"]} memories={memories} />);
+    expect(screen.getByText("Based on your memory:")).toBeInTheDocument();
+    expect(screen.getByText("Prices include VAT")).toBeInTheDocument();
+    expect(screen.getByText("a memory that was deleted")).toBeInTheDocument();
+  });
+
+  it("renders nothing for an old suggestion without memory ids", () => {
+    const { container } = renderWithI18n(<MemoryCitation memoryIds={undefined} memories={memories} />);
+    expect(container).toBeEmptyDOMElement();
   });
 });
 

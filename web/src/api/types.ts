@@ -84,6 +84,19 @@ export interface Suggestion {
   confidence: number;
   calibrated: boolean;
   evidence: { column_index: number; sample: string }[];
+  /** Memories the advisor used; older servers omit this field. */
+  memory_ids?: string[];
+}
+
+export type MemorySource = "user_note" | "accepted_suggestion";
+
+export interface Memory {
+  id: string;
+  text: string;
+  supplier_name: string | null;
+  source: MemorySource;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Question {

@@ -1,4 +1,4 @@
-import type { Question } from "../../api/types";
+import type { Memory, Question } from "../../api/types";
 import { useI18n } from "../../i18n";
 import { Button } from "../atoms/Button";
 import { QuestionCard } from "../molecules/QuestionCard";
@@ -11,16 +11,18 @@ interface Props {
   blocked?: boolean;
   onAnswer(questionId: string, option: string): void;
   onContinue(): void;
+  memories?: Memory[];
+  onRemember?(questionId: string): Promise<string | null>;
 }
 
-export function QuestionsPanel({ questions, answers, busy, blocked = false, onAnswer, onContinue }: Props) {
+export function QuestionsPanel({ questions, answers, busy, blocked = false, onAnswer, onContinue, memories = [], onRemember }: Props) {
   const { t } = useI18n();
   const open = questions.filter((item) => answers[item.id] === undefined);
   return (
     <div className="stack">
       {questions.length === 0 && <p className="lede">{t("questions.none")}</p>}
       {questions.map((item) => (
-        <QuestionCard key={item.id} question={item} answer={answers[item.id]} onAnswer={onAnswer} disabled={busy} />
+        <QuestionCard key={item.id} question={item} answer={answers[item.id]} onAnswer={onAnswer} disabled={busy} memories={memories} onRemember={onRemember} />
       ))}
       <div className="actions">
         <Button variant="primary" disabled={busy || blocked || open.length > 0} onClick={onContinue}>

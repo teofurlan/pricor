@@ -105,6 +105,12 @@ p {
   font-size: 0.95rem;
 }
 
+.masthead__tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .layout {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
@@ -320,7 +326,8 @@ p {
 }
 
 input,
-select {
+select,
+textarea {
   font: inherit;
   color: inherit;
   padding: 10px 12px;
@@ -328,6 +335,10 @@ select {
   border-radius: var(--radius);
   background: var(--surface);
   min-width: 0;
+}
+
+textarea {
+  resize: vertical;
 }
 
 input[type="radio"] {
@@ -695,6 +706,115 @@ input[type="file"] {
 
 .question__custom input {
   width: 110px;
+}
+
+.question__remember {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.memory-citation {
+  padding: 12px 14px;
+  border-left: 3px solid var(--gemma);
+  background: var(--gemma-wash);
+  font-size: 0.9rem;
+}
+
+.memory-citation ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
+.memory-saved {
+  color: var(--good);
+  font-weight: 650;
+}
+
+/* -- memory drawer -------------------------------------------------------- */
+
+.memory-drawer {
+  position: fixed;
+  z-index: 20;
+  inset: 0 0 0 auto;
+  width: min(520px, 100vw);
+  overflow-y: auto;
+  padding: 24px 28px 48px;
+  background: var(--surface);
+  border-left: 1px solid var(--line-strong);
+  box-shadow: -18px 0 48px rgb(23 36 42 / 0.18);
+}
+
+.memory-drawer__close {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.memory-panel,
+.memory-note,
+.memory-list,
+.memory-card__editor {
+  display: grid;
+  gap: 16px;
+}
+
+.memory-panel__header .lede {
+  margin-top: 4px;
+}
+
+.memory-note {
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-large);
+  background: var(--ground);
+}
+
+.memory-note label,
+.memory-card__editor label {
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.memory-note .button {
+  justify-self: start;
+}
+
+.memory-panel__empty,
+.memory-panel__error {
+  padding: 18px 20px;
+  border-radius: var(--radius);
+}
+
+.memory-panel__empty {
+  color: var(--muted);
+  background: var(--ground);
+}
+
+.memory-panel__error {
+  color: var(--bad);
+  background: var(--bad-wash);
+}
+
+.memory-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+}
+
+.memory-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.memory-card__text {
+  white-space: pre-wrap;
 }
 
 .answered ul {

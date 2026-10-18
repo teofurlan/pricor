@@ -5,6 +5,7 @@ import type {
   PriceReport,
   SessionState,
   ColumnRole,
+  Memory,
 } from "./types";
 
 /** A failed API call, normalized from the server's `{"error": {code, message}}` envelope. */
@@ -39,6 +40,14 @@ export interface ApiClient {
   reportUrl(id: string, threshold?: string): string;
 }
 
+export interface MemoryApiClient {
+  listMemories(): Promise<Memory[]>;
+  createMemoryNote(text: string, supplierName?: string): Promise<Memory>;
+  rememberSuggestion(sessionId: string, questionId: string): Promise<Memory>;
+  editMemory(id: string, text: string): Promise<Memory>;
+  deleteMemory(id: string): Promise<void>;
+}
+
 type Fetch = typeof fetch;
 
 async function fail(response: Response): Promise<never> {
@@ -55,7 +64,7 @@ async function fail(response: Response): Promise<never> {
   throw new ApiError(response.status, "unexpected_response", `The server answered ${response.status}.`);
 }
 
-export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), baseUrl = ""): ApiClient {
+export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), baseUrl = ""): ApiClient & MemoryApiClient {
   async function call<T>(path: string, init?: RequestInit): Promise<T> {
     let response: Response;
     try {
@@ -64,6 +73,7 @@ export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), 
       throw new ApiError(0, "network_error", "The Pricor server cannot be reached.");
     }
     if (!response.ok) await fail(response);
+    if (response.status === 204) return undefined as T;
     return (await response.json()) as T;
   }
 
@@ -99,5 +109,12 @@ export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), 
     rejectedUrl: (id, format) => `${baseUrl}${base(id)}/rejected?format=${format}`,
     reportUrl: (id, threshold) =>
       `${baseUrl}${base(id)}/report/export?format=csv${threshold === undefined ? "" : `&threshold=${encodeURIComponent(threshold)}`}`,
+    listMemories: () => call("/memories"),
+    createMemoryNote: (text, supplierName) =>
+      call("/memories", json("POST", { text, ...(supplierName?.trim() ? { supplier_name: supplierName.trim() } : {}) })),
+    rememberSuggestion: (sessionId, questionId) =>
+      call("/memories", json("POST", { session_id: sessionId, question_id: questionId })),
+    editMemory: (id, text) => call(`/memories/${encodeURIComponent(id)}`, json("PATCH", { text })),
+    deleteMemory: (id) => call(`/memories/${encodeURIComponent(id)}`, { method: "DELETE" }),
   };
 }

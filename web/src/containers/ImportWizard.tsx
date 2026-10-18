@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { ApiClient, ApiError } from "../api/client";
-import type { ColumnRole, CreateImportInput, Question, SessionState } from "../api/types";
+import type { ApiClient, ApiError, MemoryApiClient } from "../api/client";
+import type { ColumnRole, CreateImportInput, Memory, Question, SessionState } from "../api/types";
 import { Button } from "../components/atoms/Button";
 import { CountsSummary } from "../components/molecules/CountsSummary";
 import { NoticeList } from "../components/molecules/NoticeList";
@@ -18,6 +18,7 @@ import { Stepper, type StepId, type StepItem } from "../components/organisms/Ste
 import { UploadForm } from "../components/organisms/UploadForm";
 import { useI18n, type TextKey } from "../i18n";
 import { PriceChanges } from "./PriceChanges";
+import { MemoryPanelContainer } from "./MemoryPanelContainer";
 import { toApiError, usePreview } from "./usePreview";
 
 const TITLES: Record<StepId, { title: TextKey; lede: TextKey }> = {
@@ -44,6 +45,9 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   const [error, setError] = useState<ApiError | null>(null);
   // The server only lists open questions; answered ones are remembered here so they stay changeable.
   const [askedQuestions, setAskedQuestions] = useState<Question[]>([]);
+  const [memories, setMemories] = useState<Memory[]>([]);
+  const [memoryOpen, setMemoryOpen] = useState(false);
+  const memoryApi = "listMemories" in api ? (api as ApiClient & MemoryApiClient) : null;
 
   const remember = (next: SessionState) => {
     setSession(next);
@@ -122,6 +126,17 @@ export function ImportWizard({ api }: { api: ApiClient }) {
       setSession(await api.approve(session.id));
     });
 
+  async function rememberSuggestion(questionId: string): Promise<string | null> {
+    if (!session || !memoryApi) return null;
+    try {
+      const created = await memoryApi.rememberSuggestion(session.id, questionId);
+      setMemories((known) => known.some((item) => item.id === created.id) ? known : [...known, created]);
+      return null;
+    } catch (failure) {
+      return failure instanceof Error ? failure.message : String(failure);
+    }
+  }
+
   function select(id: StepId) {
     setError(null);
     if (id === "upload") {
@@ -152,8 +167,19 @@ export function ImportWizard({ api }: { api: ApiClient }) {
           <span className="masthead__name">{t("app.name")}</span>
           <span className="masthead__promise">{t("app.promise")}</span>
         </div>
-        <LanguageToggle />
+        <div className="masthead__tools">
+          {memoryApi && <Button variant="quiet" onClick={() => setMemoryOpen(true)}>{t("memory.open")}</Button>}
+          <LanguageToggle />
+        </div>
       </header>
+      {memoryApi && (
+        <MemoryPanelContainer
+          api={memoryApi}
+          open={memoryOpen}
+          onClose={() => setMemoryOpen(false)}
+          onMemoriesChange={setMemories}
+        />
+      )}
       <div className="layout">
         <aside className="rail">
           <Stepper steps={steps} onSelect={select} />
@@ -202,6 +228,8 @@ export function ImportWizard({ api }: { api: ApiClient }) {
                 blocked={session.status === "fx_rate_required"}
                 onAnswer={answer}
                 onContinue={() => setStep("preview")}
+                memories={memories}
+                onRemember={memoryApi ? rememberSuggestion : undefined}
               />
               {session.fx && (
                 <FxPanel fx={session.fx} busy={busy} onManual={setManualRate} onRefresh={refreshRate} />
