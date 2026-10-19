@@ -22,6 +22,7 @@ export class ApiError extends Error {
 }
 
 export interface ApiClient {
+  listSheets(file: File): Promise<string[]>;
   createImport(input: CreateImportInput): Promise<SessionState>;
   getImport(id: string): Promise<SessionState>;
   chooseHeader(id: string, rowIndex: number | null): Promise<SessionState>;
@@ -35,6 +36,7 @@ export interface ApiClient {
   approve(id: string): Promise<SessionState>;
   /** What changed since the supplier's previous approved import; `threshold` is a ratio ("0.30"). */
   report(id: string, threshold?: string): Promise<PriceReport>;
+  getSample(id: string, limit?: number): Promise<{ header: string[]; rows: string[][] }>;
   exportUrl(id: string, format: ExportFormat): string;
   rejectedUrl(id: string, format: ExportFormat): string;
   reportUrl(id: string, threshold?: string): string;
@@ -85,6 +87,12 @@ export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), 
   const base = (id: string) => `/imports/${encodeURIComponent(id)}`;
 
   return {
+    listSheets: async (file) => {
+      const form = new FormData();
+      form.set("file", file);
+      const data = await call<{ sheets: string[] }>("/sheets", { method: "POST", body: form });
+      return data.sheets;
+    },
     createImport({ file, supplierName, sheet, language, forceFirstImport }) {
       const form = new FormData();
       form.set("file", file);
@@ -105,6 +113,7 @@ export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), 
     approve: (id) => call(`${base(id)}/approve`, { method: "POST" }),
     report: (id, threshold) =>
       call(`${base(id)}/report${threshold === undefined ? "" : `?threshold=${encodeURIComponent(threshold)}`}`),
+    getSample: (id, limit = 5) => call(`${base(id)}/sample?limit=${limit}`),
     exportUrl: (id, format) => `${baseUrl}${base(id)}/export?format=${format}`,
     rejectedUrl: (id, format) => `${baseUrl}${base(id)}/rejected?format=${format}`,
     reportUrl: (id, threshold) =>

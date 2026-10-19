@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ApiError, type MemoryApiClient } from "../api/client";
 import type { Memory } from "../api/types";
 import { Button } from "../components/atoms/Button";
@@ -18,6 +18,14 @@ export function MemoryPanelContainer({ api, open, onClose, onMemoriesChange }: P
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const panelRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    panelRef.current?.querySelector("button")?.focus();
+    return () => { if (opener?.isConnected) opener.focus(); };
+  }, [open]);
 
   function publish(next: Memory[]) {
     setMemories(next);
@@ -57,7 +65,9 @@ export function MemoryPanelContainer({ api, open, onClose, onMemoriesChange }: P
   if (!open) return null;
 
   return (
-    <div className="memory-drawer" role="dialog" aria-modal="true" aria-label={t("memory.title")}>
+    <aside ref={panelRef} className="memory-drawer" aria-label={t("memory.title")} onKeyDown={(event) => {
+      if (event.key === "Escape") { event.stopPropagation(); onClose(); }
+    }}>
       <div className="memory-drawer__close">
         <Button variant="link" onClick={onClose}>{t("memory.close")}</Button>
       </div>
@@ -76,6 +86,6 @@ export function MemoryPanelContainer({ api, open, onClose, onMemoriesChange }: P
           return memories.filter((item) => item.id !== id);
         })}
       />
-    </div>
+    </aside>
   );
 }

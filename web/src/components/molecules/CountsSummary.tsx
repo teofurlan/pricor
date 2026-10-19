@@ -9,14 +9,14 @@ const SKIPPED: [string, TextKey][] = [
 ];
 
 /** Accepted + rejected = data rows, with the rows that were left out of the count named. */
-export function CountsSummary({ totals }: { totals: PreviewTotals }) {
+export function CountsSummary({ totals, tape = false }: { totals: PreviewTotals; tape?: boolean }) {
   const { t } = useI18n();
   const adds = totals.accepted + totals.rejected === totals.data_rows;
   const skipped = SKIPPED.filter(([kind]) => (totals.skipped_rows[kind] ?? 0) > 0).map(([kind, key]) =>
     t(key, { count: totals.skipped_rows[kind] }),
   );
   return (
-    <section className="counts">
+    <section className={`counts${tape ? " counts--tape" : ""}`}>
       <div className="counts__equation">
         <div className="count count--good" role="group" aria-label={t("counts.accepted")}>
           <span className="count__value">{totals.accepted}</span>

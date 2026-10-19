@@ -1,9 +1,10 @@
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ApiError, type MemoryApiClient } from "../api/client";
 import type { Memory } from "../api/types";
 import { renderWithI18n } from "../test/render";
+import { I18nProvider } from "../i18n";
 import { MemoryPanelContainer } from "./MemoryPanelContainer";
 
 const memory: Memory = {
@@ -27,6 +28,21 @@ function fakeApi(overrides: Partial<MemoryApiClient> = {}): MemoryApiClient {
 }
 
 describe("MemoryPanelContainer", () => {
+  it("opens as a non-modal side panel, closes with Escape and restores the opener's focus", async () => {
+    const onClose = vi.fn();
+    const api = fakeApi();
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    const { rerender } = renderWithI18n(<MemoryPanelContainer api={api} open onClose={onClose} />);
+    const panel = await screen.findByRole("complementary", { name: "Memory" });
+    expect(screen.getByRole("button", { name: "Close memory" })).toHaveFocus();
+    fireEvent.keyDown(panel, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledOnce();
+    rerender(<I18nProvider><MemoryPanelContainer api={api} open={false} onClose={onClose} /></I18nProvider>);
+    expect(opener).toHaveFocus();
+    opener.remove();
+  });
   it("loads once and keeps add, edit and delete changes in the list", async () => {
     const api = fakeApi();
     const onMemoriesChange = vi.fn();

@@ -48,19 +48,26 @@ export function QuestionCard({ question, answer, onAnswer, disabled = false, mem
       <p className="question__reason">{t("question.reason", { reason: question.reason })}</p>
       {question.model_phrasing && <p className="question__phrasing">{question.model_phrasing}</p>}
       <div className="question__options">
-        {question.options.map((option) => (
-          <label key={option.token} className="choice">
-            <input
-              type="radio"
-              name={question.id}
-              value={option.token}
-              checked={answer === option.token}
-              onChange={() => onAnswer(question.id, option.token)}
-            />
-            <span className="choice__label">{option.label[language]}</span>
-            {question.suggestion?.option === option.token && <SuggestionBadge suggestion={question.suggestion} />}
-          </label>
-        ))}
+        {question.options.map((option) => {
+          const isSelected = answer === option.token;
+          return (
+            <label key={option.token} className={`choice choice--key${isSelected ? " choice--pressed" : ""}`}>
+              <input
+                type="radio"
+                className="sr-only"
+                name={question.id}
+                value={option.token}
+                checked={isSelected}
+                onChange={() => onAnswer(question.id, option.token)}
+              />
+              <span className="choice__mark" aria-hidden="true">
+                {isSelected ? "✓" : ""}
+              </span>
+              <span className="choice__label">{option.label[language]}</span>
+              {question.suggestion?.option === option.token && <SuggestionBadge suggestion={question.suggestion} />}
+            </label>
+          );
+        })}
       </div>
       <MemoryCitation memoryIds={question.suggestion?.memory_ids} memories={memories} />
       {suggestionAccepted && onRemember && (

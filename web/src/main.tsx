@@ -1,4 +1,5 @@
-import "@fontsource-variable/schibsted-grotesk";
+import "@fontsource-variable/archivo";
+import "@fontsource-variable/azeret-mono";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";

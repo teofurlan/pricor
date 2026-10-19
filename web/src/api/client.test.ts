@@ -63,6 +63,21 @@ describe("api client", () => {
     ]);
   });
 
+  it("lists sheets for an uploaded workbook file", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ sheets: ["Hoja 1", "Hoja 2"] }));
+    const api = createApiClient(fetchMock);
+    const file = new File(["dummy"], "catalogo.xlsx");
+
+    const sheets = await api.listSheets(file);
+
+    expect(sheets).toEqual(["Hoja 1", "Hoja 2"]);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/sheets");
+    expect(init.method).toBe("POST");
+    const form = init.body as FormData;
+    expect((form.get("file") as File).name).toBe("catalogo.xlsx");
+  });
+
   it("requests a preview page with offset and limit", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ items: [] }));
     await createApiClient(fetchMock).preview("s1", 50, 25);

@@ -19,6 +19,8 @@ function fakeApi(overrides: Partial<ApiClient> = {}): ApiClient {
     refreshRate: vi.fn(unexpected("refreshRate")),
     preview: vi.fn(unexpected("preview")),
     approve: vi.fn(unexpected("approve")),
+    listSheets: vi.fn().mockResolvedValue([]),
+    getSample: vi.fn().mockResolvedValue({ header: [], rows: [] }),
     report: vi.fn(() => Promise.reject(new ApiError(409, "no_previous_import", "nothing to compare with"))),
     exportUrl: (id, format) => `/imports/${id}/export?format=${format}`,
     rejectedUrl: (id, format) => `/imports/${id}/rejected?format=${format}`,
@@ -74,7 +76,7 @@ describe("ImportWizard: currency conversion", () => {
     renderWithI18n(<ImportWizard api={api} />);
     await startImport();
 
-    expect(await screen.findByText("Your default setting")).toBeInTheDocument();
+    expect(await screen.findByText("YOUR DEFAULT")).toBeInTheDocument();
     for (const radio of screen.getAllByRole("radio")) expect(radio).not.toBeChecked(); // never auto-applied
     await userEvent.click(screen.getByRole("radio", { name: /Official, sell rate/ }));
     expect(api.answer).toHaveBeenCalledWith("s1", "fx_conversion", "oficial:venta");

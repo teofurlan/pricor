@@ -115,15 +115,15 @@ describe("converted costs in the preview", () => {
     ],
   });
 
-  it("adds a converted column and names the conversion step", () => {
+  it("adds a converted column and names the conversion step", async () => {
     renderWithI18n(
       <PreviewTable page={previewPage({ items: [converted, previewItem()] })} busy={false} onPage={noop} fx={fxState()} />,
     );
 
     expect(screen.getByRole("columnheader", { name: "Converted (ARS)" })).toBeInTheDocument();
     expect(screen.getAllByText("3837.50 ARS").length).toBeGreaterThan(0);
-    expect(screen.getByText("2.50 USD")).toBeInTheDocument(); // the original stays visible
-    expect(screen.getByText("Converted")).toBeInTheDocument();
+    expect(await screen.findByText("2.50 USD")).toBeInTheDocument(); // the original stays visible as the tape prints
+    expect(await screen.findByText("Converted")).toBeInTheDocument();
   });
 
   it("has no converted column when nothing is converted", () => {
@@ -149,6 +149,6 @@ describe("conversion question", () => {
       />,
     );
 
-    expect(screen.getByText("Your default setting")).toBeInTheDocument();
+    expect(screen.getByText("YOUR DEFAULT")).toBeInTheDocument();
   });
 });

@@ -45,6 +45,9 @@ uv run uvicorn pricor.entrypoints.wiring:app_from_env --factory --port 8000
 The endpoints and the session flow are documented in the docstring of `src/pricor/entrypoints/api.py`.
 Uploads accept `.csv`, `.xlsx`, `.xlsm` and `.xls` up to 20 MB.
 
+- `POST /sheets` (multipart `file`): inspects a workbook and returns `{"sheets": [...]}` with its sheet names via `SpreadsheetReader.sheet_names` (CSV files return a single sheet named after the file stem). Shares the 20 MB size limit, allowed extensions, and error envelope with `POST /imports`.
+- `GET /imports/{id}/sample?limit=5`: returns `{"header": [...], "rows": [[...], ...]}` with the first data rows of the sheet under their original headers, skipping preamble, empty, section, and total rows as classified by the profiler. `limit` is validated between 1 and 20 (default 5); returns 404 for an unknown session.
+
 ### Excel percentages
 
 Native Excel percentage cells retain their meaning in XLSX, XLSM and XLS: a

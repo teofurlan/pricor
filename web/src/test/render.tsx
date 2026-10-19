@@ -4,5 +4,7 @@ import type { Language } from "../api/types";
 import { I18nProvider } from "../i18n";
 
 export function renderWithI18n(ui: ReactElement, language: Language = "en") {
-  return render(<I18nProvider initialLanguage={language}>{ui}</I18nProvider>);
+  return render(ui, {
+    wrapper: ({ children }) => <I18nProvider initialLanguage={language}>{children}</I18nProvider>,
+  });
 }

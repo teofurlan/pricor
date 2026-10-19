@@ -24,6 +24,7 @@ function fakeApi(overrides: Partial<ApiClient & MemoryApiClient> = {}): ApiClien
     answer: vi.fn(unexpected("answer")), setManualRate: vi.fn(unexpected("setManualRate")),
     refreshRate: vi.fn(unexpected("refreshRate")), preview: vi.fn().mockResolvedValue(previewPage()),
     approve: vi.fn(unexpected("approve")), report: vi.fn(unexpected("report")),
+    listSheets: vi.fn().mockResolvedValue([]), getSample: vi.fn().mockResolvedValue({ header: [], rows: [] }),
     exportUrl: () => "", rejectedUrl: () => "", reportUrl: () => "",
     listMemories: vi.fn().mockResolvedValue([memory]), createMemoryNote: vi.fn(unexpected("createMemoryNote")),
     rememberSuggestion: vi.fn().mockResolvedValue(memory), editMemory: vi.fn(unexpected("editMemory")),

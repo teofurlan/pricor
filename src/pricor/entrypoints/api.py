@@ -14,9 +14,11 @@ always returned in the same shape (`id`, `status`, `header`, `columns`,
 
 Endpoints:
 
+    POST /sheets                  multipart: file -> {"sheets": ["..."]}
     POST /imports                 multipart: file, supplier_name, [sheet], [language],
                                   [force_first_import]  -> 201 state
     GET  /imports/{id}            current state
+    GET  /imports/{id}/sample     ?limit=5 (1..20) -> {"header": [...], "rows": [[...], ...]}
     PUT  /imports/{id}/header     {"row_index": 3 | null}   (null = the sheet has no header)
     PUT  /imports/{id}/roles      {"roles": {"2": "cost_price"}}   (column index -> role)
     POST /imports/{id}/answers    {"question_id": "currency", "option": "ARS"}
@@ -106,6 +108,7 @@ from pricor.entrypoints.web_app import install_web_app
 from pricor.ports.spreadsheet import (
     FileTooLargeError,
     SpreadsheetError,
+    SpreadsheetReader,
     TooManyRowsError,
     UnsupportedFormatError,
 )
@@ -126,6 +129,7 @@ class ApiDependencies:
     reports: ReportPriceChanges | None = None  # price-change reports; unavailable if None
     memory: ManageMemory | None = None  # semantic memory; unavailable if None
     memory_top_k: int = 3  # retrieval count used by the later Gemma integration
+    reader: SpreadsheetReader | None = None
 
 
 class HeaderBody(BaseModel):
@@ -531,10 +535,24 @@ def _store_upload(upload: UploadFile, directory: Path, limit: int) -> Path:
 def create_app(dependencies: ApiDependencies) -> FastAPI:
     app = FastAPI(title="Pricor", version="0.1.0")
     use_case = dependencies.use_case
+    reader = dependencies.reader or getattr(use_case, "_reader", None)
     exports = dependencies.exports or ExportImport(
         use_case.get, [CsvExporter(), XlsxExporter()]
     )
     _install_error_handlers(app)
+
+    @app.post("/sheets")
+    def list_sheets(file: UploadFile = File(...)) -> dict[str, list[str]]:
+        if reader is None:
+            raise InvalidOperationError("spreadsheet reader is not configured")
+        parent = None if dependencies.upload_dir is None else str(dependencies.upload_dir)
+        directory = Path(tempfile.mkdtemp(prefix="pricor-sheets-", dir=parent))
+        try:
+            path = _store_upload(file, directory, dependencies.max_upload_bytes)
+            names = reader.sheet_names(path)
+        finally:
+            shutil.rmtree(directory, ignore_errors=True)
+        return {"sheets": names}
 
     def memories() -> ManageMemory:
         if dependencies.memory is None:
@@ -613,6 +631,10 @@ def create_app(dependencies: ApiDependencies) -> FastAPI:
     @app.get("/imports/{session_id}/preview")
     def preview(session_id: str, offset: int = 0, limit: int = 50) -> dict[str, Any]:
         return preview_body(use_case.preview(session_id, offset, limit))
+
+    @app.get("/imports/{session_id}/sample")
+    def sample(session_id: str, limit: int = 5) -> dict[str, Any]:
+        return use_case.sample(session_id, limit)
 
     @app.post("/imports/{session_id}/approve")
     def approve(session_id: str) -> dict[str, Any]:

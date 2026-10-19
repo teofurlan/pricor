@@ -16,7 +16,7 @@ describe("ProvenanceBadge", () => {
   it.each([
     ["heuristics", "Heuristics"],
     ["gemma", "Gemma"],
-    ["user", "You"],
+    ["user", "YOU"],
     ["saved_plan", "Saved plan"],
   ])("names who decided: %s", (decidedBy, label) => {
     renderWithI18n(<ProvenanceBadge decidedBy={decidedBy} />);
@@ -39,24 +39,24 @@ describe("SuggestionBadge", () => {
 
   it("labels an uncalibrated model confidence as such", () => {
     renderWithI18n(<SuggestionBadge suggestion={suggestion} />);
-    expect(screen.getByText("Suggested by Gemma (uncalibrated: 0.6)")).toBeInTheDocument();
+    expect(screen.getByText("GEMMA ~.6")).toHaveAttribute("title", "Suggested by Gemma (uncalibrated: 0.6)");
   });
 
   it("names Gemma when the server only says 'model', the only advisor behind it", () => {
     renderWithI18n(<SuggestionBadge suggestion={{ ...suggestion, suggested_by: "model", confidence: 0.4 }} />);
-    expect(screen.getByText("Suggested by Gemma (uncalibrated: 0.4)")).toBeInTheDocument();
+    expect(screen.getByText("GEMMA ~.4")).toHaveAttribute("title", "Suggested by Gemma (uncalibrated: 0.4)");
   });
 
   it("labels a value read from the file as detected, with no model confidence", () => {
     renderWithI18n(
       <SuggestionBadge suggestion={{ ...suggestion, suggested_by: "detected", confidence: 1, calibrated: true }} />,
     );
-    expect(screen.getByText("Detected in the file: confirm or change")).toBeInTheDocument();
+    expect(screen.getByText("DETECTED · confirm or change")).toBeInTheDocument();
   });
 
   it("drops the warning once the confidence is calibrated", () => {
     renderWithI18n(<SuggestionBadge suggestion={{ ...suggestion, calibrated: true }} />);
-    expect(screen.getByText("Suggested by Gemma (calibrated: 0.6)")).toBeInTheDocument();
+    expect(screen.getByText("GEMMA .6")).toHaveAttribute("title", "Suggested by Gemma (calibrated: 0.6)");
   });
 });
 
@@ -92,12 +92,11 @@ describe("StepTrace", () => {
 
   it("lists every step in order, from the original cell to the final value", () => {
     renderWithI18n(<StepTrace trace={trace} currency="ARS" />);
-    const steps = screen.getAllByRole("listitem").map((item) => item.textContent);
-    expect(steps).toEqual([
-      expect.stringContaining("Original1.210,00"),
-      expect.stringContaining("VAT removed1000.00"),
-      expect.stringContaining("Final cost1000.00 ARS"),
-    ]);
+    const steps = screen.getAllByRole("listitem");
+    expect(steps).toHaveLength(trace.length);
+    expect(steps[0]).toHaveTextContent("#Original1.210,00");
+    expect(steps[1]).toHaveTextContent("÷VAT removed1000.00");
+    expect(steps[2]).toHaveTextContent("=Final cost1000.00 ARS✱");
   });
 
   it("shortens long intermediate decimals for reading but keeps the exact value in a tooltip", () => {
@@ -172,15 +171,15 @@ describe("QuestionCard", () => {
     const radios = screen.getAllByRole("radio");
     expect(radios).toHaveLength(2);
     expect(radios.every((radio) => !(radio as HTMLInputElement).checked)).toBe(true);
-    expect(screen.getByText("Suggested by Gemma (uncalibrated: 0.6)")).toBeInTheDocument();
+    expect(screen.getByText("GEMMA ~.6")).toHaveAttribute("title", "Suggested by Gemma (uncalibrated: 0.6)");
   });
 
   it("puts the suggestion badge on the suggested option only", () => {
     renderWithI18n(<QuestionCard question={question({ suggestion })} answer={undefined} onAnswer={vi.fn()} />);
     const usd = screen.getByRole("radio", { name: /US dollars/ }).closest("label")!;
     const ars = screen.getByRole("radio", { name: /Argentine pesos/ }).closest("label")!;
-    expect(within(usd).getByText(/Suggested by Gemma/)).toBeInTheDocument();
-    expect(within(ars).queryByText(/Suggested by Gemma/)).toBeNull();
+    expect(within(usd).getByText("GEMMA ~.6")).toHaveAttribute("title", "Suggested by Gemma (uncalibrated: 0.6)");
+    expect(within(ars).queryByText(/GEMMA/)).toBeNull();
   });
 
   it("reports the token the user picks", async () => {

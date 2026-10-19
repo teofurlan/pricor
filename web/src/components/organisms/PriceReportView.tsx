@@ -2,7 +2,6 @@ import { useId, useState, type FormEvent, type ReactNode } from "react";
 import type { PriceReport, ReportChange, ReportProduct } from "../../api/types";
 import { percentToRatio, ratioToPercent, signedPercent } from "../../lib/percent";
 import { useI18n, type TextKey } from "../../i18n";
-import { Badge } from "../atoms/Badge";
 import { Button } from "../atoms/Button";
 
 const ROW_LIMIT = 50;
@@ -72,9 +71,9 @@ function ChangeTable({ rows, showPercent = true }: { rows: ReportChange[]; showP
             <td>{row.description}</td>
             <td className="num">{money(row.previous_cost, row.currency)}</td>
             <td className="num">{money(row.current_cost, row.currency)}</td>
-            <td className="num">{signedMoney(row.change, row.currency)}</td>
-            {showPercent && <td className="num">{row.change_pct === null ? "" : signedPercent(row.change_pct)}</td>}
-            <td>{row.anomaly && <Badge tone="user">{t("report.review")}</Badge>}</td>
+            <td className={`num${row.change.startsWith("-") ? " num--negative" : ""}`}>{signedMoney(row.change, row.currency)}</td>
+            {showPercent && <td className={`num${row.change_pct?.startsWith("-") ? " num--negative" : ""}`}>{row.change_pct === null ? "" : signedPercent(row.change_pct)}</td>}
+            <td>{row.anomaly && <span className="anomaly-mark">✱ {t("report.review")}</span>}</td>
           </tr>
         ))}
       </tbody>
@@ -146,25 +145,29 @@ export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
     t(`${base}.${count === 1 ? "one" : "other"}` as TextKey, { count });
   const times = (count: number) => t(`report.times.${count === 1 ? "one" : "other"}` as TextKey, { count });
 
-  const down = t("report.down", { count: summary.decreases });
-  const median =
-    summary.median_change_pct === null
-      ? ""
-      : ` (${t("report.median", { median: signedPercent(summary.median_change_pct) })})`;
-  const headline = [
-    t("report.unchanged", { count: summary.unchanged }),
-    t("report.up", { count: summary.increases }),
-    `${down}${median}`,
-    plural("report.anomaly", summary.anomalies),
-  ].join(", ");
+  const summaryLines = [
+    { mark: "◇", value: summary.unchanged, label: t("report.unchanged", { count: "" }).trim() },
+    { mark: "↑", value: summary.increases, label: t("report.up", { count: "" }).trim() },
+    { mark: "↓", value: summary.decreases, label: t("report.down", { count: "" }).trim(), negative: true },
+    { mark: "+", value: summary.new_products, label: plural("report.new", summary.new_products).replace(String(summary.new_products), "").trim() },
+    { mark: "−", value: summary.discontinued, label: t("report.gone", { count: "" }).trim() },
+    { mark: "✱", value: summary.anomalies, label: plural("report.anomaly", summary.anomalies).replace(String(summary.anomalies), "").trim(), total: true },
+  ];
 
   return (
     <div className="stack report">
-      <div className="stack">
-        <h2 className="report__headline">{headline}</h2>
-        <p className="hint">
-          {plural("report.new", summary.new_products)}, {t("report.gone", { count: summary.discontinued })}.
-        </p>
+      <div className="report__overview">
+        <section className="tape report__summary" aria-label={t("report.summary")}>
+          <h2 className="report__headline">{t("report.summary")}</h2>
+          <ol className="report__summary-list">
+            {summaryLines.map((line) => <li key={line.label} className={`report__summary-line${line.negative ? " report__summary-line--negative" : ""}${line.total ? " report__summary-line--total" : ""}`}>
+              <span aria-hidden="true">{line.mark}</span><span className="report__summary-label">{line.label}</span><span className="report__summary-value">{line.value}</span>
+            </li>)}
+          </ol>
+          {summary.median_change_pct !== null && <p className="hint report__median">{t("report.median", { median: signedPercent(summary.median_change_pct) })}</p>}
+          <div className="tape__tear" aria-hidden="true" />
+        </section>
+        <div className="report__tools">
         {summary.currency_changed > 0 && <p className="hint">{t("report.note.currency", { count: summary.currency_changed })}</p>}
         {summary.ambiguous > 0 && <p className="hint">{t("report.note.ambiguous", { count: summary.ambiguous })}</p>}
         <div className="actions">
@@ -172,6 +175,7 @@ export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
           <a className="button button--quiet" href={csvUrl} download>
             {t("report.csv")}
           </a>
+        </div>
         </div>
       </div>
 

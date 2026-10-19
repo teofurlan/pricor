@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ApiClient, ApiError, MemoryApiClient } from "../api/client";
 import type { ColumnRole, CreateImportInput, Memory, Question, SessionState } from "../api/types";
 import { Button } from "../components/atoms/Button";
 import { CountsSummary } from "../components/molecules/CountsSummary";
 import { NoticeList } from "../components/molecules/NoticeList";
+import { type SampleData } from "../components/molecules/SamplePreview";
 import { ApprovePanel } from "../components/organisms/ApprovePanel";
 import { ColumnsTable } from "../components/organisms/ColumnsTable";
 import { ErrorBanner } from "../components/organisms/ErrorBanner";
@@ -49,6 +50,28 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   const [memoryOpen, setMemoryOpen] = useState(false);
   const memoryApi = "listMemories" in api ? (api as ApiClient & MemoryApiClient) : null;
 
+  // Optimistic answers & serialized request queue
+  const [localAnswers, setLocalAnswers] = useState<Record<string, string>>({});
+  const answerQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const pendingAnswersRef = useRef<Record<string, string>>({});
+  const [answeringCount, setAnsweringCount] = useState(0);
+  const [sample, setSample] = useState<SampleData | null>(null);
+
+  useEffect(() => {
+    if (session?.id) {
+      api.getSample(session.id, 5)
+        .then(setSample)
+        .catch(() => setSample(null));
+    } else {
+      setSample(null);
+    }
+  }, [session?.id, session?.header?.row_index]);
+
+  const effectiveAnswers = useMemo(
+    () => ({ ...(session?.answers ?? {}), ...localAnswers }),
+    [session?.answers, localAnswers],
+  );
+
   const remember = (next: SessionState) => {
     setSession(next);
     setAskedQuestions((known) => {
@@ -59,11 +82,22 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   };
   const visibleQuestions = session
     ? askedQuestions.filter(
-        (item) => session.questions.some((open) => open.id === item.id) || item.id in session.answers,
+        (item) => session.questions.some((open) => open.id === item.id) || item.id in effectiveAnswers,
       )
     : [];
 
-  const preview = usePreview(api, session?.id ?? null, session !== null && (step === "preview" || step === "approve"));
+  const previewEnabled =
+    session !== null &&
+    (step === "preview" || step === "approve" || (step === "questions" && session.status === "ready_for_preview"));
+  const preview = usePreview(api, session?.id ?? null, previewEnabled);
+
+  const finalCosts = preview.page?.items
+    ? preview.page.items
+        .slice(0, 5)
+        .map((item) =>
+          item.record?.unit_cost_net ? `${item.record.unit_cost_net} ${item.record.currency ?? ""}`.trim() : null,
+        )
+    : undefined;
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -102,11 +136,31 @@ export function ImportWizard({ api }: { api: ApiClient }) {
       setStep(stepAfterColumns(next));
     });
 
-  const answer = (questionId: string, option: string) =>
-    run(async () => {
-      if (!session) return;
-      remember(await api.answer(session.id, questionId, option));
-    });
+  const answer = (questionId: string, option: string) => {
+    if (!session) return;
+    const sessionId = session.id;
+    // Show the selection immediately
+    setLocalAnswers((prev) => ({ ...prev, [questionId]: option }));
+    pendingAnswersRef.current[questionId] = option;
+    setAnsweringCount((count) => count + 1);
+
+    // Chain onto the queue to send answers to the server in order
+    answerQueueRef.current = answerQueueRef.current
+      .then(async () => {
+        try {
+          const next = await api.answer(sessionId, questionId, option);
+          if (pendingAnswersRef.current[questionId] === option) {
+            delete pendingAnswersRef.current[questionId];
+          }
+          remember(next);
+          setLocalAnswers(() => ({ ...next.answers, ...pendingAnswersRef.current }));
+        } catch (failure) {
+          setError(toApiError(failure));
+        } finally {
+          setAnsweringCount((count) => Math.max(0, count - 1));
+        }
+      });
+  };
 
   const setManualRate = (rate: string) =>
     run(async () => {
@@ -142,6 +196,9 @@ export function ImportWizard({ api }: { api: ApiClient }) {
     if (id === "upload") {
       setSession(null);
       setHeaderNeeded(false);
+      setLocalAnswers({});
+      pendingAnswersRef.current = {};
+      setSample(null);
     }
     setStep(id);
   }
@@ -158,7 +215,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
     rejected: { csv: api.rejectedUrl(id, "csv"), xlsx: api.rejectedUrl(id, "xlsx") },
   });
 
-  const loadingPreview = <p className="lede">{t("common.loading")}</p>;
+  const loadingPreview = <div className="stack" role="status" aria-live="polite"><p className="lede">{t("common.loading")}</p><div className="loading-rules" aria-hidden="true"><span /><span /><span /></div></div>;
 
   return (
     <div className="shell">
@@ -199,7 +256,13 @@ export function ImportWizard({ api }: { api: ApiClient }) {
           <ErrorBanner error={error ?? preview.error} />
           {busy && <p className="working" aria-live="polite">{t("common.working")}</p>}
 
-          {step === "upload" && <UploadForm busy={busy} onSubmit={upload} />}
+          {step === "upload" && (
+            <UploadForm
+              busy={busy}
+              onSubmit={upload}
+              onInspectSheets={(file) => api.listSheets(file)}
+            />
+          )}
           {step === "header" && session && (
             <HeaderChoice candidates={session.header.candidates} busy={busy} onChoose={chooseHeader} />
           )}
@@ -216,6 +279,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
               columns={session.columns}
               issues={session.role_issues}
               busy={busy}
+              sample={sample}
               onConfirm={confirmColumns}
             />
           )}
@@ -223,13 +287,19 @@ export function ImportWizard({ api }: { api: ApiClient }) {
             <>
               <QuestionsPanel
                 questions={visibleQuestions}
-                answers={session.answers}
-                busy={busy}
+                answers={effectiveAnswers}
+                busy={busy || answeringCount > 0}
                 blocked={session.status === "fx_rate_required"}
                 onAnswer={answer}
-                onContinue={() => setStep("preview")}
+                onContinue={async () => {
+                  await answerQueueRef.current;
+                  setStep("preview");
+                }}
                 memories={memories}
                 onRemember={memoryApi ? rememberSuggestion : undefined}
+                sample={sample}
+                columns={session.columns}
+                finalCosts={finalCosts}
               />
               {session.fx && (
                 <FxPanel fx={session.fx} busy={busy} onManual={setManualRate} onRefresh={refreshRate} />
@@ -266,12 +336,13 @@ export function ImportWizard({ api }: { api: ApiClient }) {
             session &&
             (preview.page ? (
               <div className="stack">
-                <CountsSummary totals={preview.page.totals} />
                 <ApprovePanel
                   totals={preview.page.totals}
                   approved={session.approved}
                   busy={busy}
                   links={links(session.id)}
+                  supplier={session.supplier_name}
+                  file={session.file_name}
                   onApprove={approve}
                 />
                 {session.approved && (

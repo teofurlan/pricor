@@ -19,6 +19,8 @@ function fakeApi(overrides: Partial<ApiClient> = {}): ApiClient {
     refreshRate: vi.fn(unexpected("refreshRate")),
     preview: vi.fn(unexpected("preview")),
     approve: vi.fn(unexpected("approve")),
+    listSheets: vi.fn().mockResolvedValue([]),
+    getSample: vi.fn().mockResolvedValue({ header: [], rows: [] }),
     // A first import has no earlier list to compare with, which is the quiet default here.
     report: vi.fn(() => Promise.reject(new ApiError(409, "no_previous_import", "nothing to compare with"))),
     exportUrl: (id, format) => `/imports/${id}/export?format=${format}`,
@@ -66,7 +68,7 @@ describe("ImportWizard", () => {
     await userEvent.click(screen.getByRole("button", { name: "Confirm columns" }));
 
     // The suggestion is visible and nothing is preselected.
-    expect(await screen.findByText("Suggested by Gemma (uncalibrated: 0.6)")).toBeInTheDocument();
+    expect(await screen.findByText("GEMMA ~.6")).toBeInTheDocument();
     for (const radio of screen.getAllByRole("radio")) expect(radio).not.toBeChecked();
     await userEvent.click(screen.getByRole("radio", { name: /Argentine pesos/ }));
     expect(api.answer).toHaveBeenCalledWith("s1", "currency", "ARS");
@@ -78,7 +80,7 @@ describe("ImportWizard", () => {
     expect(await screen.findByLabelText("Accepted")).toHaveTextContent("5");
     expect(screen.getByLabelText("Rejected")).toHaveTextContent("1");
     expect(screen.getByLabelText("Data rows")).toHaveTextContent("6");
-    expect(screen.getByText("1000.00 ARS")).toBeInTheDocument();
+    expect(await screen.findByText("1000.00 ARS")).toBeInTheDocument();
     expect(screen.getByText(/cannot parse 'abc'/)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Continue to approval" }));
@@ -125,14 +127,39 @@ describe("ImportWizard", () => {
     expect(api.chooseHeader).toHaveBeenCalledWith("s1", 1);
 
     const row = await screen.findByRole("row", { name: /Precio/ });
-    expect(within(row).getByText("Needs your choice")).toBeInTheDocument();
+    expect(within(row).getByText("Needs your confirmation")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Confirm columns" })).toBeDisabled();
+    await userEvent.click(within(row).getByRole("button", { name: /Change/i }));
     await userEvent.selectOptions(within(row).getByRole("combobox"), "cost_price");
     await userEvent.click(screen.getByRole("button", { name: "Confirm columns" }));
     expect(api.setRoles).toHaveBeenCalledWith("s1", { 2: "cost_price" });
 
     // No open question, so the wizard goes straight to the preview.
     expect(await screen.findByLabelText("Accepted")).toHaveTextContent("5");
+  });
+
+  it("loads and renders the first 5 rows sample preview on the columns and questions steps", async () => {
+    const api = fakeApi({
+      createImport: vi.fn().mockResolvedValue(withQuestion),
+      getSample: vi.fn().mockResolvedValue({
+        header: ["Codigo", "Precio"],
+        rows: [["P100", "500"]],
+      }),
+    });
+    renderWithI18n(<ImportWizard api={api} />);
+    await startImport();
+
+    // On columns step, sample preview is shown
+    expect(await screen.findByRole("heading", { name: "Preview: first 5 rows" })).toBeInTheDocument();
+    expect(screen.getByText("P100")).toBeInTheDocument();
+    expect(api.getSample).toHaveBeenCalledWith("s1", 5);
+
+    // Proceed to questions step
+    await userEvent.click(screen.getByRole("button", { name: "Confirm columns" }));
+
+    // On questions step, sample preview is also shown
+    expect(await screen.findByRole("heading", { name: "Preview: first 5 rows" })).toBeInTheDocument();
+    expect(screen.getByText("P100")).toBeInTheDocument();
   });
 
   it("can tell the server the sheet has no header", async () => {
@@ -223,7 +250,10 @@ describe("ImportWizard", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: "Approve import" }));
 
-    expect(await screen.findByRole("heading", { level: 2, name: /312 unchanged, 85 up/ })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 2, name: "Price comparison" })).toBeInTheDocument();
+    const summary = screen.getByRole("region", { name: "Price comparison" });
+    expect(summary).toHaveTextContent("unchanged312");
+    expect(summary).toHaveTextContent("up85");
     expect(api.report).toHaveBeenCalledWith("s1", undefined);
   });
 
@@ -257,7 +287,7 @@ describe("ImportWizard", () => {
 
     expect(await screen.findByRole("heading", { name: "Reusing plan v2 for Ferreteria Ejemplo" })).toBeInTheDocument();
     expect(screen.getByText(/moved from column 1 to column 2/)).toBeInTheDocument();
-    expect(screen.getByText("Saved plan")).toBeInTheDocument();
+    expect(screen.getByText("✓ From the saved plan")).toBeInTheDocument();
   });
 
   it("shows no reuse banner for a first import", async () => {
@@ -274,5 +304,83 @@ describe("ImportWizard", () => {
     renderWithI18n(<ImportWizard api={fakeApi()} />);
     await userEvent.click(screen.getByRole("button", { name: "ES" }));
     expect(screen.getByRole("button", { name: "Iniciar importación" })).toBeInTheDocument();
+  });
+
+  it("records both answers when clicking options for two questions back to back while the first is pending", async () => {
+    const q1 = question({
+      id: "currency",
+      text: { en: "Which currency?", es: "Moneda" },
+      options: [
+        { token: "ARS", label: { en: "Argentine pesos", es: "ARS" } },
+        { token: "USD", label: { en: "US dollars", es: "USD" } },
+      ],
+    });
+    const q2 = question({
+      id: "vat_included",
+      text: { en: "VAT included?", es: "IVA" },
+      options: [
+        { token: "yes", label: { en: "Yes", es: "Si" } },
+        { token: "no", label: { en: "No", es: "No" } },
+      ],
+    });
+    const sessionWithTwoQuestions = session({
+      status: "questions_pending",
+      questions: [q1, q2],
+      answers: {},
+    });
+
+    let resolveFirstAnswer!: (value: SessionState) => void;
+    const firstAnswerPromise = new Promise<SessionState>((resolve) => {
+      resolveFirstAnswer = resolve;
+    });
+
+    const api = fakeApi({
+      createImport: vi.fn().mockResolvedValue(sessionWithTwoQuestions),
+      answer: vi
+        .fn()
+        .mockImplementationOnce(() => firstAnswerPromise)
+        .mockImplementationOnce(() =>
+          Promise.resolve(
+            session({
+              status: "ready_for_preview",
+              questions: [q1, q2],
+              answers: { currency: "ARS", vat_included: "yes" },
+            }),
+          ),
+        ),
+    });
+
+    renderWithI18n(<ImportWizard api={api} />);
+    await startImport();
+    await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
+
+    // Both questions are open
+    const arsOption = await screen.findByRole("radio", { name: /Argentine pesos/ });
+    const yesOption = screen.getByRole("radio", { name: /Yes/ });
+
+    // Click first question
+    await userEvent.click(arsOption);
+    expect(api.answer).toHaveBeenCalledWith("s1", "currency", "ARS");
+
+    // Click second question back to back while first API call is still pending
+    await userEvent.click(yesOption);
+
+    // Resolve first answer
+    resolveFirstAnswer(
+      session({
+        status: "questions_pending",
+        questions: [q1, q2],
+        answers: { currency: "ARS" },
+      }),
+    );
+
+    // Both answers must be recorded in order
+    await waitFor(() => {
+      expect(api.answer).toHaveBeenCalledWith("s1", "vat_included", "yes");
+    });
+    expect(api.answer).toHaveBeenCalledTimes(2);
+
+    expect(screen.getByRole("radio", { name: /Argentine pesos/ })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /Yes/ })).toBeChecked();
   });
 });

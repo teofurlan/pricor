@@ -231,6 +231,28 @@ class ImportFirstTime:
         page = tuple(items[offset : offset + limit])
         return PreviewPage(offset, limit, len(items), page, self._totals(session))
 
+    def sample(self, session_id: str, limit: int = 5) -> dict[str, Any]:
+        if not 1 <= limit <= 20:
+            raise InvalidInputError("limit must be between 1 and 20")
+        session = self._repository.get(session_id)
+        profile = session.profile
+        header = [column.raw_header for column in profile.columns]
+        width = len(profile.columns)
+        data_indexes = profile.indexes_of(RowClass.DATA)
+        if profile.header_row is not None:
+            data_indexes = [idx for idx in data_indexes if idx > profile.header_row]
+        sampled_indexes = data_indexes[:limit]
+        rows = [
+            [
+                display(session.rows[idx][i])
+                if i < len(session.rows[idx]) and session.rows[idx][i] is not None
+                else ""
+                for i in range(width)
+            ]
+            for idx in sampled_indexes
+        ]
+        return {"header": header, "rows": rows}
+
     def approve(self, session_id: str) -> ImportSession:
         session = self._repository.get(session_id)
         if session.approved:

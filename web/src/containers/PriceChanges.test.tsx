@@ -24,7 +24,8 @@ describe("PriceChanges", () => {
     renderWithI18n(<PriceChanges api={fakeApi(report)} sessionId="s2" supplierName="Ferreteria Ejemplo" />);
 
     expect(screen.getByText("Loading…")).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { level: 2, name: /312 unchanged/ })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 2, name: "Price comparison" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Price comparison" })).toHaveTextContent("unchanged312");
     expect(report).toHaveBeenCalledWith("s2", undefined);
     expect(screen.getByRole("link", { name: "Report (CSV)" })).toHaveAttribute(
       "href",
@@ -68,7 +69,7 @@ describe("PriceChanges", () => {
     const report = vi.fn().mockResolvedValue(priceReport({ threshold: "0.15" }));
     renderWithI18n(<PriceChanges api={fakeApi(report)} sessionId="s2" supplierName="Ferreteria Ejemplo" />);
 
-    await screen.findByRole("heading", { level: 2, name: /312 unchanged/ });
+    await screen.findByRole("heading", { level: 2, name: "Price comparison" });
 
     expect(report).toHaveBeenCalledWith("s2", "0.15");
     expect(screen.getByLabelText("Anomaly threshold (%)")).toHaveValue("15");
@@ -79,7 +80,7 @@ describe("PriceChanges", () => {
     const report = vi.fn().mockResolvedValue(priceReport());
     renderWithI18n(<PriceChanges api={fakeApi(report)} sessionId="s2" supplierName="Ferreteria Ejemplo" />);
 
-    await screen.findByRole("heading", { level: 2, name: /312 unchanged/ });
+    await screen.findByRole("heading", { level: 2, name: "Price comparison" });
 
     expect(report).toHaveBeenCalledWith("s2", undefined);
   });

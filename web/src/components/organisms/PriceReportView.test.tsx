@@ -14,13 +14,20 @@ function view(report = priceReport(), props: Partial<Parameters<typeof PriceRepo
 }
 
 describe("PriceReportView", () => {
-  it("opens with a one-line summary of the whole comparison", () => {
+  it("opens with a tape summary of the whole comparison", () => {
     view();
-
-    expect(screen.getByRole("heading", { level: 2, name: /unchanged/ })).toHaveTextContent(
-      "312 unchanged, 85 up, 4 down (median change +4.20%), 3 anomalies to review",
-    );
-    expect(screen.getByText("2 new products, 1 discontinued.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Price comparison" })).toBeInTheDocument();
+    const tape = screen.getByRole("region", { name: "Price comparison" });
+    const lines = within(tape).getAllByRole("listitem");
+    expect(lines).toHaveLength(6);
+    expect(lines[0]).toHaveTextContent("◇unchanged312");
+    expect(lines[1]).toHaveTextContent("↑up85");
+    expect(lines[2]).toHaveTextContent("↓down4");
+    expect(lines[2]).toHaveClass("report__summary-line--negative");
+    expect(lines[3]).toHaveTextContent("+new products2");
+    expect(lines[4]).toHaveTextContent("−discontinued1");
+    expect(lines[5]).toHaveTextContent("✱anomalies to review3");
+    expect(within(tape).getByText("median change +4.20%")).toBeInTheDocument();
   });
 
   it("uses the singular for a single anomaly and leaves the median out when nothing changed", () => {
@@ -31,9 +38,12 @@ describe("PriceReportView", () => {
       }),
     );
 
-    expect(screen.getByRole("heading", { level: 2, name: /unchanged/ })).toHaveTextContent(
-      "312 unchanged, 0 up, 0 down, 1 anomaly to review",
-    );
+    const tape = screen.getByRole("region", { name: "Price comparison" });
+    expect(tape).toHaveTextContent("unchanged312");
+    expect(tape).toHaveTextContent("up0");
+    expect(tape).toHaveTextContent("down0");
+    expect(tape).toHaveTextContent("anomaly to review1");
+    expect(within(tape).queryByText(/median/)).not.toBeInTheDocument();
   });
 
   it("highlights anomalies in their own section", () => {
@@ -237,8 +247,11 @@ describe("PriceReportView", () => {
       "es",
     );
 
-    expect(screen.getByRole("heading", { level: 2, name: /sin cambios/ })).toHaveTextContent(
-      "312 sin cambios, 85 subieron, 4 bajaron (variación mediana +4.20%), 3 anomalías para revisar",
-    );
+    const tape = screen.getByRole("region", { name: "Comparación de precios" });
+    expect(tape).toHaveTextContent("sin cambios312");
+    expect(tape).toHaveTextContent("subieron85");
+    expect(tape).toHaveTextContent("bajaron4");
+    expect(tape).toHaveTextContent("variación mediana +4.20%");
+    expect(tape).toHaveTextContent("anomalías para revisar3");
   });
 });
