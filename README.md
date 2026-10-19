@@ -2,6 +2,10 @@
 
 Pricor turns heterogeneous supplier price lists (Excel/CSV) from Argentine stores into a normalized catalog. Models propose an import plan from a closed catalog of operations, and a deterministic engine executes it with exact decimal math, so no model ever touches the numbers.
 
+![Two fictional supplier lists go through column roles, questions and exact receipts into one common format](docs/media/pricor-demo.gif)
+
+![Pricor as a local filter in front of the system a shop already uses: deterministic profile, Laya, Gemma 4 and the user, then an exact Decimal engine](docs/media/pricor-filter.png)
+
 ## Quick start
 
 Requires Python 3.13 with [uv](https://docs.astral.sh/uv/), Node 22 with npm, and [Ollama](https://ollama.com) with the `gemma4:e4b` model pulled.
