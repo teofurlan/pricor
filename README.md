@@ -4,7 +4,10 @@ Pricor turns heterogeneous supplier price lists (Excel/CSV) from Argentine store
 
 ![Two fictional supplier lists go through column roles, questions and exact receipts into one common format](docs/media/pricor-demo.gif)
 
-![Pricor as a local filter in front of the system a shop already uses: deterministic profile, Laya, Gemma 4 and the user, then an exact Decimal engine](docs/media/pricor-filter.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/pricor-filter-dark.png">
+  <img alt="Pricor as a local filter in front of the system a shop already uses: deterministic profile, Laya, Gemma 4 and the user, then an exact Decimal engine" src="docs/media/pricor-filter.png">
+</picture>
 
 ## Quick start
 
