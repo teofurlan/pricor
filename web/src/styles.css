@@ -70,6 +70,7 @@ a:hover { text-decoration-thickness: 2px; }
 .stepper__item--current { color: var(--ink); font-weight: 700; border-bottom-color: var(--ink); }
 .stepper__item--current .stepper__index { font-weight: 700; }
 .stepper__link { border: 0; background: none; padding: 6px 0; cursor: pointer; text-align: left; }
+.stepper__lock { font-size: 0.75rem; color: var(--muted); font-weight: 400; }
 .stepper__link:hover { text-decoration: underline; text-underline-offset: 4px; }
 
 /* Keys have a short physical travel; only the signature key uses red ink. */

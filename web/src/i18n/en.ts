@@ -237,6 +237,8 @@ export const en = {
   "step.questions": "Questions",
   "step.preview": "Preview",
   "step.approve": "Approve",
+  "step.locked": "locked",
+  "step.lockedHint": "The import is approved, so this step can no longer change.",
   "app.promise": "The models fill the form, the engine does the math, you sign.",
   "common.loading": "Loading…",
   "report.loading": "Comparing with the previous list…",

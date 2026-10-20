@@ -240,6 +240,8 @@ export const es: Record<TextKey, string> = {
   "step.questions": "Preguntas",
   "step.preview": "Vista previa",
   "step.approve": "Aprobar",
+  "step.locked": "bloqueado",
+  "step.lockedHint": "La importación está aprobada, así que este paso ya no se puede cambiar.",
   "app.promise": "Los modelos completan el formulario, el motor hace las cuentas, usted firma.",
   "common.loading": "Cargando…",
   "report.loading": "Comparando con la lista anterior…",

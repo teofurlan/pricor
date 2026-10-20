@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ApiError, type ApiClient } from "../api/client";
 import type { SessionState } from "../api/types";
-import { change, column, previewPage, priceReport, question, session } from "../test/fixtures";
+import { change, column, fxState, previewPage, priceReport, question, session } from "../test/fixtures";
 import { renderWithI18n } from "../test/render";
 import { ImportWizard } from "./ImportWizard";
 
@@ -216,6 +216,55 @@ describe("ImportWizard", () => {
       "href",
       "/imports/s1/rejected?format=xlsx",
     );
+  });
+
+  it("locks the steps that would change the plan once the import is approved", async () => {
+    const api = fakeApi({
+      createImport: vi.fn().mockResolvedValue(withQuestion),
+      answer: vi.fn().mockResolvedValue(ready),
+      preview: vi.fn().mockResolvedValue(previewPage()),
+      approve: vi.fn().mockResolvedValue(approved),
+    });
+    renderWithI18n(<ImportWizard api={api} />);
+    await startImport();
+    await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
+    await userEvent.click(await screen.findByRole("radio", { name: /Argentine pesos/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "See the preview" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Continue to approval" }));
+    const steps = screen.getByRole("navigation", { name: "Import steps" });
+    expect(within(steps).getByRole("button", { name: "Columns" })).toBeInTheDocument();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Approve import" }));
+    await screen.findByRole("link", { name: "Products (CSV)" });
+
+    expect(within(steps).queryByRole("button", { name: /Columns/ })).toBeNull();
+    expect(within(steps).queryByRole("button", { name: /Questions/ })).toBeNull();
+    expect(within(steps).getByText("Columns").closest("li")).toHaveTextContent("locked");
+    // The preview stays readable and a new import can still be started.
+    expect(within(steps).getByRole("button", { name: "Upload" })).toBeInTheDocument();
+    await userEvent.click(within(steps).getByRole("button", { name: "Preview" }));
+    expect(await screen.findByLabelText("Accepted")).toHaveTextContent("5");
+  });
+
+  it("shows the rate of an approved import without offering to change it", async () => {
+    const converting: SessionState = { ...approved, fx: fxState() };
+    const api = fakeApi({
+      createImport: vi.fn().mockResolvedValue({ ...converting, status: "ready_for_preview", approved: false }),
+      preview: vi.fn().mockResolvedValue(previewPage()),
+      approve: vi.fn().mockResolvedValue(converting),
+    });
+    renderWithI18n(<ImportWizard api={api} />);
+    await startImport();
+    await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
+    expect(await screen.findByRole("button", { name: "Use this rate" })).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("button", { name: "Continue to approval" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Approve import" }));
+    await screen.findByRole("link", { name: "Products (CSV)" });
+
+    await userEvent.click(within(screen.getByRole("navigation", { name: "Import steps" })).getByRole("button", { name: "Preview" }));
+    expect(await screen.findByText("1 USD = 1535 ARS")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Use this rate" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Get the live rate again" })).toBeNull();
   });
 
   it("asks for the header row when the sheet is ambiguous, then continues with the user's choice", async () => {

@@ -4,6 +4,8 @@ export type StepId = "upload" | "header" | "columns" | "questions" | "preview" |
 export interface StepItem {
   id: StepId;
   state: "done" | "current" | "upcoming";
+  /** A finished step that can no longer change, such as the plan of an approved import. */
+  locked?: boolean;
 }
 
 const LABELS: Record<StepId, TextKey> = {
@@ -15,7 +17,7 @@ const LABELS: Record<StepId, TextKey> = {
   approve: "step.approve",
 };
 
-/** The route of the import. Finished steps can be revisited; later ones cannot be skipped to. */
+/** The route of the import. Finished steps can be revisited unless locked; later ones cannot be skipped to. */
 export function Stepper({ steps, onSelect }: { steps: StepItem[]; onSelect(id: StepId): void }) {
   const { t } = useI18n();
   return (
@@ -26,11 +28,16 @@ export function Stepper({ steps, onSelect }: { steps: StepItem[]; onSelect(id: S
             key={step.id}
             className={`stepper__item stepper__item--${step.state}`}
             aria-current={step.state === "current" ? "step" : undefined}
+            title={step.locked ? t("step.lockedHint") : undefined}
           >
             <span className="stepper__index" aria-hidden="true">
               {step.state === "done" ? "✓" : position + 1}
             </span>
-            {step.state === "done" ? (
+            {step.locked ? (
+              <span className="stepper__label">
+                {t(LABELS[step.id])} <span className="stepper__lock">{t("step.locked")}</span>
+              </span>
+            ) : step.state === "done" ? (
               <button type="button" className="stepper__link" onClick={() => onSelect(step.id)}>
                 {t(LABELS[step.id])}
               </button>

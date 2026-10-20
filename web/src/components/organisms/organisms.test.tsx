@@ -853,6 +853,20 @@ describe("Stepper", () => {
     await userEvent.click(screen.getByRole("button", { name: /Upload/ }));
     expect(onSelect).toHaveBeenCalledWith("upload");
   });
+
+  it("shows a locked finished step as read-only instead of a link back", () => {
+    renderWithI18n(
+      <Stepper
+        steps={[{ id: "upload", state: "done" }, { id: "columns", state: "done", locked: true }, { id: "approve", state: "current" }]}
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /Columns/ })).toBeNull();
+    const locked = screen.getByText("Columns").closest("li")!;
+    expect(locked).toHaveTextContent("locked");
+    expect(locked).toHaveAttribute("title", "The import is approved, so this step can no longer change.");
+    expect(screen.getByRole("button", { name: /Upload/ })).toBeEnabled();
+  });
 });
 
 describe("LanguageToggle", () => {

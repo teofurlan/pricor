@@ -24,6 +24,9 @@ import { MemoryPanelContainer } from "./MemoryPanelContainer";
 import { OutputFormatContainer } from "./OutputFormatContainer";
 import { toApiError, usePreview } from "./usePreview";
 
+// Steps that change the plan; the server refuses them once the import is approved.
+const PLAN_STEPS: StepId[] = ["header", "columns", "questions"];
+
 const TITLES: Record<StepId, { title: TextKey; lede: TextKey }> = {
   upload: { title: "title.upload", lede: "lede.upload" },
   header: { title: "title.header", lede: "lede.header" },
@@ -264,6 +267,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   const steps: StepItem[] = order.map((id, position) => ({
     id,
     state: position < current ? "done" : position === current ? "current" : "upcoming",
+    locked: session?.approved === true && PLAN_STEPS.includes(id),
   }));
 
   const links = (id: string) => ({
@@ -369,7 +373,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
               <div className="stack">
                 <CountsSummary totals={preview.page.totals} />
                 {session?.fx && (
-                  <FxPanel fx={session.fx} busy={busy} onManual={setManualRate} onRefresh={refreshRate} />
+                  <FxPanel fx={session.fx} busy={busy} onManual={setManualRate} onRefresh={refreshRate} readOnly={session.approved} />
                 )}
                 <PreviewTable
                   page={preview.page}

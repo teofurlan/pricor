@@ -10,10 +10,12 @@ interface Props {
   busy: boolean;
   onManual(rate: string): void;
   onRefresh(): void;
+  /** Shows the rate without the ways to change it, e.g. once the import is approved. */
+  readOnly?: boolean;
 }
 
 /** The exchange rate of this run: what was used and where it came from, or a way to supply one. */
-export function FxPanel({ fx, busy, onManual, onRefresh }: Props) {
+export function FxPanel({ fx, busy, onManual, onRefresh, readOnly = false }: Props) {
   const { t } = useI18n();
   const pending = usePendingAction<"manual" | "refresh">(busy);
   const [typed, setTyped] = useState("");
@@ -35,18 +37,20 @@ export function FxPanel({ fx, busy, onManual, onRefresh }: Props) {
         <p className="fx__required">{t("fx.required")}</p>
       )}
       {fx.error && <p className="fx__error">{t("fx.error", { error: fx.error })}</p>}
-      <div className="fx__manual">
-        <label htmlFor={inputId}>{t("fx.manual.label", { from: fx.from, to: fx.to })}</label>
-        <input id={inputId} inputMode="decimal" value={typed} onChange={(event) => setTyped(event.target.value)} />
-        <Button disabled={busy || typed.trim() === ""} loading={pending.isLoading("manual")} onClick={() => { pending.mark("manual"); onManual(typed.trim()); }}>
-          {t("fx.manual.use")}
-        </Button>
-        {fx.rate_type !== "manual" && (
-          <Button disabled={busy} loading={pending.isLoading("refresh")} onClick={() => { pending.mark("refresh"); onRefresh(); }}>
-            {t("fx.refresh")}
+      {!readOnly && (
+        <div className="fx__manual">
+          <label htmlFor={inputId}>{t("fx.manual.label", { from: fx.from, to: fx.to })}</label>
+          <input id={inputId} inputMode="decimal" value={typed} onChange={(event) => setTyped(event.target.value)} />
+          <Button disabled={busy || typed.trim() === ""} loading={pending.isLoading("manual")} onClick={() => { pending.mark("manual"); onManual(typed.trim()); }}>
+            {t("fx.manual.use")}
           </Button>
-        )}
-      </div>
+          {fx.rate_type !== "manual" && (
+            <Button disabled={busy} loading={pending.isLoading("refresh")} onClick={() => { pending.mark("refresh"); onRefresh(); }}>
+              {t("fx.refresh")}
+            </Button>
+          )}
+        </div>
+      )}
     </section>
   );
 }
