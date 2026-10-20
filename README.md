@@ -88,7 +88,8 @@ Once a session is approved, `GET /imports/{id}/export?format=csv|xlsx` returns t
 Upload a CSV/XLS/XLSX template to define the products file your store needs.
 There is one format for the whole store, shared by all suppliers and imports.
 The first non-empty row supplies the column names, in their original order;
-blank names become `Column N` (1-based). Up to five following rows are samples.
+blank names become `Column N` (1-based). Up to five following rows are samples;
+the number of columns comes from the header and those samples only.
 An empty file returns 422. The optional `sheet` selects a workbook sheet.
 
 - `POST /output-format` (multipart `file`, optional `sheet`) returns 201 and

@@ -385,6 +385,7 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
 .question__custom { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 0.875rem; }
 .question__custom input { width: 120px; }
 .question__chosen { font-size: 0.8125rem; }
+.field__error { margin-top: -8px; font-size: 0.8125rem; color: var(--red); }
 .question__invalid { flex-basis: 100%; font-size: 0.8125rem; color: var(--red); }
 .question__custom input[aria-invalid="true"] { border-color: var(--red); }
 .question__remember { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }

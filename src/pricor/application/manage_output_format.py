@@ -47,11 +47,12 @@ class ManageOutputFormat:
         header_index = next((i for i, row in enumerate(rows) if any(not is_blank(c) for c in row)), None)
         if header_index is None:
             raise SpreadsheetError("the template has no non-empty row")
-        # Spreadsheet readers may omit trailing blank header cells even when
-        # following rows populate those columns. Keep that template width.
-        width = max(len(row) for row in rows[header_index:])
-        header = (*rows[header_index], *([None] * (width - len(rows[header_index]))))
         samples = rows[header_index + 1:header_index + 6]
+        # Spreadsheet readers may omit trailing blank header cells even when the
+        # sample rows populate those columns. Keep that width, but only from the
+        # header and its samples: a stray cell further down is not a column.
+        width = max(len(row) for row in (rows[header_index], *samples))
+        header = (*rows[header_index], *([None] * (width - len(rows[header_index]))))
         columns = tuple(
             TemplateColumn(
                 index,

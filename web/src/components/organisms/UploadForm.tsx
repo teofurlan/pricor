@@ -1,6 +1,8 @@
 import { useId, useRef, useState, type FormEvent } from "react";
 import type { CreateImportInput, Language } from "../../api/types";
+import { ApiError } from "../../api/client";
 import { useI18n } from "../../i18n";
+import { describeError } from "../../i18n/serverText";
 import { Button } from "../atoms/Button";
 import { TapeLoader } from "../atoms/TapeLoader";
 
@@ -18,6 +20,9 @@ function formatFileSize(bytes: number): string {
 
 export function UploadForm({ busy, onSubmit, onInspectSheets }: Props) {
   const { t, language: interfaceLanguage } = useI18n();
+  const [inspectError, setInspectError] = useState<string | null>(null);
+  // Only the file picked last may fill the sheet list.
+  const inspection = useRef(0);
   const [supplierName, setSupplierName] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [availableSheets, setAvailableSheets] = useState<string[] | null>(null);
@@ -38,12 +43,21 @@ export function UploadForm({ busy, onSubmit, onInspectSheets }: Props) {
     setFile(selected);
     setSheet("");
     setAvailableSheets(null);
+    setInspectError(null);
+    const ticket = ++inspection.current;
     if (selected && onInspectSheets) {
       setInspectingSheets(true);
       onInspectSheets(selected)
-        .then((names) => setAvailableSheets(names))
-        .catch(() => setAvailableSheets([]))
-        .finally(() => setInspectingSheets(false));
+        .then((names) => { if (ticket === inspection.current) setAvailableSheets(names); })
+        .catch((failure: unknown) => {
+          if (ticket !== inspection.current) return;
+          setAvailableSheets([]);
+          const reason = failure instanceof ApiError ? describeError(failure, interfaceLanguage) : failure instanceof Error ? failure.message : String(failure);
+          setInspectError(t("upload.sheetsFailed", { reason }));
+        })
+        .finally(() => { if (ticket === inspection.current) setInspectingSheets(false); });
+    } else {
+      setInspectingSheets(false);
     }
   }
 
@@ -154,6 +168,7 @@ export function UploadForm({ busy, onSubmit, onInspectSheets }: Props) {
           )}
         </div>
       </div>
+      {inspectError && <p className="field__error" role="status">{inspectError}</p>}
       <div className="form__row">
         {availableSheets && availableSheets.length > 1 && (
           <label className="field">

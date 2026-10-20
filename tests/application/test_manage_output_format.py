@@ -164,3 +164,16 @@ def test_define_rejects_invalid_columns_and_keeps_the_stored_format(manager, col
     with pytest.raises(InvalidInputError, match=message):
         manager.define(columns)
     assert manager.get() == stored
+
+
+def test_a_stray_cell_below_the_samples_adds_no_column(manager, tmp_path):
+    path = tmp_path / "stray.csv"
+    rows = ["SKU,Costo", *[f"00{i},{i}" for i in range(5)], "", ",,,,,,,,nota suelta"]
+    path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    assert [column.name for column in manager.upload(path).columns] == ["SKU", "Costo"]
+
+
+def test_sample_rows_still_widen_the_template(manager, tmp_path):
+    path = tmp_path / "wide.csv"
+    path.write_text("SKU,Costo\n001,2,extra\n", encoding="utf-8")
+    assert [column.name for column in manager.upload(path).columns] == ["SKU", "Costo", "Column 3"]

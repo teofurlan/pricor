@@ -49,6 +49,27 @@ describe("UploadForm", () => {
     expect(onSubmit).toHaveBeenCalledWith({ file, supplierName: "Acme", sheet: "Hoja 2", language: "es" });
   });
 
+  it("offers the sheets of the file picked last, even when an earlier file answers later", async () => {
+    const answers: Record<string, (names: string[]) => void> = {};
+    const onInspectSheets = vi.fn((file: File) => new Promise<string[]>((resolve) => { answers[file.name] = resolve; }));
+    renderWithI18n(<UploadForm busy={false} onSubmit={vi.fn()} onInspectSheets={onInspectSheets} />);
+    await userEvent.upload(screen.getByLabelText("Price list file"), new File(["a"], "primero.xlsx"));
+    await userEvent.upload(screen.getByLabelText("Price list file"), new File(["b"], "segundo.xlsx"));
+    answers["segundo.xlsx"](["Nueva 1", "Nueva 2"]);
+    const sheet = await screen.findByLabelText("Sheet");
+    answers["primero.xlsx"](["Vieja 1", "Vieja 2"]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(within(sheet).queryByRole("option", { name: "Vieja 1" })).toBeNull();
+    expect(within(sheet).getByRole("option", { name: "Nueva 1" })).toBeInTheDocument();
+  });
+
+  it("says so when the sheets of a file cannot be read", async () => {
+    const onInspectSheets = vi.fn().mockRejectedValue(new ApiError(415, "unsupported_format", "unsupported file type"));
+    renderWithI18n(<UploadForm busy={false} onSubmit={vi.fn()} onInspectSheets={onInspectSheets} />);
+    await userEvent.upload(screen.getByLabelText("Price list file"), new File(["a"], "lista.xlsx"));
+    expect(await screen.findByText("Could not read this file: unsupported file type")).toBeInTheDocument();
+  });
+
   it("hides the sheet select when the file has only one sheet or is single-sheet csv", async () => {
     const onSubmit = vi.fn();
     const onInspectSheets = vi.fn().mockResolvedValue(["lista_octubre"]);

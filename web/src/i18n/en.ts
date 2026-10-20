@@ -125,6 +125,7 @@ export const en = {
   "upload.fileHint": "Excel (.xls, .xlsx) or CSV · up to 20 MB",
   "upload.sheet": "Sheet",
   "upload.sheetDefault": "First sheet with data",
+  "upload.sheetsFailed": "Could not read this file: {reason}",
   "upload.language": "Language of the questions",
   "upload.reading": "Reading the file…",
   "upload.start": "Start import",

@@ -127,6 +127,7 @@ export const es: Record<TextKey, string> = {
   "upload.dropActive": "Soltala para leerla",
   "upload.fileHint": "Excel (.xls, .xlsx) o CSV · hasta 20 MB",
   "upload.sheet": "Hoja",
+  "upload.sheetsFailed": "No se pudo leer este archivo: {reason}",
   "upload.sheetDefault": "Primera hoja con datos",
   "upload.language": "Idioma de las preguntas",
   "upload.reading": "Leyendo el archivo…",

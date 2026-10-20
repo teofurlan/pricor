@@ -158,7 +158,9 @@ from pricor.ports.spreadsheet import (
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 ALLOWED_EXTENSIONS = frozenset({".csv", ".xlsx", ".xlsm", ".xls"})
 _CHUNK = 1024 * 1024
-_UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
+# Letters in any script, digits, spaces, dots and dashes survive; separators and the
+# characters Windows forbids in file names do not.
+_UNSAFE = re.compile(r"[^\w .-]+")
 
 
 @dataclass(frozen=True)
@@ -601,7 +603,8 @@ def _install_error_handlers(app: FastAPI) -> None:
 
 
 def _safe_name(filename: str | None) -> str:
-    name = _UNSAFE.sub("_", Path(filename or "upload").name).strip("._") or "upload"
+    base = (filename or "upload").replace("\\", "/").rsplit("/", 1)[-1]
+    name = _UNSAFE.sub("_", base).strip("._ ") or "upload"
     return name[:100]
 
 

@@ -231,6 +231,24 @@ def test_uploaded_file_names_cannot_escape_the_upload_directory(tmp_path):
     assert list(tmp_path.iterdir()) == []  # temporary uploads are removed after reading
 
 
+@pytest.mark.parametrize("filename, shown", [
+    ("Lista Precios Ñandú.csv", "Lista Precios Ñandú.csv"),
+    ("a<b>:c|e?f*g.csv", "a_b_c_e_f_g.csv"),
+    ("..\..\evil.csv", "evil.csv"),
+])
+def test_the_import_keeps_a_readable_file_name(tmp_path, filename, shown):
+    use_case = ImportFirstTime(
+        FileSpreadsheetReader(),
+        InMemoryImportSessionRepository(),
+        [ClassifierStage("heuristics", FakeClassifier(ROLES))],
+    )
+    client = TestClient(create_app(ApiDependencies(use_case, upload_dir=tmp_path)))
+    response = upload(client, filename=filename)
+    assert response.status_code == 201
+    assert response.json()["file_name"] == shown
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_unexpected_errors_are_hidden_behind_a_generic_500():
     class Boom:
         def classify_sheet(self, sheet):
