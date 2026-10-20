@@ -58,6 +58,9 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   const answerQueueRef = useRef<Promise<void>>(Promise.resolve());
   const pendingAnswersRef = useRef<Record<string, string>>({});
   const [answeringCount, setAnsweringCount] = useState(0);
+  // Bumped for every new import, so a late reply about the previous one is ignored.
+  const generationRef = useRef(0);
+  const sessionRef = useRef<SessionState | null>(null);
   const [sample, setSample] = useState<SampleData | null>(null);
   const [sheets, setSheets] = useState<Partial<Record<ExportFile, ExportSheet>>>({});
   const approvedId = session?.approved ? session.id : null;
@@ -92,6 +95,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   );
 
   const remember = (next: SessionState) => {
+    sessionRef.current = next;
     setSession(next);
     setAskedQuestions((known) => {
       const fresh = next.questions.filter((item) => !known.some((old) => old.id === item.id));
@@ -134,8 +138,23 @@ export function ImportWizard({ api }: { api: ApiClient }) {
     }
   }
 
+  /** Drop answers not yet confirmed; the server's answers are the truth from now on. */
+  function forgetLocalAnswers() {
+    setLocalAnswers({});
+    pendingAnswersRef.current = {};
+  }
+
+  /** Start over: no answer still in flight may touch the next import. */
+  function resetAnswerQueue() {
+    generationRef.current += 1;
+    answerQueueRef.current = Promise.resolve();
+    setAnsweringCount(0);
+    forgetLocalAnswers();
+  }
+
   const upload = (input: CreateImportInput) =>
     run(async () => {
+      resetAnswerQueue();
       const created = await api.createImport(input);
       setAskedQuestions([]);
       remember(created);
@@ -148,6 +167,8 @@ export function ImportWizard({ api }: { api: ApiClient }) {
     run(async () => {
       if (!session) return;
       remember(await api.chooseHeader(session.id, rowIndex));
+      // The server clears every answer when the header changes.
+      forgetLocalAnswers();
       setStep("columns");
     });
 
@@ -156,12 +177,14 @@ export function ImportWizard({ api }: { api: ApiClient }) {
       if (!session) return;
       const next = Object.keys(edits).length > 0 ? await api.setRoles(session.id, edits) : session;
       remember(next);
+      if (next !== session) forgetLocalAnswers();
       setStep(stepAfterColumns(next));
     });
 
   const answer = (questionId: string, option: string) => {
     if (!session) return;
     const sessionId = session.id;
+    const generation = generationRef.current;
     // Show the selection immediately
     setLocalAnswers((prev) => ({ ...prev, [questionId]: option }));
     pendingAnswersRef.current[questionId] = option;
@@ -170,14 +193,17 @@ export function ImportWizard({ api }: { api: ApiClient }) {
     // Chain onto the queue to send answers to the server in order
     answerQueueRef.current = answerQueueRef.current
       .then(async () => {
+        if (generation !== generationRef.current) return; // a new import started meanwhile
         try {
           const next = await api.answer(sessionId, questionId, option);
+          if (generation !== generationRef.current) return;
           if (pendingAnswersRef.current[questionId] === option) {
             delete pendingAnswersRef.current[questionId];
           }
           remember(next);
           setLocalAnswers(() => ({ ...next.answers, ...pendingAnswersRef.current }));
         } catch (failure) {
+          if (generation !== generationRef.current) return;
           // A refused answer must not stay on screen as chosen; fall back to the server's answer.
           if (pendingAnswersRef.current[questionId] === option) {
             delete pendingAnswersRef.current[questionId];
@@ -185,7 +211,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
           }
           setError(toApiError(failure));
         } finally {
-          setAnsweringCount((count) => Math.max(0, count - 1));
+          if (generation === generationRef.current) setAnsweringCount((count) => Math.max(0, count - 1));
         }
       });
   };
@@ -205,7 +231,9 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   const approve = () =>
     run(async () => {
       if (!session) return;
-      setSession(await api.approve(session.id));
+      const approved = await api.approve(session.id);
+      sessionRef.current = approved;
+      setSession(approved);
     });
 
   async function rememberSuggestion(questionId: string): Promise<string | null> {
@@ -223,9 +251,9 @@ export function ImportWizard({ api }: { api: ApiClient }) {
     setError(null);
     if (id === "upload") {
       setSession(null);
+      sessionRef.current = null;
       setHeaderNeeded(false);
-      setLocalAnswers({});
-      pendingAnswersRef.current = {};
+      resetAnswerQueue();
       setSample(null);
     }
     setStep(id);
@@ -320,7 +348,9 @@ export function ImportWizard({ api }: { api: ApiClient }) {
                 onAnswer={answer}
                 onContinue={async () => {
                   await answerQueueRef.current;
-                  setStep("preview");
+                  // The last answer may have reopened something; go where the server says.
+                  const latest = sessionRef.current;
+                  if (latest) setStep(stepAfterColumns(latest));
                 }}
                 memories={memories}
                 onRemember={memoryApi ? rememberSuggestion : undefined}

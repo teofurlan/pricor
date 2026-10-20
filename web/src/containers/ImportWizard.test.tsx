@@ -50,6 +50,83 @@ const ready: SessionState = session({ status: "ready_for_preview", answers: { cu
 const approved: SessionState = { ...ready, status: "approved", approved: true };
 
 describe("ImportWizard", () => {
+  it("forgets answers the server cleared when the header row is chosen again", async () => {
+    const ambiguous = session({
+      status: "header_choice_required",
+      header: {
+        row_index: null, confidence: 0.4, ambiguous: true,
+        candidates: [
+          { row_index: 0, file_row: 1, cells: ["Codigo", "Precio", ""] },
+          { row_index: 1, file_row: 2, cells: ["Codigo", "Descripcion", "Precio"] },
+        ],
+      },
+      columns: [],
+    });
+    const asking = session({ status: "questions_pending", questions: [question()], answers: {}, header: { ...ambiguous.header, row_index: 1 } });
+    const api = fakeApi({
+      createImport: vi.fn().mockResolvedValue(ambiguous),
+      chooseHeader: vi.fn().mockResolvedValue(asking),
+      answer: vi.fn().mockResolvedValue(session({ status: "ready_for_preview", questions: [question()], answers: { currency: "ARS" }, header: asking.header })),
+      preview: vi.fn().mockResolvedValue(previewPage()),
+    });
+    renderWithI18n(<ImportWizard api={api} />);
+    await startImport();
+    await userEvent.click(await screen.findByRole("radio", { name: /Row 2/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Use this row" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
+    await userEvent.click(await screen.findByRole("radio", { name: /Argentine pesos/ }));
+    expect(await screen.findByRole("button", { name: "See the preview" })).toBeEnabled();
+
+    await userEvent.click(screen.getByRole("button", { name: /Header/ }));
+    await userEvent.click(await screen.findByRole("radio", { name: /Row 1/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Use this row" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
+    expect(await screen.findByRole("radio", { name: /Argentine pesos/ })).not.toBeChecked();
+    expect(screen.getByRole("button", { name: "See the preview" })).toBeDisabled();
+  });
+
+  it("ignores a slow answer from the previous import once a new one started", async () => {
+    let finishOld!: (value: SessionState) => void;
+    const api = fakeApi({
+      createImport: vi.fn()
+        .mockResolvedValueOnce(session({ status: "questions_pending", questions: [question()], answers: {} }))
+        .mockResolvedValueOnce(session({ id: "s2", supplier_name: "Otro proveedor", status: "questions_pending", questions: [question()], answers: {} })),
+      answer: vi.fn(() => new Promise<SessionState>((resolve) => { finishOld = resolve; })),
+    });
+    renderWithI18n(<ImportWizard api={api} />);
+    await startImport();
+    await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
+    await userEvent.click(await screen.findByRole("radio", { name: /Argentine pesos/ }));
+
+    await userEvent.click(screen.getByRole("button", { name: /Upload/ }));
+    await startImport();
+    await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
+    expect(await screen.findByText("Otro proveedor")).toBeInTheDocument();
+
+    finishOld(session({ status: "ready_for_preview", answers: { currency: "ARS" } }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.getByText("Otro proveedor")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Argentine pesos/ })).not.toBeChecked();
+  });
+
+  it("goes where the server says when Continue finds the import not ready", async () => {
+    const api = fakeApi({
+      createImport: vi.fn().mockResolvedValue(session({ status: "questions_pending", questions: [question()], answers: {} })),
+      answer: vi.fn().mockResolvedValue(session({
+        status: "role_confirmation_required", questions: [], answers: { currency: "ARS" },
+        columns: [column({ index: 0 }), column({ index: 2, header: "Precio", role: null, decided_by: null, samples: ["10"] })],
+      })),
+      preview: vi.fn().mockResolvedValue(previewPage()),
+    });
+    renderWithI18n(<ImportWizard api={api} />);
+    await startImport();
+    await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
+    await userEvent.click(await screen.findByRole("radio", { name: /Argentine pesos/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "See the preview" }));
+    expect(await screen.findByRole("button", { name: "Confirm columns" })).toBeInTheDocument();
+    expect(api.preview).not.toHaveBeenCalled();
+  });
+
   it("reloads the preview when an answer changes after the import was ready", async () => {
     const vat = question({ id: "vat_rate", allows_custom: true, options: [
       { token: "constant:21", label: { en: "21%", es: "21%" } },
