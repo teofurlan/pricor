@@ -234,7 +234,7 @@ def test_uploaded_file_names_cannot_escape_the_upload_directory(tmp_path):
 @pytest.mark.parametrize("filename, shown", [
     ("Lista Precios Ñandú.csv", "Lista Precios Ñandú.csv"),
     ("a<b>:c|e?f*g.csv", "a_b_c_e_f_g.csv"),
-    ("..\..\evil.csv", "evil.csv"),
+    (r"..\..\evil.csv", "evil.csv"),
 ])
 def test_the_import_keeps_a_readable_file_name(tmp_path, filename, shown):
     use_case = ImportFirstTime(
