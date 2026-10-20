@@ -4,6 +4,7 @@ import { useI18n } from "../../i18n";
 import { Badge } from "../atoms/Badge";
 import { Button } from "../atoms/Button";
 import { StepTrace } from "../molecules/StepTrace";
+import { usePendingAction } from "../atoms/usePendingAction";
 
 interface Props {
   page: PreviewPage;
@@ -15,19 +16,32 @@ interface Props {
 /** The ruled journal keeps every row; the selected row feeds the adjacent tape. */
 export function PreviewTable({ page, busy, onPage, fx = null }: Props) {
   const { t } = useI18n();
+  const pending = usePendingAction<"previous" | "next">(busy);
   const [selection, setSelection] = useState({ offset: page.offset, row: page.items[0]?.row_number });
+  // Only the first trace is printed line by line; once the user browses, results appear at once.
+  const [browsed, setBrowsed] = useState(false);
   const tableRef = useRef<HTMLTableElement>(null);
   const helpId = useId();
   const selected = (selection.offset === page.offset && page.items.find((row) => row.row_number === selection.row)) || page.items[0];
   const first = page.items.length === 0 ? 0 : page.offset + 1;
   const last = page.offset + page.items.length;
 
+  function select(row: number) {
+    setBrowsed(true);
+    setSelection({ offset: page.offset, row });
+  }
+
+  function turnPage(offset: number) {
+    setBrowsed(true);
+    onPage(offset);
+  }
+
   function move(event: KeyboardEvent) {
     if (!selected || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
     event.preventDefault();
     const index = page.items.indexOf(selected);
     const next = Math.max(0, Math.min(page.items.length - 1, index + (event.key === "ArrowDown" ? 1 : -1)));
-    setSelection({ offset: page.offset, row: page.items[next].row_number });
+    select(page.items[next].row_number);
     const row = tableRef.current?.tBodies[0]?.rows[next];
     row?.scrollIntoView?.({ block: "nearest" });
     // When navigation starts on a row key, keep keyboard focus with that row.
@@ -55,10 +69,10 @@ export function PreviewTable({ page, busy, onPage, fx = null }: Props) {
                   <tr
                     key={item.row_number}
                     className={`${item.status === "rejected" ? "row--rejected" : ""}${selected === item ? " row--selected" : ""}`.trim()}
-                    onClick={() => setSelection({ offset: page.offset, row: item.row_number })}
+                    onClick={() => select(item.row_number)}
                   >
                     <th scope="row" className="cell--row">
-                      <button type="button" className="row-key" aria-label={t("preview.rowNumber", { row: item.row_number })} aria-pressed={selected === item} onClick={() => setSelection({ offset: page.offset, row: item.row_number })}>{item.row_number}</button>
+                      <button type="button" className="row-key" aria-label={t("preview.rowNumber", { row: item.row_number })} aria-pressed={selected === item} onClick={() => select(item.row_number)}>{item.row_number}</button>
                     </th>
                     <td className="cell--code">{item.record?.supplier_code ?? "—"}</td>
                     <td>
@@ -82,8 +96,8 @@ export function PreviewTable({ page, busy, onPage, fx = null }: Props) {
           <div className="pager">
             <span>{t("preview.range", { first, last, total: page.total_items })}</span>
             <div className="actions">
-              <Button disabled={busy || page.offset === 0} onClick={() => onPage(Math.max(0, page.offset - page.limit))}>{t("preview.previous")}</Button>
-              <Button disabled={busy || last >= page.total_items} onClick={() => onPage(page.offset + page.limit)}>{t("preview.next")}</Button>
+              <Button disabled={busy || page.offset === 0} loading={pending.isLoading("previous")} onClick={() => { pending.mark("previous"); turnPage(Math.max(0, page.offset - page.limit)); }}>{t("preview.previous")}</Button>
+              <Button disabled={busy || last >= page.total_items} loading={pending.isLoading("next")} onClick={() => { pending.mark("next"); turnPage(page.offset + page.limit); }}>{t("preview.next")}</Button>
             </div>
           </div>
         </div>
@@ -92,7 +106,7 @@ export function PreviewTable({ page, busy, onPage, fx = null }: Props) {
           {selected ? <>
             <p className="tape__reference"># {t("preview.rowNumber", { row: selected.row_number })}{selected.record?.supplier_code ? ` / ${selected.record.supplier_code}` : ""}</p>
             {selected.record?.description && <p className="tape__description">{selected.record.description}</p>}
-            {selected.status === "rejected" ? <div className="reasons"><strong>{t("preview.rejected")}</strong>{selected.reasons.map((reason) => <p key={reason}>{reason}</p>)}</div> : selected.trace.length ? <StepTrace key={selected.row_number} trace={selected.trace} currency={selected.record?.currency ?? null} convertedCurrency={fx?.to ?? null} animate /> : <p className="hint">{t("preview.noTrace")}</p>}
+            {selected.status === "rejected" ? <div className="reasons"><strong>{t("preview.rejected")}</strong>{selected.reasons.map((reason) => <p key={reason}>{reason}</p>)}</div> : selected.trace.length ? <StepTrace key={selected.row_number} trace={selected.trace} currency={selected.record?.currency ?? null} convertedCurrency={fx?.to ?? null} animate={!browsed} announce /> : <p className="hint">{t("preview.noTrace")}</p>}
           </> : <p className="hint">{t("preview.empty")}</p>}
         </section>
       </div>

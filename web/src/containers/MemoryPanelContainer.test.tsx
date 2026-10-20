@@ -1,6 +1,6 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError, type MemoryApiClient } from "../api/client";
 import type { Memory } from "../api/types";
 import { renderWithI18n } from "../test/render";
@@ -28,6 +28,8 @@ function fakeApi(overrides: Partial<MemoryApiClient> = {}): MemoryApiClient {
 }
 
 describe("MemoryPanelContainer", () => {
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+
   it("opens as a non-modal side panel, closes with Escape and restores the opener's focus", async () => {
     const onClose = vi.fn();
     const api = fakeApi();
@@ -43,6 +45,28 @@ describe("MemoryPanelContainer", () => {
     expect(opener).toHaveFocus();
     opener.remove();
   });
+  it("slides out along its entry path before it is removed, and cannot be used meanwhile", () => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+    vi.useFakeTimers();
+    const api = fakeApi();
+    const { rerender } = renderWithI18n(<MemoryPanelContainer api={api} open onClose={vi.fn()} />);
+    expect(screen.getByRole("complementary", { name: "Memory" })).not.toHaveClass("memory-drawer--closing");
+    rerender(<MemoryPanelContainer api={api} open={false} onClose={vi.fn()} />);
+    const closing = document.querySelector(".memory-drawer");
+    expect(closing).toHaveClass("memory-drawer--closing");
+    expect(closing).toHaveAttribute("inert");
+    act(() => vi.advanceTimersByTime(260));
+    expect(document.querySelector(".memory-drawer")).toBeNull();
+  });
+
+  it("is removed at once under reduced motion", () => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+    const api = fakeApi();
+    const { rerender } = renderWithI18n(<MemoryPanelContainer api={api} open onClose={vi.fn()} />);
+    rerender(<MemoryPanelContainer api={api} open={false} onClose={vi.fn()} />);
+    expect(document.querySelector(".memory-drawer")).toBeNull();
+  });
+
   it("loads once and keeps add, edit and delete changes in the list", async () => {
     const api = fakeApi();
     const onMemoriesChange = vi.fn();

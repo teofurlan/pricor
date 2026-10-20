@@ -6,6 +6,7 @@ import { PriceReportView } from "../components/organisms/PriceReportView";
 import { useI18n } from "../i18n";
 import { percentToRatio, ratioToPercent } from "../lib/percent";
 import { toApiError } from "./usePreview";
+import { TapeLoader } from "../components/atoms/TapeLoader";
 
 const STORAGE_KEY = "pricor.anomalyThresholdPercent";
 
@@ -73,7 +74,7 @@ export function PriceChanges({
 
   switch (load.state) {
     case "loading":
-      return <p className="lede">{t("common.loading")}</p>;
+      return <TapeLoader text={t("report.loading")} />;
     case "first_import":
       return <p className="lede">{t("report.empty", { supplier: supplierName })}</p>;
     case "failed":

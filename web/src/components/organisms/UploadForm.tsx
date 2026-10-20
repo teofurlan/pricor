@@ -2,7 +2,7 @@ import { useId, useRef, useState, type FormEvent } from "react";
 import type { CreateImportInput, Language } from "../../api/types";
 import { useI18n } from "../../i18n";
 import { Button } from "../atoms/Button";
-import { ExampleTape } from "../molecules/ExampleTape";
+import { TapeLoader } from "../atoms/TapeLoader";
 
 interface Props {
   busy: boolean;
@@ -14,31 +14,6 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-export function TapeLoader({
-  size = "normal",
-  text,
-}: {
-  size?: "normal" | "small";
-  text: string;
-}) {
-  return (
-    <div
-      className={`tape-loader${size === "small" ? " tape-loader--small" : ""}`}
-      role="status"
-      aria-busy="true"
-    >
-      <span className="tape-loader__slot" aria-hidden="true">
-        <span className="tape-loader__tape">
-          <span className="tape-loader__line" />
-          <span className="tape-loader__line" />
-          {size === "normal" && <span className="tape-loader__line" />}
-        </span>
-      </span>
-      <span className="tape-loader__text">{text}</span>
-    </div>
-  );
 }
 
 export function UploadForm({ busy, onSubmit, onInspectSheets }: Props) {
@@ -79,7 +54,7 @@ export function UploadForm({ busy, onSubmit, onInspectSheets }: Props) {
   }
 
   return (
-    <div className="workbench workbench--upload">
+    <div className="upload">
     <form className="form" onSubmit={submit}>
       <div className="feed-slot">
         <span aria-hidden="true">↓</span>
@@ -231,7 +206,6 @@ export function UploadForm({ busy, onSubmit, onInspectSheets }: Props) {
         )}
       </Button>
     </form>
-    <ExampleTape />
     </div>
   );
 }

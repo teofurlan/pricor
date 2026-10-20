@@ -3,6 +3,7 @@ import type { FxState } from "../../api/types";
 import { useI18n } from "../../i18n";
 import { Badge } from "../atoms/Badge";
 import { Button } from "../atoms/Button";
+import { usePendingAction } from "../atoms/usePendingAction";
 
 interface Props {
   fx: FxState;
@@ -14,6 +15,7 @@ interface Props {
 /** The exchange rate of this run: what was used and where it came from, or a way to supply one. */
 export function FxPanel({ fx, busy, onManual, onRefresh }: Props) {
   const { t } = useI18n();
+  const pending = usePendingAction<"manual" | "refresh">(busy);
   const [typed, setTyped] = useState("");
   const inputId = useId();
   const snapshot = fx.snapshot;
@@ -36,11 +38,11 @@ export function FxPanel({ fx, busy, onManual, onRefresh }: Props) {
       <div className="fx__manual">
         <label htmlFor={inputId}>{t("fx.manual.label", { from: fx.from, to: fx.to })}</label>
         <input id={inputId} inputMode="decimal" value={typed} onChange={(event) => setTyped(event.target.value)} />
-        <Button disabled={busy || typed.trim() === ""} onClick={() => onManual(typed.trim())}>
+        <Button disabled={busy || typed.trim() === ""} loading={pending.isLoading("manual")} onClick={() => { pending.mark("manual"); onManual(typed.trim()); }}>
           {t("fx.manual.use")}
         </Button>
         {fx.rate_type !== "manual" && (
-          <Button disabled={busy} onClick={onRefresh}>
+          <Button disabled={busy} loading={pending.isLoading("refresh")} onClick={() => { pending.mark("refresh"); onRefresh(); }}>
             {t("fx.refresh")}
           </Button>
         )}

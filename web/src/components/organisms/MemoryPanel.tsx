@@ -3,6 +3,7 @@ import type { Memory } from "../../api/types";
 import { useI18n } from "../../i18n";
 import { Badge } from "../atoms/Badge";
 import { Button } from "../atoms/Button";
+import { TapeLoader } from "../atoms/TapeLoader";
 
 interface Props {
   memories: Memory[];
@@ -46,12 +47,12 @@ export function MemoryPanel({ memories, loading, busy, error = null, onAdd, onEd
         <textarea id="memory-note-text" value={text} onChange={(event) => setText(event.target.value)} rows={3} />
         <label htmlFor="memory-note-supplier">{t("memory.supplier.label")}</label>
         <input id="memory-note-supplier" value={supplier} onChange={(event) => setSupplier(event.target.value)} />
-        <Button variant="primary" type="submit" disabled={busy || text.trim() === ""}>{t("memory.add")}</Button>
+        <Button variant="primary" type="submit" disabled={busy || text.trim() === ""} loading={busy && text.trim() !== ""}>{t("memory.add")}</Button>
       </form>
 
       {error && <p className="memory-panel__error" role="alert">{error}</p>}
       {loading ? (
-        <p className="lede" aria-live="polite">{t("common.loading")}</p>
+        <TapeLoader text={t("common.loading")} />
       ) : memories.length === 0 ? (
         <p className="memory-panel__empty">{t("memory.empty")}</p>
       ) : (

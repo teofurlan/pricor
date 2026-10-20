@@ -19,11 +19,16 @@ beforeEach(() => localStorage.clear());
 afterEach(() => localStorage.clear());
 
 describe("PriceChanges", () => {
+  it("shows the animated loader while the comparison loads", () => {
+    renderWithI18n(<PriceChanges api={fakeApi(vi.fn(() => new Promise<never>(() => undefined)))} sessionId="s2" supplierName="Ferreteria Ejemplo" />);
+    expect(screen.getByRole("status")).toHaveClass("tape-loader");
+  });
+
   it("loads the report of the approved import and shows its summary", async () => {
     const report = vi.fn().mockResolvedValue(priceReport());
     renderWithI18n(<PriceChanges api={fakeApi(report)} sessionId="s2" supplierName="Ferreteria Ejemplo" />);
 
-    expect(screen.getByText("Loading…")).toBeInTheDocument();
+    expect(screen.getByText("Comparing with the previous list…")).toBeInTheDocument();
     expect(await screen.findByRole("heading", { level: 2, name: "Price comparison" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Price comparison" })).toHaveTextContent("unchanged312");
     expect(report).toHaveBeenCalledWith("s2", undefined);

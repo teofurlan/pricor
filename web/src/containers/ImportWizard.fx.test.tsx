@@ -22,6 +22,7 @@ function fakeApi(overrides: Partial<ApiClient> = {}): ApiClient {
     listSheets: vi.fn().mockResolvedValue([]),
     getSample: vi.fn().mockResolvedValue({ header: [], rows: [] }),
     report: vi.fn(() => Promise.reject(new ApiError(409, "no_previous_import", "nothing to compare with"))),
+    exportSheet: vi.fn().mockResolvedValue({ header: [], rows: [], total: 0 }),
     exportUrl: (id, format) => `/imports/${id}/export?format=${format}`,
     rejectedUrl: (id, format) => `/imports/${id}/rejected?format=${format}`,
     reportUrl: (id) => `/imports/${id}/report/export?format=csv`,

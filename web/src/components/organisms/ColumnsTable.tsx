@@ -3,6 +3,7 @@ import { COLUMN_ROLES, type ColumnRole, type ColumnState } from "../../api/types
 import { useI18n } from "../../i18n";
 import { Button } from "../atoms/Button";
 import { SamplePreview, type SampleData } from "../molecules/SamplePreview";
+import { usePendingAction } from "../atoms/usePendingAction";
 
 interface Props {
   columns: ColumnState[];
@@ -146,10 +147,51 @@ function ConfidenceMeter({
   );
 }
 
+/**
+ * A key that reads "Change ▾" with a transparent native select laid over it.
+ * Picking commits at once, so it never replaces the row's other keys and has no
+ * mode to escape from. The overlay keeps the key as wide as its label, since a
+ * bare select sizes itself to its longest option.
+ */
+function RolePicker({
+  label,
+  current,
+  onPick,
+}: {
+  label: string;
+  current: ColumnRole | null;
+  onPick(role: ColumnRole): void;
+}) {
+  const { t } = useI18n();
+  return (
+    <span className="button button--key button--action role-picker">
+      <span aria-hidden="true">{t("columns.change")}</span>
+      <select
+        className="role-picker__select"
+        aria-label={label}
+        value=""
+        onChange={(event) => {
+          const value = event.target.value as ColumnRole | "";
+          if (value) onPick(value);
+        }}
+      >
+        <option value="" disabled hidden>
+          {t("columns.change")}
+        </option>
+        {COLUMN_ROLES.map((option) => (
+          <option key={option} value={option}>
+            {option === current ? `✓ ${t(`role.${option}`)}` : t(`role.${option}`)}
+          </option>
+        ))}
+      </select>
+    </span>
+  );
+}
+
 export function ColumnsTable({ columns, issues, busy, sample, onConfirm }: Props) {
   const { t } = useI18n();
+  const pending = usePendingAction<"confirm">(busy);
   const [edits, setEdits] = useState<Record<number, ColumnRole>>({});
-  const [changing, setChanging] = useState<Record<number, boolean>>({});
 
   const unresolved = columns.filter((item) => item.role === null && edits[item.index] === undefined);
 
@@ -197,10 +239,19 @@ export function ColumnsTable({ columns, issues, busy, sample, onConfirm }: Props
 
       <div className="table-wrap">
         <table className="table table--columns">
+          {/* Fixed widths: a key appearing or disappearing must not resize the other columns. */}
+          <colgroup>
+            <col className="col--column" />
+            <col className="col--role" />
+            <col className="col--actions" />
+            <col className="col--status" />
+            <col className="col--suggestion" />
+          </colgroup>
           <thead>
             <tr>
               <th>{t("columns.header")}</th>
-              <th>{t("columns.role")}</th>
+              {/* The role spans its value and its keys, so the keys line up in one column. */}
+              <th colSpan={2}>{t("columns.role")}</th>
               <th>{t("columns.status")}</th>
               <th>{t("columns.suggestion")}</th>
             </tr>
@@ -212,7 +263,6 @@ export function ColumnsTable({ columns, issues, busy, sample, onConfirm }: Props
               const needsUser = role === null;
               const bestProposal = getBestProposal(item);
               const allProposals = parseProposals(item);
-              const isChanging = Boolean(changing[item.index]);
 
               // Status determination
               let statusText = t("status.needs_confirmation");
@@ -237,127 +287,50 @@ export function ColumnsTable({ columns, issues, busy, sample, onConfirm }: Props
                     <span className="cell__name">{item.header || t("columns.noHeader", { n: item.index + 1 })}</span>
                     <span className="cell__samples">{item.samples.join(", ")}</span>
                   </th>
+                  <td className="cell--role">
+                    {role !== null ? <span className="role-decision__value">{t(`role.${role}`)}</span> : <span className="role-decision__empty" aria-hidden="true">—</span>}
+                  </td>
                   <td className="cell--actions">
-                    {edited !== undefined ? (
-                      <div className="role-decision">
-                        <span className="role-decision__value">{t(`role.${edited}`)}</span>
+                    <div className="role-actions">
+                      {edited !== undefined && (
                         <button
                           type="button"
                           className="button button--key button--action"
-                          onClick={() => {
+                          onClick={() =>
                             setEdits((current) => {
                               const next = { ...current };
                               delete next[item.index];
                               return next;
-                            });
-                            setChanging((prev) => ({ ...prev, [item.index]: false }));
-                          }}
+                            })
+                          }
                         >
                           {t("columns.backToSuggestion")}
                         </button>
-                        {isChanging ? (
-                          <select
-                            aria-label={t("columns.roleFor", { header: item.header || item.index + 1 })}
-                            value={edited}
-                            onChange={(event) => {
-                              const value = event.target.value as ColumnRole;
-                              if (value) {
-                                setEdits((cur) => ({ ...cur, [item.index]: value }));
-                                setChanging((prev) => ({ ...prev, [item.index]: false }));
-                              }
-                            }}
-                          >
-                            {COLUMN_ROLES.map((option) => (
-                              <option key={option} value={option}>
-                                {t(`role.${option}`)}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <button
-                            type="button"
-                            className="button button--key button--action"
-                            onClick={() => setChanging((prev) => ({ ...prev, [item.index]: true }))}
-                          >
-                            {t("columns.change")}
-                          </button>
-                        )}
-                      </div>
-                    ) : item.role !== null && !isChanging ? (
-                      <div className="role-actions">
-                        <span className="role-decision__value">{t(`role.${item.role}`)}</span>
+                      )}
+                      {needsUser && bestProposal && (
                         <button
                           type="button"
                           className="button button--key button--action"
-                          onClick={() => setChanging((prev) => ({ ...prev, [item.index]: true }))}
+                          onClick={() => setEdits((cur) => ({ ...cur, [item.index]: bestProposal.role }))}
                         >
-                          {t("columns.change")}
+                          {t("columns.accept")}
                         </button>
-                      </div>
-                    ) : isChanging ? (
-                      <select
-                        aria-label={t("columns.roleFor", { header: item.header || item.index + 1 })}
-                        value={role ?? ""}
-                        onChange={(event) => {
-                          const value = event.target.value as ColumnRole | "";
-                          if (value) {
-                            setEdits((cur) => ({ ...cur, [item.index]: value }));
-                            setChanging((prev) => ({ ...prev, [item.index]: false }));
-                          }
-                        }}
-                      >
-                        {role === null && <option value="">{t("columns.choose")}</option>}
-                        {COLUMN_ROLES.map((option) => (
-                          <option key={option} value={option}>
-                            {t(`role.${option}`)}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      /* Unresolved column with row actions */
-                      <div className="role-actions">
-                        {bestProposal && bestProposal.role !== "ignore" && (
-                          <button
-                            type="button"
-                            className="button button--key button--action"
-                            onClick={() => {
-                              setEdits((cur) => ({ ...cur, [item.index]: bestProposal.role }));
-                            }}
-                          >
-                            {t("columns.accept")}
-                          </button>
-                        )}
-                        {bestProposal && bestProposal.role === "ignore" && (
-                          <button
-                            type="button"
-                            className="button button--key button--action"
-                            onClick={() => {
-                              setEdits((cur) => ({ ...cur, [item.index]: "ignore" }));
-                            }}
-                          >
-                            {t("columns.accept")}
-                          </button>
-                        )}
-                        {(!bestProposal || bestProposal.role !== "ignore") && (
-                          <button
-                            type="button"
-                            className="button button--key button--action"
-                            onClick={() => {
-                              setEdits((cur) => ({ ...cur, [item.index]: "ignore" }));
-                            }}
-                          >
-                            {t("columns.ignore")}
-                          </button>
-                        )}
+                      )}
+                      {needsUser && bestProposal?.role !== "ignore" && (
                         <button
                           type="button"
                           className="button button--key button--action"
-                          onClick={() => setChanging((prev) => ({ ...prev, [item.index]: true }))}
+                          onClick={() => setEdits((cur) => ({ ...cur, [item.index]: "ignore" }))}
                         >
-                          {t("columns.change")}
+                          {t("columns.ignore")}
                         </button>
-                      </div>
-                    )}
+                      )}
+                      <RolePicker
+                        label={t("columns.roleFor", { header: item.header || item.index + 1 })}
+                        current={role}
+                        onPick={(value) => setEdits((cur) => ({ ...cur, [item.index]: value }))}
+                      />
+                    </div>
                   </td>
                   <td className="cell--status">
                     <span className={`status-badge ${statusClass}`}>{statusText}</span>
@@ -379,7 +352,7 @@ export function ColumnsTable({ columns, issues, busy, sample, onConfirm }: Props
         </table>
       </div>
       <div className="actions">
-        <Button variant="primary" disabled={busy || unresolved.length > 0} onClick={() => onConfirm(edits)}>
+        <Button variant="primary" disabled={busy || unresolved.length > 0} loading={pending.isLoading("confirm")} onClick={() => { pending.mark("confirm"); onConfirm(edits); }}>
           {t("columns.confirm")}
         </Button>
         {unresolved.length > 0 && <span className="hint">{t("columns.remaining", { count: unresolved.length })}</span>}

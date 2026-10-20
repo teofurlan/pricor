@@ -3,6 +3,7 @@ import { useI18n } from "../../i18n";
 import { Button } from "../atoms/Button";
 import { QuestionCard } from "../molecules/QuestionCard";
 import { SamplePreview, type SampleData } from "../molecules/SamplePreview";
+import { usePendingAction } from "../atoms/usePendingAction";
 
 interface Props {
   questions: Question[];
@@ -33,6 +34,7 @@ export function QuestionsPanel({
   finalCosts,
 }: Props) {
   const { t } = useI18n();
+  const pending = usePendingAction<"continue">(busy);
   const open = questions.filter((item) => answers[item.id] === undefined);
   return (
     <div className="stack">
@@ -42,7 +44,7 @@ export function QuestionsPanel({
         <QuestionCard key={item.id} question={item} answer={answers[item.id]} onAnswer={onAnswer} memories={memories} onRemember={onRemember} />
       ))}
       <div className="actions">
-        <Button variant="primary" disabled={busy || blocked || open.length > 0} onClick={onContinue}>
+        <Button variant="primary" disabled={busy || blocked || open.length > 0} loading={pending.isLoading("continue")} onClick={() => { pending.mark("continue"); onContinue(); }}>
           {t("questions.continue")}
         </Button>
         {open.length > 0 && <span className="hint">{t("questions.remaining", { count: open.length })}</span>}

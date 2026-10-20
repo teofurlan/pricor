@@ -343,29 +343,56 @@ describe("ColumnsTable", () => {
     const row0 = screen.getByRole("row", { name: /ColA/ });
     expect(within(row0).getByRole("button", { name: /Accept/i })).toBeInTheDocument();
     expect(within(row0).getByRole("button", { name: /Ignore/i })).toBeInTheDocument();
-    expect(within(row0).getByRole("button", { name: /Change/i })).toBeInTheDocument();
+    expect(within(row0).getByRole("combobox", { name: /Change role/i })).toBeInTheDocument();
 
     // Row 1 (suggestion is "ignore"): only [✓ Accept] and [Change ▾], NO duplicate Ignore button
     const row1 = screen.getByRole("row", { name: /ColB/ });
     expect(within(row1).getByRole("button", { name: /Accept/i })).toBeInTheDocument();
     expect(within(row1).queryByRole("button", { name: /Ignore/i })).not.toBeInTheDocument();
-    expect(within(row1).getByRole("button", { name: /Change/i })).toBeInTheDocument();
+    expect(within(row1).getByRole("combobox", { name: /Change role/i })).toBeInTheDocument();
 
     // Row 2 (no suggestion): [⊘ Ignore] and [Change ▾], NO Accept button
     const row2 = screen.getByRole("row", { name: /ColC/ });
     expect(within(row2).queryByRole("button", { name: /Accept/i })).not.toBeInTheDocument();
     expect(within(row2).getByRole("button", { name: /Ignore/i })).toBeInTheDocument();
-    expect(within(row2).getByRole("button", { name: /Change/i })).toBeInTheDocument();
+    expect(within(row2).getByRole("combobox", { name: /Change role/i })).toBeInTheDocument();
+  });
+
+  it("keeps Accept and Ignore next to the role picker, which never replaces them", async () => {
+    const cols = [
+      column({ index: 0, header: "ColA", role: null, decided_by: null, proposals: [{ stage: "laya", role: "code", score: 0.8, rationale: "" }] }),
+    ];
+    renderWithI18n(<ColumnsTable columns={cols} issues={[]} busy={false} onConfirm={vi.fn()} />);
+    const row = screen.getByRole("row", { name: /ColA/ });
+    const picker = within(row).getByRole("combobox", { name: /Change role/i });
+
+    // Opening the picker is not a mode: the row keys stay, and Accept still works.
+    await userEvent.click(picker);
+    expect(within(row).getByRole("button", { name: /Accept/i })).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: /Ignore/i })).toBeInTheDocument();
+    await userEvent.click(within(row).getByRole("button", { name: /Accept/i }));
+    expect(within(row).getByText("✓ Confirmed by you")).toBeInTheDocument();
+    expect(row.querySelector(".role-decision__value")).toHaveTextContent("Product code");
+  });
+
+  it("offers the role picker on columns the model already decided", async () => {
+    const onConfirm = vi.fn();
+    const cols = [column({ index: 0, header: "ColA", role: "code", decided_by: "heuristics" })];
+    renderWithI18n(<ColumnsTable columns={cols} issues={[]} busy={false} onConfirm={onConfirm} />);
+    const row = screen.getByRole("row", { name: /ColA/ });
+    await userEvent.selectOptions(within(row).getByRole("combobox", { name: /Change role/i }), "barcode");
+    expect(within(row).getByText("Barcode")).toBeInTheDocument();
+    // The picker stays available to change the role again.
+    expect(within(row).getByRole("combobox", { name: /Change role/i })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Confirm columns" }));
+    expect(onConfirm).toHaveBeenCalledWith({ 0: "barcode" });
   });
 
   it("allows picking a role, shows chosen role with Back to suggestion, and Back to suggestion clears choice", async () => {
     renderWithI18n(<ColumnsTable columns={columns} issues={[]} busy={false} onConfirm={vi.fn()} />);
     const row = screen.getByRole("row", { name: /Misterio/ });
 
-    // Click Change to reveal role select
-    await userEvent.click(within(row).getByRole("button", { name: /Change/i }));
-    const select = within(row).getByRole("combobox");
-    expect(select).toBeInTheDocument();
+    const select = within(row).getByRole("combobox", { name: /Change role/i });
 
     // Choose Barcode
     await userEvent.selectOptions(select, "barcode");
@@ -410,6 +437,17 @@ describe("ColumnsTable", () => {
       <ColumnsTable columns={columns.slice(0, 1)} issues={["no column is marked as the cost"]} busy={false} onConfirm={vi.fn()} />,
     );
     expect(screen.getByText("no column is marked as the cost")).toBeInTheDocument();
+  });
+
+  it("animates the confirm key while the models work on the confirmed columns", async () => {
+    const { rerender } = renderWithI18n(<ColumnsTable columns={columns.slice(0, 2)} issues={[]} busy={false} onConfirm={vi.fn()} />);
+    await userEvent.click(screen.getByRole("button", { name: "Confirm columns" }));
+    rerender(<ColumnsTable columns={columns.slice(0, 2)} issues={[]} busy onConfirm={vi.fn()} />);
+    const confirm = screen.getByRole("button", { name: "Confirm columns" });
+    expect(confirm).toHaveAttribute("aria-busy", "true");
+    expect(confirm.querySelector(".tape-loader")).toBeInTheDocument();
+    rerender(<ColumnsTable columns={columns.slice(0, 2)} issues={[]} busy={false} onConfirm={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Confirm columns" })).not.toHaveAttribute("aria-busy");
   });
 
   it("sends only the corrections, so confirming untouched columns changes nothing", async () => {
@@ -473,10 +511,9 @@ describe("ColumnsTable", () => {
     expect(within(previewTable).getByText("1210.00")).toBeInTheDocument();
     expect(within(previewTable).getByText("A5")).toBeInTheDocument();
 
-    // Update live before saving: click Change on Column 1 and pick Description
+    // Update live before saving: pick Description for Column 1
     const rowDesc = within(document.querySelector(".table--columns") as HTMLElement).getByRole("row", { name: /Descripcion/ });
-    await userEvent.click(within(rowDesc).getByRole("button", { name: /Change/i }));
-    await userEvent.selectOptions(within(rowDesc).getByRole("combobox"), "description");
+    await userEvent.selectOptions(within(rowDesc).getByRole("combobox", { name: /Change role/i }), "description");
 
     // Header in preview table updates live to "Description" and loses muted ink
     expect(within(previewTable).getByText("Description")).not.toHaveClass("preview-th--muted");
@@ -580,7 +617,9 @@ describe("PreviewTable", () => {
     expect(within(row).getByText("A1, Tornillo, 1.210,00, 21%")).toBeVisible();
     const tape = screen.getByRole("region", { name: "From file to cost" });
     expect(await within(tape).findByText("VAT removed")).toBeInTheDocument();
-    expect(await within(tape).findByText("1000.00 ARS")).toBeInTheDocument();
+    expect(
+      await within(tape).findByText((_, el) => Boolean(el?.classList.contains("trace__value") && el?.textContent === "1000.00 ARS")),
+    ).toBeInTheDocument();
   });
 
   it("shows a rejected row with its file row number and reasons instead of a cost", () => {
@@ -647,6 +686,66 @@ describe("ApprovePanel", () => {
     expect(screen.getByRole("link", { name: "Products (XLSX)" })).toHaveAttribute("href", links.products.xlsx);
     expect(screen.getByRole("link", { name: "Rejected rows (CSV)" })).toHaveAttribute("href", links.rejected.csv);
     expect(screen.getByRole("link", { name: "Rejected rows (XLSX)" })).toHaveAttribute("href", links.rejected.xlsx);
+  });
+
+  it("names each file once and offers its formats as small keys beside it", () => {
+    renderWithI18n(<ApprovePanel totals={previewPage().totals} approved busy={false} links={links} onApprove={vi.fn()} />);
+    const downloads = screen.getByRole("list", { name: "Downloads" });
+    const [products, rejected] = within(downloads).getAllByRole("listitem");
+    expect(within(products).getByText("Products")).toBeInTheDocument();
+    expect(within(products).getAllByRole("link").map((link) => link.textContent)).toEqual(["XLSX", "CSV"]);
+    expect(within(rejected).getByText("Rejected rows")).toBeInTheDocument();
+    expect(within(rejected).getAllByRole("link").map((link) => link.textContent)).toEqual(["XLSX", "CSV"]);
+  });
+
+  it("shows the first rows of the exported products file exactly as it was written", () => {
+    const sheet = { header: ["supplier_code", "description", "unit_cost_net"], rows: [["A1", "Bolt, 6 mm", "1000.00"], ["B2", "Nut", "2420.00"]], total: 5 };
+    renderWithI18n(<ApprovePanel totals={previewPage().totals} approved busy={false} links={links} sheets={{ products: sheet }} onApprove={vi.fn()} />);
+    const table = screen.getByRole("table", { name: "The products file" });
+    expect(within(table).getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual(sheet.header);
+    expect(within(table).getByText("Bolt, 6 mm")).toBeInTheDocument();
+    expect(within(table).getAllByRole("row")).toHaveLength(3);
+    expect(screen.getByText("First 2 of 5 rows")).toBeInTheDocument();
+  });
+
+  it("does not preview the file before the import is approved", () => {
+    const sheet = { header: ["supplier_code"], rows: [["A1"]], total: 1 };
+    renderWithI18n(<ApprovePanel totals={previewPage().totals} approved={false} busy={false} links={links} sheets={{ products: sheet, rejected: sheet }} onApprove={vi.fn()} />);
+    expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  it("previews the rejected-rows file too, or says plainly that it is empty", () => {
+    const products = { header: ["supplier_code"], rows: [["A1"]], total: 1 };
+    const rejected = { header: ["source_row", "reasons", "Codigo"], rows: [["8", "cost: cannot parse 'abc'", "X9"]], total: 1 };
+    const { unmount } = renderWithI18n(<ApprovePanel totals={previewPage().totals} approved busy={false} links={links} sheets={{ products, rejected }} onApprove={vi.fn()} />);
+    const table = screen.getByRole("table", { name: "The rejected-rows file" });
+    expect(within(table).getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual(rejected.header);
+    expect(within(table).getByText("cost: cannot parse 'abc'")).toBeInTheDocument();
+    unmount();
+    renderWithI18n(<ApprovePanel totals={previewPage().totals} approved busy={false} links={links} sheets={{ products, rejected: { header: ["source_row", "reasons"], rows: [], total: 0 } }} onApprove={vi.fn()} />);
+    expect(screen.queryByRole("table", { name: "The rejected-rows file" })).toBeNull();
+    expect(screen.getByText("No rows were rejected.")).toBeInTheDocument();
+  });
+});
+
+describe("waiting keys", () => {
+  it("animates only the key that started the wait", async () => {
+    const candidates = [{ row_index: 0, file_row: 1, cells: ["code", "price"] }, { row_index: 1, file_row: 2, cells: ["A1", "100"] }];
+    const { rerender } = renderWithI18n(<HeaderChoice candidates={candidates} busy={false} onChoose={vi.fn()} />);
+    const noHeader = screen.getAllByRole("button").at(-1)!;
+    await userEvent.click(noHeader);
+    rerender(<HeaderChoice candidates={candidates} busy onChoose={vi.fn()} />);
+    const busyKeys = screen.getAllByRole("button").filter((key) => key.getAttribute("aria-busy") === "true");
+    expect(busyKeys).toHaveLength(1);
+    expect(busyKeys[0].textContent).toBe(noHeader.textContent);
+  });
+
+  it("animates the signature key while the import is being approved", async () => {
+    const links = { products: { csv: "", xlsx: "" }, rejected: { csv: "", xlsx: "" } };
+    const { rerender } = renderWithI18n(<ApprovePanel totals={previewPage().totals} approved={false} busy={false} links={links} onApprove={vi.fn()} />);
+    await userEvent.click(screen.getByRole("button", { name: "Approve import" }));
+    rerender(<ApprovePanel totals={previewPage().totals} approved={false} busy links={links} onApprove={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Approve import" })).toHaveAttribute("aria-busy", "true");
   });
 });
 

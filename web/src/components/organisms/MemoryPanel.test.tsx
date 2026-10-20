@@ -39,6 +39,11 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof MemoryPanel>
 }
 
 describe("MemoryPanel", () => {
+  it("shows the animated loader while the notes load", () => {
+    renderPanel({ loading: true, memories: [] });
+    expect(screen.getByRole("status")).toHaveClass("tape-loader");
+  });
+
   it("lists text, supplier, source and date", () => {
     renderPanel();
     const first = screen.getByRole("article", { name: /Prices include VAT/ });

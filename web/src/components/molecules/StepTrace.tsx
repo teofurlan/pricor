@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { TraceStep } from "../../api/types";
 import { isTextKey, useI18n } from "../../i18n";
+import { splitFigure, TapeFigure } from "../atoms/TapeFigure";
 
 const LONG_DECIMAL = /^(-?\d+)\.(\d{7,})$/;
 const OPERATORS: Record<string, string> = {
@@ -15,15 +16,7 @@ function readable(value: string): { text: string; full?: string } {
 }
 
 export function decimalTail(text: string): number {
-  const decimalMatch = text.match(/([.,]\d+…?)(\s+\S+)?$/);
-  if (decimalMatch) {
-    return decimalMatch[0].length;
-  }
-  const unitMatch = text.match(/\s+\S+$/);
-  if (unitMatch) {
-    return unitMatch[0].length;
-  }
-  return 0;
+  return splitFigure(text).fracPart.length;
 }
 
 function useReducedMotion() {
@@ -40,19 +33,21 @@ function useReducedMotion() {
 
 /** Only server-provided steps are printed: an operation's value is its result, not an inferred operand. */
 export function StepTrace({
-  trace, currency, convertedCurrency = null, animate = false,
+  trace, currency, convertedCurrency = null, animate = false, announce = animate,
 }: {
   trace: TraceStep[];
   currency: string | null;
   convertedCurrency?: string | null;
   animate?: boolean;
+  /** Announce the final cost to screen readers; defaults to `animate`. */
+  announce?: boolean;
 }) {
   // Replacing a trace cancels the previous print, even when it has the same number of lines.
-  return <TracePrint key={JSON.stringify([trace, currency, convertedCurrency])} trace={trace} currency={currency} convertedCurrency={convertedCurrency} animate={animate} />;
+  return <TracePrint key={JSON.stringify([trace, currency, convertedCurrency])} trace={trace} currency={currency} convertedCurrency={convertedCurrency} animate={animate} announce={announce} />;
 }
 
-function TracePrint({ trace, currency, convertedCurrency, animate }: {
-  trace: TraceStep[]; currency: string | null; convertedCurrency: string | null; animate: boolean;
+function TracePrint({ trace, currency, convertedCurrency, animate, announce }: {
+  trace: TraceStep[]; currency: string | null; convertedCurrency: string | null; animate: boolean; announce: boolean;
 }) {
   const { t } = useI18n();
   const reduced = useReducedMotion();
@@ -74,7 +69,7 @@ function TracePrint({ trace, currency, convertedCurrency, animate }: {
       ? { text: unit ? `${item.value} ${unit}` : item.value }
       : readable(item.value);
   });
-  const decimalColumn = Math.max(0, ...shownValues.map((value) => decimalTail(value.text)));
+  const decimalColumn = Math.max(0, ...shownValues.map((value) => splitFigure(value.text).fracPart.length));
   return (
     <>
       <ol className={`trace${animate && !reduced ? " trace--printing" : ""}`}>
@@ -87,13 +82,13 @@ function TracePrint({ trace, currency, convertedCurrency, animate }: {
             <li key={`${item.step}-${position}`} className={`trace__step${isTotal ? " trace__step--final" : ""}`}>
               <span className="trace__operator" aria-hidden="true">{isTotal ? "=" : OPERATORS[item.step] ?? "◇"}</span>
               <span className="trace__label">{label}</span>
-              <span className="trace__value" title={shown.full} style={{ paddingInlineEnd: `${decimalColumn - decimalTail(shown.text)}ch` }}>{shown.text}</span>
+              <TapeFigure className="trace__value" value={shown.text} full={shown.full} fracWidth={decimalColumn} />
               {isTotal && <span className="trace__mark" aria-hidden="true">✱</span>}
             </li>
           );
         })}
       </ol>
-      {animate && <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{complete && result ? `${t("trace.rounding")}: ${result}` : ""}</p>}
+      {announce && <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{complete && result ? `${t("trace.rounding")}: ${result}` : ""}</p>}
       {complete && <div className="tape__tear" aria-hidden="true" />}
     </>
   );

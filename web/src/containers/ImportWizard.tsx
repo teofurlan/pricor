@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ApiClient, ApiError, MemoryApiClient } from "../api/client";
+import type { ApiClient, ApiError, ExportFile, ExportSheet, MemoryApiClient } from "../api/client";
 import type { ColumnRole, CreateImportInput, Memory, Question, SessionState } from "../api/types";
 import { Button } from "../components/atoms/Button";
+import { TapeLoader } from "../components/atoms/TapeLoader";
 import { CountsSummary } from "../components/molecules/CountsSummary";
 import { NoticeList } from "../components/molecules/NoticeList";
 import { type SampleData } from "../components/molecules/SamplePreview";
@@ -56,6 +57,22 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   const pendingAnswersRef = useRef<Record<string, string>>({});
   const [answeringCount, setAnsweringCount] = useState(0);
   const [sample, setSample] = useState<SampleData | null>(null);
+  const [sheets, setSheets] = useState<Partial<Record<ExportFile, ExportSheet>>>({});
+  const approvedId = session?.approved ? session.id : null;
+
+  // The file preview reads the exported file itself, so it can only exist once the user signed.
+  useEffect(() => {
+    setSheets({});
+    if (!approvedId) return;
+    let active = true;
+    for (const file of ["products", "rejected"] as const) {
+      api.exportSheet(approvedId, file)
+        .then((loaded) => { if (active) setSheets((current) => ({ ...current, [file]: loaded })); })
+        // The downloads stay available; a preview is a convenience and is simply left out.
+        .catch(() => undefined);
+    }
+    return () => { active = false; };
+  }, [api, approvedId]);
 
   useEffect(() => {
     if (session?.id) {
@@ -215,7 +232,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
     rejected: { csv: api.rejectedUrl(id, "csv"), xlsx: api.rejectedUrl(id, "xlsx") },
   });
 
-  const loadingPreview = <div className="stack" role="status" aria-live="polite"><p className="lede">{t("common.loading")}</p><div className="loading-rules" aria-hidden="true"><span /><span /><span /></div></div>;
+  const loadingPreview = <div className="stack"><TapeLoader text={t("common.loading")} /><div className="loading-rules" aria-hidden="true"><span /><span /><span /></div></div>;
 
   return (
     <div className="shell">
@@ -254,7 +271,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
           <p className="stage__lede">{t(TITLES[step].lede)}</p>
           {session && <NoticeList notices={session.notices} />}
           <ErrorBanner error={error ?? preview.error} />
-          {busy && <p className="working" aria-live="polite">{t("common.working")}</p>}
+          {busy && <div className="working"><TapeLoader size="small" text={t("common.working")} /></div>}
 
           {step === "upload" && (
             <UploadForm
@@ -343,6 +360,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
                   links={links(session.id)}
                   supplier={session.supplier_name}
                   file={session.file_name}
+                  sheets={sheets}
                   onApprove={approve}
                 />
                 {session.approved && (

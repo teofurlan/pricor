@@ -1,3 +1,4 @@
+import { parseCsv } from "./csv";
 import type {
   CreateImportInput,
   ExportFormat,
@@ -21,6 +22,15 @@ export class ApiError extends Error {
   }
 }
 
+/** Which approved file: the products or the rejected-rows report. */
+export type ExportFile = "products" | "rejected";
+
+export interface ExportSheet {
+  header: string[];
+  rows: string[][];
+  total: number;
+}
+
 export interface ApiClient {
   listSheets(file: File): Promise<string[]>;
   createImport(input: CreateImportInput): Promise<SessionState>;
@@ -37,6 +47,8 @@ export interface ApiClient {
   /** What changed since the supplier's previous approved import; `threshold` is a ratio ("0.30"). */
   report(id: string, threshold?: string): Promise<PriceReport>;
   getSample(id: string, limit?: number): Promise<{ header: string[]; rows: string[][] }>;
+  /** An approved file as written (CSV): its header, the first `limit` rows and the row count. */
+  exportSheet(id: string, file: ExportFile, limit?: number): Promise<ExportSheet>;
   exportUrl(id: string, format: ExportFormat): string;
   rejectedUrl(id: string, format: ExportFormat): string;
   reportUrl(id: string, threshold?: string): string;
@@ -114,6 +126,17 @@ export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), 
     report: (id, threshold) =>
       call(`${base(id)}/report${threshold === undefined ? "" : `?threshold=${encodeURIComponent(threshold)}`}`),
     getSample: (id, limit = 5) => call(`${base(id)}/sample?limit=${limit}`),
+    async exportSheet(id, file, limit = 10) {
+      let response: Response;
+      try {
+        response = await fetchImpl(`${baseUrl}${base(id)}/${file === "products" ? "export" : "rejected"}?format=csv`);
+      } catch {
+        throw new ApiError(0, "network_error", "The Pricor server cannot be reached.");
+      }
+      if (!response.ok) await fail(response);
+      const [header = [], ...rows] = parseCsv(await response.text());
+      return { header, rows: rows.slice(0, limit), total: rows.length };
+    },
     exportUrl: (id, format) => `${baseUrl}${base(id)}/export?format=${format}`,
     rejectedUrl: (id, format) => `${baseUrl}${base(id)}/rejected?format=${format}`,
     reportUrl: (id, threshold) =>

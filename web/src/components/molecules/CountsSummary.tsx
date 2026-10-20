@@ -1,5 +1,6 @@
 import type { PreviewTotals } from "../../api/types";
 import { useI18n, type TextKey } from "../../i18n";
+import { TapeFigure } from "../atoms/TapeFigure";
 
 const SKIPPED: [string, TextKey][] = [
   ["empty", "counts.skipped.empty"],
@@ -19,17 +20,17 @@ export function CountsSummary({ totals, tape = false }: { totals: PreviewTotals;
     <section className={`counts${tape ? " counts--tape" : ""}`}>
       <div className="counts__equation">
         <div className="count count--good" role="group" aria-label={t("counts.accepted")}>
-          <span className="count__value">{totals.accepted}</span>
+          <TapeFigure className="count__value" value={totals.accepted} fracWidth={0} />
           <span className="count__label">{t("counts.accepted")}</span>
         </div>
         <span className="counts__sign" aria-hidden="true">+</span>
         <div className="count count--bad" role="group" aria-label={t("counts.rejected")}>
-          <span className="count__value">{totals.rejected}</span>
+          <TapeFigure className="count__value" value={totals.rejected} fracWidth={0} />
           <span className="count__label">{t("counts.rejected")}</span>
         </div>
         <span className="counts__sign" aria-hidden="true">=</span>
         <div className="count" role="group" aria-label={t("counts.dataRows")}>
-          <span className="count__value">{totals.data_rows}</span>
+          <TapeFigure className="count__value" value={totals.data_rows} fracWidth={0} />
           <span className="count__label">{t("counts.dataRows")}</span>
         </div>
       </div>

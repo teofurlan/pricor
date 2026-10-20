@@ -39,12 +39,12 @@ describe("SuggestionBadge", () => {
 
   it("labels an uncalibrated model confidence as such", () => {
     renderWithI18n(<SuggestionBadge suggestion={suggestion} />);
-    expect(screen.getByText("GEMMA ~.6")).toHaveAttribute("title", "Suggested by Gemma (uncalibrated: 0.6)");
+    expect(screen.getByText("GEMMA ~60%")).toHaveAttribute("title", "Suggested by Gemma (uncalibrated: 60%)");
   });
 
   it("names Gemma when the server only says 'model', the only advisor behind it", () => {
     renderWithI18n(<SuggestionBadge suggestion={{ ...suggestion, suggested_by: "model", confidence: 0.4 }} />);
-    expect(screen.getByText("GEMMA ~.4")).toHaveAttribute("title", "Suggested by Gemma (uncalibrated: 0.4)");
+    expect(screen.getByText("GEMMA ~40%")).toHaveAttribute("title", "Suggested by Gemma (uncalibrated: 40%)");
   });
 
   it("labels a value read from the file as detected, with no model confidence", () => {
@@ -56,7 +56,7 @@ describe("SuggestionBadge", () => {
 
   it("drops the warning once the confidence is calibrated", () => {
     renderWithI18n(<SuggestionBadge suggestion={{ ...suggestion, calibrated: true }} />);
-    expect(screen.getByText("GEMMA .6")).toHaveAttribute("title", "Suggested by Gemma (calibrated: 0.6)");
+    expect(screen.getByText("GEMMA 60%")).toHaveAttribute("title", "Suggested by Gemma (calibrated: 60%)");
   });
 });
 
@@ -110,9 +110,10 @@ describe("StepTrace", () => {
         currency="ARS"
       />,
     );
-    const shown = screen.getByText("1720.6611…");
+    const shown = screen.getByText((_, el) => Boolean(el?.classList.contains("trace__value") && el?.textContent === "1720.6611…"));
     expect(shown).toHaveAttribute("title", long);
-    expect(screen.getByText("1720.66 ARS")).not.toHaveAttribute("title");
+    const finalVal = screen.getByText((_, el) => Boolean(el?.classList.contains("trace__value") && el?.textContent === "1720.66 ARS"));
+    expect(finalVal).not.toHaveAttribute("title");
   });
 
   it("falls back to the raw step name for a step it does not know", () => {
@@ -171,14 +172,14 @@ describe("QuestionCard", () => {
     const radios = screen.getAllByRole("radio");
     expect(radios).toHaveLength(2);
     expect(radios.every((radio) => !(radio as HTMLInputElement).checked)).toBe(true);
-    expect(screen.getByText("GEMMA ~.6")).toHaveAttribute("title", "Suggested by Gemma (uncalibrated: 0.6)");
+    expect(screen.getByText("GEMMA ~60%")).toHaveAttribute("title", "Suggested by Gemma (uncalibrated: 60%)");
   });
 
   it("puts the suggestion badge on the suggested option only", () => {
     renderWithI18n(<QuestionCard question={question({ suggestion })} answer={undefined} onAnswer={vi.fn()} />);
     const usd = screen.getByRole("radio", { name: /US dollars/ }).closest("label")!;
     const ars = screen.getByRole("radio", { name: /Argentine pesos/ }).closest("label")!;
-    expect(within(usd).getByText("GEMMA ~.6")).toHaveAttribute("title", "Suggested by Gemma (uncalibrated: 0.6)");
+    expect(within(usd).getByText("GEMMA ~60%")).toHaveAttribute("title", "Suggested by Gemma (uncalibrated: 60%)");
     expect(within(ars).queryByText(/GEMMA/)).toBeNull();
   });
 

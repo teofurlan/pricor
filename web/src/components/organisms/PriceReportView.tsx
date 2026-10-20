@@ -3,6 +3,7 @@ import type { PriceReport, ReportChange, ReportProduct } from "../../api/types";
 import { percentToRatio, ratioToPercent, signedPercent } from "../../lib/percent";
 import { useI18n, type TextKey } from "../../i18n";
 import { Button } from "../atoms/Button";
+import { TapeFigure } from "../atoms/TapeFigure";
 
 const ROW_LIMIT = 50;
 
@@ -128,7 +129,7 @@ function ThresholdForm({ initial, busy, onApply }: { initial: string; busy: bool
           onChange={(event) => setText(event.target.value)}
         />
       </label>
-      <Button type="submit" disabled={busy || ratio === null}>
+      <Button type="submit" disabled={busy || ratio === null} loading={busy}>
         {t("report.apply")}
       </Button>
       {(invalid || text.trim() === "") && <span className="hint">{t("report.threshold.invalid")}</span>}
@@ -161,7 +162,7 @@ export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
           <h2 className="report__headline">{t("report.summary")}</h2>
           <ol className="report__summary-list">
             {summaryLines.map((line) => <li key={line.label} className={`report__summary-line${line.negative ? " report__summary-line--negative" : ""}${line.total ? " report__summary-line--total" : ""}`}>
-              <span aria-hidden="true">{line.mark}</span><span className="report__summary-label">{line.label}</span><span className="report__summary-value">{line.value}</span>
+              <span aria-hidden="true">{line.mark}</span><span className="report__summary-label">{line.label}</span><TapeFigure className="report__summary-value" value={line.value} fracWidth={0} />
             </li>)}
           </ol>
           {summary.median_change_pct !== null && <p className="hint report__median">{t("report.median", { median: signedPercent(summary.median_change_pct) })}</p>}

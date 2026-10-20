@@ -21,6 +21,7 @@ function fakeApi(overrides: Partial<ApiClient> = {}): ApiClient {
     approve: vi.fn(unexpected("approve")),
     listSheets: vi.fn().mockResolvedValue([]),
     getSample: vi.fn().mockResolvedValue({ header: [], rows: [] }),
+    exportSheet: vi.fn().mockResolvedValue({ header: [], rows: [], total: 0 }),
     // A first import has no earlier list to compare with, which is the quiet default here.
     report: vi.fn(() => Promise.reject(new ApiError(409, "no_previous_import", "nothing to compare with"))),
     exportUrl: (id, format) => `/imports/${id}/export?format=${format}`,
@@ -68,7 +69,7 @@ describe("ImportWizard", () => {
     await userEvent.click(screen.getByRole("button", { name: "Confirm columns" }));
 
     // The suggestion is visible and nothing is preselected.
-    expect(await screen.findByText("GEMMA ~.6")).toBeInTheDocument();
+    expect(await screen.findByText("GEMMA ~60%")).toBeInTheDocument();
     for (const radio of screen.getAllByRole("radio")) expect(radio).not.toBeChecked();
     await userEvent.click(screen.getByRole("radio", { name: /Argentine pesos/ }));
     expect(api.answer).toHaveBeenCalledWith("s1", "currency", "ARS");
@@ -80,7 +81,9 @@ describe("ImportWizard", () => {
     expect(await screen.findByLabelText("Accepted")).toHaveTextContent("5");
     expect(screen.getByLabelText("Rejected")).toHaveTextContent("1");
     expect(screen.getByLabelText("Data rows")).toHaveTextContent("6");
-    expect(await screen.findByText("1000.00 ARS")).toBeInTheDocument();
+    expect(
+      await screen.findByText((_, el) => Boolean(el?.classList.contains("trace__value") && el?.textContent === "1000.00 ARS")),
+    ).toBeInTheDocument();
     expect(screen.getByText(/cannot parse 'abc'/)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Continue to approval" }));
@@ -129,8 +132,7 @@ describe("ImportWizard", () => {
     const row = await screen.findByRole("row", { name: /Precio/ });
     expect(within(row).getByText("Needs your confirmation")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Confirm columns" })).toBeDisabled();
-    await userEvent.click(within(row).getByRole("button", { name: /Change/i }));
-    await userEvent.selectOptions(within(row).getByRole("combobox"), "cost_price");
+    await userEvent.selectOptions(within(row).getByRole("combobox", { name: /Change role/i }), "cost_price");
     await userEvent.click(screen.getByRole("button", { name: "Confirm columns" }));
     expect(api.setRoles).toHaveBeenCalledWith("s1", { 2: "cost_price" });
 
@@ -255,6 +257,30 @@ describe("ImportWizard", () => {
     expect(summary).toHaveTextContent("unchanged312");
     expect(summary).toHaveTextContent("up85");
     expect(api.report).toHaveBeenCalledWith("s1", undefined);
+  });
+
+  it("previews both approved files, and only after the user signs", async () => {
+    const sheet = { header: ["supplier_code", "description"], rows: [["A1", "Bolt"]], total: 5 };
+    const rejectedSheet = { header: ["source_row", "reasons"], rows: [["8", "Invalid cost"]], total: 1 };
+    const api = fakeApi({
+      createImport: vi.fn().mockResolvedValue(ready),
+      preview: vi.fn().mockResolvedValue(previewPage()),
+      approve: vi.fn().mockResolvedValue(approved),
+      exportSheet: vi.fn((_: string, file: string) => Promise.resolve(file === "products" ? sheet : rejectedSheet)),
+    });
+    renderWithI18n(<ImportWizard api={api} />);
+    await startImport();
+    await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Continue to approval" }));
+    expect(api.exportSheet).not.toHaveBeenCalled();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Approve import" }));
+
+    const table = await screen.findByRole("table", { name: "The products file" });
+    expect(table).toHaveTextContent("Bolt");
+    expect(api.exportSheet).toHaveBeenCalledWith("s1", "products");
+    expect(await screen.findByRole("table", { name: "The rejected-rows file" })).toHaveTextContent("Invalid cost");
+    expect(api.exportSheet).toHaveBeenCalledWith("s1", "rejected");
   });
 
   it("says so when an approved import is the first of its supplier", async () => {

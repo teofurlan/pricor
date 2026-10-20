@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { HeaderCandidate } from "../../api/types";
 import { useI18n } from "../../i18n";
 import { Button } from "../atoms/Button";
+import { usePendingAction } from "../atoms/usePendingAction";
 
 interface Props {
   candidates: HeaderCandidate[];
@@ -12,6 +13,7 @@ interface Props {
 /** The profiler could not settle which row holds the column names: the user decides. */
 export function HeaderChoice({ candidates, busy, onChoose }: Props) {
   const { t } = useI18n();
+  const pending = usePendingAction<"use" | "none">(busy);
   const [chosen, setChosen] = useState<number | null>(null);
   return (
     <div className="stack">
@@ -33,10 +35,10 @@ export function HeaderChoice({ candidates, busy, onChoose }: Props) {
         ))}
       </div>
       <div className="actions">
-        <Button variant="primary" disabled={busy || chosen === null} onClick={() => chosen !== null && onChoose(chosen)}>
+        <Button variant="primary" disabled={busy || chosen === null} loading={pending.isLoading("use")} onClick={() => { if (chosen === null) return; pending.mark("use"); onChoose(chosen); }}>
           {t("header.use")}
         </Button>
-        <Button disabled={busy} onClick={() => onChoose(null)}>
+        <Button disabled={busy} loading={pending.isLoading("none")} onClick={() => { pending.mark("none"); onChoose(null); }}>
           {t("header.none")}
         </Button>
       </div>
