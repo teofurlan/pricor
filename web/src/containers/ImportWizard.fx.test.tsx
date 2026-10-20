@@ -133,11 +133,27 @@ describe("ImportWizard: currency conversion", () => {
     renderWithI18n(<ImportWizard api={api} />);
     await startImport(); // a ready import goes straight to the preview
     expect(await screen.findByText("3551.25 ARS")).toBeInTheDocument();
+    expect(screen.queryByText("Preview updated with the new rate.")).toBeNull();
 
     await userEvent.type(screen.getByLabelText("Rate typed by you (USD to ARS)"), "1500");
     await userEvent.click(screen.getByRole("button", { name: "Use this rate" }));
     expect(await screen.findByText("3750.00 ARS")).toBeInTheDocument();
     expect(screen.queryByText("3551.25 ARS")).toBeNull();
+    expect(screen.getByText("Preview updated with the new rate.")).toHaveAttribute("role", "status");
+  });
+
+  it("says nothing when the rate asked for again has not changed", async () => {
+    const api = fakeApi({
+      createImport: vi.fn().mockResolvedValue(session({ ...ready, fx: fxState() })),
+      refreshRate: vi.fn().mockResolvedValue(session({ ...ready, fx: fxState() })),
+      preview: vi.fn().mockResolvedValue(previewPage()),
+    });
+    renderWithI18n(<ImportWizard api={api} />);
+    await startImport();
+    await userEvent.click(await screen.findByRole("button", { name: "Get the live rate again" }));
+
+    expect(api.refreshRate).toHaveBeenCalledWith("s1");
+    expect(screen.queryByText("Preview updated with the new rate.")).toBeNull();
   });
 });
 

@@ -257,6 +257,7 @@ export const en = {
   "title.approve": "Approve this import",
   "lede.approve": "Approving freezes the plan and the result. Exports are generated from what you see here.",
   "preview.continue": "Continue to approval",
+  "preview.rateUpdated": "Preview updated with the new rate.",
   "rejected.title": "Rejected rows ({count})",
   "common.working": "Working. Local models can take up to a minute.",
   "questions.remaining": "{count} still to answer.",

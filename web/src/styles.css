@@ -558,7 +558,7 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
 .fx__rate { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 16px; }
 .fx__line { grid-column: 1 / -1; font: 1rem/1.6 var(--figures); font-variant-numeric: tabular-nums; }
 .fx__detail { font-size: 0.75rem; color: var(--muted); }
-.fx__required, .fx__error { font-size: 0.875rem; }
+.fx__required, .fx__error, .fx__updated { font-size: 0.875rem; }
 .fx__manual { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 0.8125rem; }
 .fx__manual label { flex-basis: 100%; }
 .fx__manual input { width: 16ch; }

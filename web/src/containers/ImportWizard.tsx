@@ -66,6 +66,9 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   const sessionRef = useRef<SessionState | null>(null);
   const [sample, setSample] = useState<SampleData | null>(null);
   const [sheets, setSheets] = useState<Partial<Record<ExportFile, ExportSheet>>>({});
+  // A rate changed on the preview step reloads it; say so, since the figures move under the user.
+  const [rateChanged, setRateChanged] = useState(false);
+  useEffect(() => setRateChanged(false), [step]);
   const approvedId = session?.approved ? session.id : null;
 
   // The file preview reads the exported file itself, so it can only exist once the user signed.
@@ -219,17 +222,17 @@ export function ImportWizard({ api }: { api: ApiClient }) {
       });
   };
 
-  const setManualRate = (rate: string) =>
+  const changeRate = (call: (sessionId: string) => Promise<SessionState>) =>
     run(async () => {
       if (!session) return;
-      remember(await api.setManualRate(session.id, rate));
+      const next = await call(session.id);
+      remember(next);
+      if (step === "preview" && JSON.stringify(next.fx?.snapshot) !== JSON.stringify(session.fx?.snapshot)) {
+        setRateChanged(true);
+      }
     });
-
-  const refreshRate = () =>
-    run(async () => {
-      if (!session) return;
-      remember(await api.refreshRate(session.id));
-    });
+  const setManualRate = (rate: string) => changeRate((sessionId) => api.setManualRate(sessionId, rate));
+  const refreshRate = () => changeRate((sessionId) => api.refreshRate(sessionId));
 
   const approve = () =>
     run(async () => {
@@ -374,6 +377,9 @@ export function ImportWizard({ api }: { api: ApiClient }) {
                 <CountsSummary totals={preview.page.totals} />
                 {session?.fx && (
                   <FxPanel fx={session.fx} busy={busy} onManual={setManualRate} onRefresh={refreshRate} readOnly={session.approved} />
+                )}
+                {rateChanged && !preview.loading && (
+                  <p role="status" className="fx__updated">{t("preview.rateUpdated")}</p>
                 )}
                 <PreviewTable
                   page={preview.page}

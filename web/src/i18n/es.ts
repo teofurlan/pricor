@@ -260,6 +260,7 @@ export const es: Record<TextKey, string> = {
   "title.approve": "Aprobar esta importación",
   "lede.approve": "Al aprobar se congelan el plan y el resultado. Las exportaciones se generan con lo que ve aquí.",
   "preview.continue": "Continuar a la aprobación",
+  "preview.rateUpdated": "Vista previa actualizada con la nueva cotización.",
   "rejected.title": "Filas rechazadas ({count})",
   "common.working": "Trabajando. Los modelos locales pueden demorar hasta un minuto.",
   "questions.remaining": "Faltan {count} por responder.",
