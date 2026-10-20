@@ -386,6 +386,26 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
 .question__custom input { width: 120px; }
 .question__chosen { font-size: 0.8125rem; }
 .question__remember { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+/* Answered questions read as a printed history; the open one is asked in full below. */
+.exchanges { list-style: none; margin: 0; padding: 0; display: grid; border-top: 1px solid var(--ink); }
+.exchange { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: baseline; gap: 4px 16px; padding: 10px 0; border-bottom: 1px solid var(--rule); font-size: 0.875rem; }
+.exchange__question { color: var(--muted); }
+.exchange__answer { font-weight: 650; }
+.exchange__change { min-height: 32px; padding: 4px 10px; font-size: 0.8125rem; }
+.exchange-current { display: grid; gap: 16px; }
+.exchange__remember { grid-column: 1 / -1; }
+.ask { display: grid; gap: 12px; border-top: 1px dashed var(--muted); padding-top: 14px; max-width: 72ch; }
+.ask__thread { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.ask__turn { display: grid; gap: 2px; padding: 10px 12px; background: var(--paper); border-left: 3px solid var(--rule); font-size: 0.875rem; }
+.ask__turn--model { border-left-color: var(--ink-sage); }
+.ask__speaker { font-size: 0.6875rem; font-weight: 650; letter-spacing: 0.055em; text-transform: uppercase; color: var(--muted); }
+.ask__text { white-space: pre-wrap; }
+.ask__label { font-size: 0.875rem; font-weight: 600; }
+.ask__form { display: grid; gap: 7px; }
+.ask__row { display: flex; gap: 10px; align-items: center; }
+.ask__row input { flex: 1; }
+.ask__error { font-size: 0.875rem; font-weight: 560; }
+.badge--chat { color: var(--ink-sage); margin-left: auto; }
 .memory-citation { border-top: 1px dashed var(--muted); padding-top: 12px; font-size: 0.8125rem; }
 .memory-citation ul { padding-left: 20px; margin: 8px 0 0; }
 .memory-saved { font-weight: 600; text-transform: uppercase; font-size: 0.75rem; }

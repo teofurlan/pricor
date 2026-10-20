@@ -22,6 +22,7 @@ function fakeApi(overrides: Partial<ApiClient> = {}): ApiClient {
     listSheets: vi.fn().mockResolvedValue([]),
     getSample: vi.fn().mockResolvedValue({ header: [], rows: [] }),
     exportSheet: vi.fn().mockResolvedValue({ header: [], rows: [], total: 0 }),
+    askQuestion: vi.fn().mockResolvedValue({ reply: "", suggested_option: null }),
     // A first import has no earlier list to compare with, which is the quiet default here.
     report: vi.fn(() => Promise.reject(new ApiError(409, "no_previous_import", "nothing to compare with"))),
     exportUrl: (id, format) => `/imports/${id}/export?format=${format}`,
@@ -73,8 +74,10 @@ describe("ImportWizard", () => {
     for (const radio of screen.getAllByRole("radio")) expect(radio).not.toBeChecked();
     await userEvent.click(screen.getByRole("radio", { name: /Argentine pesos/ }));
     expect(api.answer).toHaveBeenCalledWith("s1", "currency", "ARS");
-    // An answered question stays on screen with its answer, so it can be changed.
-    expect(await screen.findByRole("radio", { name: /Argentine pesos/ })).toBeChecked();
+    // An answered question moves to the history above with its answer, where it can be changed.
+    const history = await screen.findByRole("list", { name: "Answered questions" });
+    expect(within(history).getByText("Argentine pesos (ARS)")).toBeInTheDocument();
+    expect(within(history).getByRole("button", { name: "Change" })).toBeInTheDocument();
 
     await userEvent.click(await screen.findByRole("button", { name: "See the preview" }));
     expect(api.preview).toHaveBeenCalledWith("s1", 0, 50);
@@ -380,16 +383,16 @@ describe("ImportWizard", () => {
     await startImport();
     await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
 
-    // Both questions are open
+    // Questions come one at a time; the next appears as soon as the first is answered.
     const arsOption = await screen.findByRole("radio", { name: /Argentine pesos/ });
-    const yesOption = screen.getByRole("radio", { name: /Yes/ });
+    expect(screen.queryByRole("radio", { name: /Yes/ })).toBeNull();
 
     // Click first question
     await userEvent.click(arsOption);
     expect(api.answer).toHaveBeenCalledWith("s1", "currency", "ARS");
 
-    // Click second question back to back while first API call is still pending
-    await userEvent.click(yesOption);
+    // Answer the second question back to back while the first API call is still pending
+    await userEvent.click(await screen.findByRole("radio", { name: /Yes/ }));
 
     // Resolve first answer
     resolveFirstAnswer(
@@ -406,7 +409,8 @@ describe("ImportWizard", () => {
     });
     expect(api.answer).toHaveBeenCalledTimes(2);
 
-    expect(screen.getByRole("radio", { name: /Argentine pesos/ })).toBeChecked();
-    expect(screen.getByRole("radio", { name: /Yes/ })).toBeChecked();
+    const history = screen.getByRole("list", { name: "Answered questions" });
+    expect(within(history).getByText(/Argentine pesos/)).toBeInTheDocument();
+    expect(within(history).getByText(/Yes/)).toBeInTheDocument();
   });
 });

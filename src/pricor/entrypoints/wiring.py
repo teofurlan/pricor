@@ -26,6 +26,7 @@ from fastapi import FastAPI
 from pricor.adapters.dolarapi_provider import DEFAULT_TIMEOUT_SECONDS as FX_TIMEOUT
 from pricor.adapters.dolarapi_provider import DolarApiProvider
 from pricor.adapters.gemma_advisor import GemmaPlanAdvisor
+from pricor.adapters.gemma_question_helper import GemmaQuestionHelper
 from pricor.adapters.gemma_classifier import GemmaColumnClassifier
 from pricor.adapters.heuristic_classifier import HeuristicColumnClassifier
 from pricor.adapters.ollama_client import (
@@ -204,6 +205,7 @@ def dependencies_from_env(env: Mapping[str, str]) -> ApiDependencies:
         reports=reports,
         memory=memory,
         memory_top_k=memory_top_k,
+        question_helper=GemmaQuestionHelper(client),
     )
 
 

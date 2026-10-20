@@ -99,6 +99,18 @@ export interface Memory {
   updated_at: string;
 }
 
+/** One turn of the side conversation about a question. */
+export interface AskTurn {
+  role: "user" | "model";
+  text: string;
+}
+
+/** Gemma's answer about a question; `suggested_option` is one of its option tokens, never applied. */
+export interface AskReply {
+  reply: string;
+  suggested_option: string | null;
+}
+
 export interface Question {
   id: string;
   text: LocalizedText;

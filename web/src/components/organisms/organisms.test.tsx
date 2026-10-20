@@ -1,4 +1,4 @@
-import { fireEvent, screen, within } from "@testing-library/react";
+import { act, fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../api/client";
@@ -521,31 +521,64 @@ describe("ColumnsTable", () => {
 });
 
 describe("QuestionsPanel", () => {
-  it("renders one card per open question and waits for the answers", () => {
-    renderWithI18n(
-      <QuestionsPanel
-        questions={[question(), question({ id: "price_includes_vat", text: { en: "Include VAT?", es: "¿Incluye IVA?" } })]}
-        answers={{}}
-        busy={false}
-        onAnswer={vi.fn()}
-        onContinue={vi.fn()}
-      />,
-    );
-    expect(screen.getAllByRole("group")).toHaveLength(2);
+  const vat = question({
+    id: "price_includes_vat",
+    text: { en: "Include VAT?", es: "¿Incluye IVA?" },
+    options: [{ token: "yes", label: { en: "Yes", es: "Sí" } }, { token: "no", label: { en: "No", es: "No" } }],
+  });
+
+  it("asks one question at a time and waits for the answers", () => {
+    renderWithI18n(<QuestionsPanel questions={[question(), vat]} answers={{}} busy={false} onAnswer={vi.fn()} onContinue={vi.fn()} />);
+    expect(screen.getAllByRole("group")).toHaveLength(1);
+    expect(screen.getByRole("group", { name: "Which currency are the prices in?" })).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Include VAT?" })).toBeNull();
     expect(screen.getByRole("button", { name: "See the preview" })).toBeDisabled();
   });
 
-  it("keeps answered questions on screen, changeable, and lets the user continue once none is open", async () => {
-    const onContinue = vi.fn();
+  it("keeps answered questions above as a changeable history and shows the next one", async () => {
     const onAnswer = vi.fn();
-    renderWithI18n(
-      <QuestionsPanel questions={[question()]} answers={{ currency: "ARS" }} busy={false} onAnswer={onAnswer} onContinue={onContinue} />,
-    );
-    expect(screen.getByRole("radio", { name: /Argentine pesos/ })).toBeChecked();
+    renderWithI18n(<QuestionsPanel questions={[question(), vat]} answers={{ currency: "ARS" }} busy={false} onAnswer={onAnswer} onContinue={vi.fn()} />);
+    const history = screen.getByRole("list", { name: "Answered questions" });
+    expect(within(history).getByText("Which currency are the prices in?")).toBeInTheDocument();
+    expect(within(history).getByText("Argentine pesos (ARS)")).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Include VAT?" })).toBeInTheDocument();
+    await userEvent.click(within(history).getByRole("button", { name: "Change" }));
     await userEvent.click(screen.getByRole("radio", { name: /US dollars/ }));
     expect(onAnswer).toHaveBeenCalledWith("currency", "USD");
+  });
+
+  it("lets the user continue once none is open", async () => {
+    const onContinue = vi.fn();
+    renderWithI18n(<QuestionsPanel questions={[question()]} answers={{ currency: "ARS" }} busy={false} onAnswer={vi.fn()} onContinue={onContinue} />);
     await userEvent.click(screen.getByRole("button", { name: "See the preview" }));
     expect(onContinue).toHaveBeenCalled();
+  });
+
+  it("asks Gemma about the open question and marks its suggestion without choosing it", async () => {
+    let resolve: (value: { reply: string; suggested_option: string | null }) => void = () => undefined;
+    const onAsk = vi.fn(() => new Promise<{ reply: string; suggested_option: string | null }>((done) => { resolve = done; }));
+    const onAnswer = vi.fn();
+    renderWithI18n(<QuestionsPanel questions={[question()]} answers={{}} busy={false} onAnswer={onAnswer} onContinue={vi.fn()} onAsk={onAsk} />);
+    await userEvent.type(screen.getByLabelText("Ask Gemma about this question"), "The list says $ only");
+    await userEvent.click(screen.getByRole("button", { name: "Ask" }));
+    expect(onAsk).toHaveBeenCalledWith("currency", "The list says $ only", []);
+    expect(screen.getByRole("button", { name: /Ask/ })).toHaveAttribute("aria-busy", "true");
+    await act(async () => resolve({ reply: "A bare $ in an Argentine list usually means pesos.", suggested_option: "ARS" }));
+    expect(screen.getByText("The list says $ only")).toBeInTheDocument();
+    expect(screen.getByText("A bare $ in an Argentine list usually means pesos.")).toBeInTheDocument();
+    const ars = screen.getByRole("radio", { name: /Argentine pesos/ });
+    expect(ars).not.toBeChecked();
+    expect(ars.closest("label")).toHaveTextContent("Suggested in the conversation");
+    expect(onAnswer).not.toHaveBeenCalled();
+  });
+
+  it("keeps the question answerable when Gemma cannot be reached", async () => {
+    const onAsk = vi.fn().mockRejectedValue(new ApiError(503, "model_unavailable", "down"));
+    renderWithI18n(<QuestionsPanel questions={[question()]} answers={{}} busy={false} onAnswer={vi.fn()} onContinue={vi.fn()} onAsk={onAsk} />);
+    await userEvent.type(screen.getByLabelText("Ask Gemma about this question"), "Which one?");
+    await userEvent.click(screen.getByRole("button", { name: "Ask" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Gemma is not available right now. You can still answer with the keys.");
+    expect(screen.getByRole("radio", { name: /Argentine pesos/ })).toBeEnabled();
   });
 
   it("says so when there is nothing to ask", () => {

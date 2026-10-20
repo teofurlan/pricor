@@ -22,6 +22,9 @@ Endpoints:
     PUT  /imports/{id}/header     {"row_index": 3 | null}   (null = the sheet has no header)
     PUT  /imports/{id}/roles      {"roles": {"2": "cost_price"}}   (column index -> role)
     POST /imports/{id}/answers    {"question_id": "currency", "option": "ARS"}
+    POST /imports/{id}/questions/{question_id}/ask
+                                  {"message": "...", "history": [{"role": "user|model", "text": "..."}]}
+                                  -> {"reply": "...", "suggested_option": "yes" | null}
     PUT  /imports/{id}/fx         {"rate": "1420,50"}  a manual exchange rate for this run
     POST /imports/{id}/fx/refresh ask the live source for the plan's rate again
     GET  /imports/{id}/preview    ?offset=0&limit=50  -> per-row original, trace, final values
@@ -61,6 +64,14 @@ Errors share one body, `{"error": {"code": "...", "message": "..."}}`, with
 large), 415 (unsupported file type) and 422 (invalid input or unreadable file).
 Nothing a model says is ever executed: questions are deterministic and a model
 hypothesis is only a suggestion.
+
+Question help is read-only, including for answered questions: only POST /answers
+confirms an option. The message is trimmed to 1–500 characters; optional history
+contains at most 6 earlier turns of that same question, each at most 1,200
+characters. Replies are non-empty and at most 1,200 characters; suggested_option
+must be one of that question's option tokens or null. Unknown sessions or unasked
+question ids return 404, invalid bodies 422, and unavailable or invalid model
+replies 503 with code model_unavailable in the same error envelope.
 """
 
 import re
@@ -69,12 +80,12 @@ import tempfile
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any, Literal
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from pricor.application.errors import (
     AcceptedSuggestionConflictError,
@@ -89,6 +100,7 @@ from pricor.application.errors import (
 )
 from pricor.adapters.csv_exporter import CsvExporter
 from pricor.adapters.xlsx_exporter import XlsxExporter
+from pricor.application.ask_about_question import AskAboutQuestion
 from pricor.application.export_import import ExportedFile, ExportImport
 from pricor.application.import_first_time import ImportFirstTime
 from pricor.application.manage_memory import InvalidMemoryTextError, ManageMemory
@@ -104,6 +116,14 @@ from pricor.ports.import_session import ImportSession, PlanChange, PreviewPage
 from pricor.ports.import_session_repository import SessionNotFoundError
 from pricor.ports.memory import Memory, MemoryNotFoundError
 from pricor.ports.price_history import ImportSummary
+from pricor.ports.model_errors import ModelError
+from pricor.ports.question_helper import (
+    MAX_HISTORY_TURNS,
+    MAX_MESSAGE_LENGTH,
+    MAX_REPLY_LENGTH,
+    QuestionHelper,
+    QuestionTurn,
+)
 from pricor.entrypoints.web_app import install_web_app
 from pricor.ports.spreadsheet import (
     FileTooLargeError,
@@ -130,6 +150,7 @@ class ApiDependencies:
     memory: ManageMemory | None = None  # semantic memory; unavailable if None
     memory_top_k: int = 3  # retrieval count used by the later Gemma integration
     reader: SpreadsheetReader | None = None
+    question_helper: QuestionHelper | None = None  # read-only model explanations; optional
 
 
 class HeaderBody(BaseModel):
@@ -143,6 +164,23 @@ class RolesBody(BaseModel):
 class AnswerBody(BaseModel):
     question_id: str
     option: str
+
+
+class QuestionTurnBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: Literal["user", "model"]
+    text: Annotated[str, StringConstraints(strict=True, max_length=MAX_REPLY_LENGTH)]
+
+
+class AskQuestionBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    message: Annotated[
+        str,
+        StringConstraints(strict=True, strip_whitespace=True, min_length=1, max_length=MAX_MESSAGE_LENGTH),
+    ]
+    history: list[QuestionTurnBody] = Field(default_factory=list, max_length=MAX_HISTORY_TURNS)
 
 
 class RateBody(BaseModel):
@@ -466,6 +504,10 @@ def _install_error_handlers(app: FastAPI) -> None:
     async def embedder_unavailable(_: Request, error: EmbedderUnavailableError) -> JSONResponse:
         return _error(503, "embedder_unavailable", str(error))
 
+    @app.exception_handler(ModelError)
+    async def model_unavailable(_: Request, error: ModelError) -> JSONResponse:
+        return _error(503, "model_unavailable", str(error))
+
     @app.exception_handler(NoPreviousImportError)
     async def no_previous_import(_: Request, error: NoPreviousImportError) -> JSONResponse:
         return _error(409, "no_previous_import", str(error))
@@ -536,6 +578,7 @@ def create_app(dependencies: ApiDependencies) -> FastAPI:
     app = FastAPI(title="Pricor", version="0.1.0")
     use_case = dependencies.use_case
     reader = dependencies.reader or getattr(use_case, "_reader", None)
+    question_help = AskAboutQuestion(use_case.get, dependencies.question_helper)
     exports = dependencies.exports or ExportImport(
         use_case.get, [CsvExporter(), XlsxExporter()]
     )
@@ -619,6 +662,18 @@ def create_app(dependencies: ApiDependencies) -> FastAPI:
     @app.post("/imports/{session_id}/answers")
     def answer(session_id: str, body: AnswerBody) -> dict[str, Any]:
         return session_state(use_case.answer(session_id, body.question_id, body.option))
+
+    @app.post("/imports/{session_id}/questions/{question_id}/ask")
+    def ask_about_question(
+        session_id: str, question_id: str, body: AskQuestionBody
+    ) -> dict[str, str | None]:
+        reply = question_help.execute(
+            session_id,
+            question_id,
+            body.message,
+            tuple(QuestionTurn(turn.role, turn.text) for turn in body.history),
+        )
+        return {"reply": reply.reply, "suggested_option": reply.suggested_option}
 
     @app.put("/imports/{session_id}/fx")
     def set_manual_rate(session_id: str, body: RateBody) -> dict[str, Any]:

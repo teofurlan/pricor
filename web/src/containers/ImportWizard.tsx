@@ -314,6 +314,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
                 }}
                 memories={memories}
                 onRemember={memoryApi ? rememberSuggestion : undefined}
+                onAsk={(questionId, message, history) => api.askQuestion(session.id, questionId, message, history)}
                 sample={sample}
                 columns={session.columns}
                 finalCosts={finalCosts}

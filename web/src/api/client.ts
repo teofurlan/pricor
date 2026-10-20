@@ -1,5 +1,7 @@
 import { parseCsv } from "./csv";
 import type {
+  AskReply,
+  AskTurn,
   CreateImportInput,
   ExportFormat,
   PreviewPage,
@@ -38,6 +40,8 @@ export interface ApiClient {
   chooseHeader(id: string, rowIndex: number | null): Promise<SessionState>;
   setRoles(id: string, roles: Record<number, ColumnRole>): Promise<SessionState>;
   answer(id: string, questionId: string, option: string): Promise<SessionState>;
+  /** Asks Gemma about one question. The reply only explains or suggests; it never answers. */
+  askQuestion(id: string, questionId: string, message: string, history: AskTurn[]): Promise<AskReply>;
   /** Use a rate the user typed for this run (`1420,50` and `1420.50` both work). */
   setManualRate(id: string, rate: string): Promise<SessionState>;
   /** Ask the live source for the plan's rate again. */
@@ -126,6 +130,8 @@ export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), 
     report: (id, threshold) =>
       call(`${base(id)}/report${threshold === undefined ? "" : `?threshold=${encodeURIComponent(threshold)}`}`),
     getSample: (id, limit = 5) => call(`${base(id)}/sample?limit=${limit}`),
+    askQuestion: (id, questionId, message, history) =>
+      call<AskReply>(`${base(id)}/questions/${encodeURIComponent(questionId)}/ask`, json("POST", { message, history })),
     async exportSheet(id, file, limit = 10) {
       let response: Response;
       try {

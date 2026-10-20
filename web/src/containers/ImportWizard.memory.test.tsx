@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ApiError, type ApiClient, type MemoryApiClient } from "../api/client";
@@ -26,6 +26,7 @@ function fakeApi(overrides: Partial<ApiClient & MemoryApiClient> = {}): ApiClien
     approve: vi.fn(unexpected("approve")), report: vi.fn(unexpected("report")),
     listSheets: vi.fn().mockResolvedValue([]), getSample: vi.fn().mockResolvedValue({ header: [], rows: [] }),
     exportSheet: vi.fn().mockResolvedValue({ header: [], rows: [], total: 0 }),
+    askQuestion: vi.fn().mockResolvedValue({ reply: "", suggested_option: null }),
     exportUrl: () => "", rejectedUrl: () => "", reportUrl: () => "",
     listMemories: vi.fn().mockResolvedValue([memory]), createMemoryNote: vi.fn(unexpected("createMemoryNote")),
     rememberSuggestion: vi.fn().mockResolvedValue(memory), editMemory: vi.fn(unexpected("editMemory")),
@@ -74,7 +75,8 @@ describe("ImportWizard memory", () => {
     renderWithI18n(<ImportWizard api={api} />);
     await startImport();
     await userEvent.click(screen.getByRole("radio", { name: /Argentine pesos/ }));
-    expect(await screen.findByRole("radio", { name: /Argentine pesos/ })).toBeChecked();
+    const history = await screen.findByRole("list", { name: "Answered questions" });
+    expect(within(history).getByText("Argentine pesos (ARS)")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Remember this" })).toBeNull();
   });
 

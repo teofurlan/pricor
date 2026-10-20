@@ -14,6 +14,12 @@ from typing import Any
 
 from pricor.domain.profile import ColumnProfile
 from pricor.ports.column_classifier import ColumnClassification, ColumnRole
+from pricor.ports.question_helper import (
+    MAX_MESSAGE_LENGTH,
+    MAX_REPLY_LENGTH,
+    QuestionContext,
+    QuestionTurn,
+)
 
 DATA_BEGIN = "<<<SHEET_DATA"
 DATA_END = "SHEET_DATA>>>"
@@ -107,4 +113,37 @@ def render_data_block(
             *(f"[M{index}] {defang(note, 1_000)}" for index, note in enumerate(memory_context, 1)),
         ]
         body = f"{body}\n" + "\n".join(notes)
+    return f"{DATA_BEGIN}\n{body}\n{DATA_END}"
+
+
+def render_question_data_block(
+    context: QuestionContext, message: str, history: Sequence[QuestionTurn] = ()
+) -> str:
+    """Keep the whole conversation in one escaped, defanged untrusted block."""
+    question = context.question
+    document = {
+        "supplier_name": defang(context.supplier_name, 1_000),
+        "language": context.language,
+        "question": {
+            "id": question.id.value,
+            "text": defang(getattr(question.text, context.language), MAX_REPLY_LENGTH),
+            "reason": defang(question.reason, MAX_REPLY_LENGTH),
+            "model_phrasing": None
+            if question.model_phrasing is None
+            else defang(question.model_phrasing, MAX_REPLY_LENGTH),
+            "options": [
+                {
+                    "token": defang(option.token, MAX_REPLY_LENGTH),
+                    "label": defang(getattr(option.label, context.language), MAX_REPLY_LENGTH),
+                }
+                for option in question.options
+            ],
+        },
+        "columns": [column_data(column) for column in context.columns],
+        "message": defang(message, MAX_MESSAGE_LENGTH),
+        "history": [
+            {"role": turn.role, "text": defang(turn.text, MAX_REPLY_LENGTH)} for turn in history
+        ],
+    }
+    body = json.dumps(document, ensure_ascii=False, indent=1)
     return f"{DATA_BEGIN}\n{body}\n{DATA_END}"
