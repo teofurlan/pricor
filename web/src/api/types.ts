@@ -106,17 +106,27 @@ export interface OutputFormatColumn {
   index: number;
   name: string;
   samples: string[];
-  proposal: { source: OutputSource; proposed_by: "gemma" | "heuristics"; confidence: number };
+  proposal: { source: OutputSource; proposed_by: "gemma" | "heuristics" | "user"; confidence: number };
   /** The confirmed source; null while the format is only proposed. */
   source: OutputSource | null;
 }
 
-/** The store-wide layout of the products file, taken from a template the user uploaded. */
+/**
+ * The store-wide layout of the products file: a template the user uploaded, columns the user
+ * defined by hand, or both. `name` is the template file name, or empty for a hand-made list.
+ */
 export interface OutputFormat {
   name: string;
   state: "proposed" | "confirmed";
   fields: string[];
   columns: OutputFormatColumn[];
+}
+
+/** One column of a hand-edited output format; `template_index` links it to a template column. */
+export interface OutputColumnDefinition {
+  name: string;
+  source: OutputSource;
+  template_index: number | null;
 }
 
 /** One turn of the side conversation about a question. */

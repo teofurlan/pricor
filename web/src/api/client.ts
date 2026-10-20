@@ -1,5 +1,6 @@
 import { parseCsv } from "./csv";
 import type {
+  OutputColumnDefinition,
   OutputFormat,
   OutputSource,
   AskReply,
@@ -75,6 +76,8 @@ export interface OutputFormatApiClient {
   uploadOutputFormat(file: File): Promise<OutputFormat>;
   /** Every column's source in template order; the format is used only after this. */
   confirmOutputFormat(sources: OutputSource[]): Promise<OutputFormat>;
+  /** Save exactly these columns, in this order, as the confirmed format. */
+  defineOutputFormat(columns: OutputColumnDefinition[]): Promise<OutputFormat>;
   deleteOutputFormat(): Promise<void>;
 }
 
@@ -156,6 +159,7 @@ export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), 
       return call<OutputFormat>("/output-format", { method: "POST", body: form });
     },
     confirmOutputFormat: (sources) => call<OutputFormat>("/output-format/mapping", json("PUT", { sources })),
+    defineOutputFormat: (columns) => call<OutputFormat>("/output-format", json("PUT", { columns })),
     deleteOutputFormat: () => call<void>("/output-format", { method: "DELETE" }),
     askQuestion: (id, questionId, message, history) =>
       call<AskReply>(`${base(id)}/questions/${encodeURIComponent(questionId)}/ask`, json("POST", { message, history })),

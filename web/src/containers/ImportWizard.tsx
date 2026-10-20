@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ApiClient, ApiError, ExportFile, ExportSheet, MemoryApiClient, OutputFormatApiClient } from "../api/client";
-import type { ColumnRole, CreateImportInput, Memory, OutputFormat, Question, SessionState } from "../api/types";
+import type { ColumnRole, CreateImportInput, Memory, Question, SessionState } from "../api/types";
 import { Button } from "../components/atoms/Button";
 import { TapeLoader } from "../components/atoms/TapeLoader";
 import { CountsSummary } from "../components/molecules/CountsSummary";
@@ -52,8 +52,6 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   const [memoryOpen, setMemoryOpen] = useState(false);
   const memoryApi = "listMemories" in api ? (api as ApiClient & MemoryApiClient) : null;
   const formatApi = "getOutputFormat" in api ? (api as ApiClient & OutputFormatApiClient) : null;
-  const [formatOpen, setFormatOpen] = useState(false);
-  const [outputFormat, setOutputFormat] = useState<OutputFormat | null>(null);
 
   // Optimistic answers & serialized request queue
   const [localAnswers, setLocalAnswers] = useState<Record<string, string>>({});
@@ -251,8 +249,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
           <span className="masthead__promise">{t("app.promise")}</span>
         </div>
         <div className="masthead__tools">
-          {formatApi && <Button variant="quiet" onClick={() => { setMemoryOpen(false); setFormatOpen(true); }}>{t("format.open")}</Button>}
-          {memoryApi && <Button variant="quiet" onClick={() => { setFormatOpen(false); setMemoryOpen(true); }}>{t("memory.open")}</Button>}
+          {memoryApi && <Button variant="quiet" onClick={() => setMemoryOpen(true)}>{t("memory.open")}</Button>}
           <LanguageToggle />
         </div>
       </header>
@@ -262,14 +259,6 @@ export function ImportWizard({ api }: { api: ApiClient }) {
           open={memoryOpen}
           onClose={() => setMemoryOpen(false)}
           onMemoriesChange={setMemories}
-        />
-      )}
-      {formatApi && (
-        <OutputFormatContainer
-          api={formatApi}
-          open={formatOpen}
-          onClose={() => setFormatOpen(false)}
-          onChange={setOutputFormat}
         />
       )}
       <div className="layout">
@@ -292,12 +281,10 @@ export function ImportWizard({ api }: { api: ApiClient }) {
           {busy && <div className="working"><TapeLoader size="small" text={t("common.working")} /></div>}
 
           {step === "upload" && (
-            <UploadForm
-              busy={busy}
-              onSubmit={upload}
-              onInspectSheets={(file) => api.listSheets(file)}
-              exportFormat={outputFormat?.state === "confirmed" ? outputFormat.name : null}
-            />
+            <div className="upload-step">
+              <UploadForm busy={busy} onSubmit={upload} onInspectSheets={(file) => api.listSheets(file)} />
+              {formatApi && <OutputFormatContainer api={formatApi} />}
+            </div>
           )}
           {step === "header" && session && (
             <HeaderChoice candidates={session.header.candidates} busy={busy} onChoose={chooseHeader} />

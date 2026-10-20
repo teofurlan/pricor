@@ -18,6 +18,10 @@ Endpoints:
     GET  /output-format           saved proposed or confirmed format (404 when absent)
     PUT  /output-format/mapping   {"sources": ["field:supplier_code", "empty", "constant:..."]}
                                   -> confirmed format (422 for wrong count or invalid source)
+    PUT  /output-format           {"columns": [{"name": "SKU", "source": "field:supplier_code",
+                                  "template_index": 0 | null}]} -> confirmed format with exactly
+                                  these columns, in this order (422 for a blank, long or repeated
+                                  name, an invalid source or an unknown template column)
     DELETE /output-format         remove the store-wide format -> 204
     POST /sheets                  multipart: file -> {"sheets": ["..."]}
     POST /imports                 multipart: file, supplier_name, [sheet], [language],
@@ -176,6 +180,20 @@ class OutputMappingBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     sources: list[Annotated[str, StringConstraints(strict=True)]]
+
+
+class OutputColumnBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: Annotated[str, StringConstraints(strict=True)]
+    source: Annotated[str, StringConstraints(strict=True)]
+    template_index: int | None = None
+
+
+class OutputColumnsBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    columns: list[OutputColumnBody]
 
 
 class HeaderBody(BaseModel):
@@ -644,6 +662,11 @@ def create_app(dependencies: ApiDependencies) -> FastAPI:
     @app.put("/output-format/mapping")
     def confirm_output_format(body: OutputMappingBody) -> dict[str, Any]:
         return output_format_body(output_formats().confirm(body.sources))
+
+    @app.put("/output-format")
+    def define_output_format(body: OutputColumnsBody) -> dict[str, Any]:
+        columns = [(column.name, column.source, column.template_index) for column in body.columns]
+        return output_format_body(output_formats().define(columns))
 
     @app.delete("/output-format", status_code=204)
     def delete_output_format() -> Response:

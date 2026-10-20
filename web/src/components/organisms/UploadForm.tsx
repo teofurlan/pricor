@@ -8,8 +8,6 @@ interface Props {
   busy: boolean;
   onSubmit(input: CreateImportInput): void;
   onInspectSheets?(file: File): Promise<string[]>;
-  /** The confirmed template the export will follow; null for Pricor's standard columns. */
-  exportFormat?: string | null;
 }
 
 function formatFileSize(bytes: number): string {
@@ -18,7 +16,7 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function UploadForm({ busy, onSubmit, onInspectSheets, exportFormat = null }: Props) {
+export function UploadForm({ busy, onSubmit, onInspectSheets }: Props) {
   const { t, language: interfaceLanguage } = useI18n();
   const [supplierName, setSupplierName] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -195,7 +193,6 @@ export function UploadForm({ busy, onSubmit, onInspectSheets, exportFormat = nul
           </span>
         </div>
       </div>
-      <p className="hint upload__format">{exportFormat ? t("format.inUse", { name: exportFormat }) : t("format.inUseStandard")}</p>
       <Button
         type="submit"
         variant="primary"

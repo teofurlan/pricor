@@ -126,3 +126,41 @@ def test_explicit_sheet_selection_and_single_column(manager, tmp_path):
     book.save(path)
     result = manager.upload(path, "Chosen")
     assert [(c.name, c.samples) for c in result.columns] == [("My only field", ("sample",))]
+
+
+def test_define_by_hand_confirms_exactly_those_columns_in_order(manager):
+    result = manager.define([("Código", "field:supplier_code", None), ("Rubro", "constant:Ferretería", None), ("Nota", "empty", None)])
+    assert result.state == "confirmed"
+    assert result.name == ""
+    assert [(c.index, c.name, c.source, c.samples) for c in result.columns] == [
+        (0, "Código", "field:supplier_code", ()),
+        (1, "Rubro", "constant:Ferretería", ()),
+        (2, "Nota", "empty", ()),
+    ]
+    assert all(c.proposal.proposed_by == "user" and c.proposal.confidence == 1.0 for c in result.columns)
+    assert manager.get() == result
+
+
+def test_define_keeps_template_samples_for_linked_columns_and_allows_renames(manager, tmp_path):
+    uploaded = manager.upload(template(tmp_path))
+    result = manager.define([("Extra", "empty", None), ("Code", "field:supplier_code", 0)])
+    assert result.name == uploaded.name
+    assert [c.name for c in result.columns] == ["Extra", "Code"]
+    assert result.columns[0].samples == ()
+    assert result.columns[1].samples == uploaded.columns[0].samples
+    assert result.columns[1].proposal == uploaded.columns[0].proposal
+
+
+@pytest.mark.parametrize("columns, message", [
+    ([], "at least one column"),
+    ([("  ", "empty", None)], "name"),
+    ([("A" * 101, "empty", None)], "name"),
+    ([("SKU", "empty", None), ("sku ", "empty", None)], "unique"),
+    ([("SKU", "field:nope", None)], "source"),
+    ([("SKU", "empty", 7)], "template column"),
+])
+def test_define_rejects_invalid_columns_and_keeps_the_stored_format(manager, columns, message):
+    stored = manager.define([("SKU", "field:supplier_code", None)])
+    with pytest.raises(InvalidInputError, match=message):
+        manager.define(columns)
+    assert manager.get() == stored

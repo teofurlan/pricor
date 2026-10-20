@@ -99,9 +99,17 @@ An empty file returns 422. The optional `sheet` selects a workbook sheet.
   order. A wrong count, unknown field or invalid constant returns 422 without
   changing the saved format; no saved format returns 404. Fixed text must be
   non-blank and 1–200 characters; it is preserved verbatim.
+- `PUT /output-format` saves a column list the user defined, already confirmed:
+  `{"columns": [{"name": "SKU", "source": "field:supplier_code", "template_index": 0}]}`.
+  The products file then has exactly these columns, in this order; every other
+  field is left out. Names are required, at most 100 characters and unique
+  ignoring case. `template_index` (optional) links a column to a column of the
+  saved template so it keeps its samples and proposal; columns added by hand
+  have none and `proposed_by: "user"`. An invalid list returns 422 without
+  changing the saved format. A list with no template column has an empty `name`.
 - `DELETE /output-format` removes the format and returns 204.
 
-POST, GET and PUT return the same shape:
+POST, GET and both PUTs return the same shape:
 
 ```json
 {

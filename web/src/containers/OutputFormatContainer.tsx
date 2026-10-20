@@ -2,19 +2,23 @@ import { useEffect, useState } from "react";
 import { ApiError, type OutputFormatApiClient } from "../api/client";
 import type { OutputFormat } from "../api/types";
 import { OutputFormatPanel } from "../components/organisms/OutputFormatPanel";
-import { SideDrawer } from "../components/organisms/SideDrawer";
-import { useI18n } from "../i18n";
+
+/**
+ * The product file's fields, in file order, mirroring the server's `OUTPUT_FIELDS`. The server
+ * sends them with a stored format; they are needed here only while there is none.
+ */
+export const OUTPUT_FIELDS = [
+  "supplier_code", "description", "unit_cost_net", "currency", "vat_rate", "units_per_pack", "barcode",
+  "suggested_retail_price", "unit_cost_net_converted", "fx_rate", "fx_source", "fx_date", "source_row",
+];
 
 interface Props {
   api: OutputFormatApiClient;
-  open: boolean;
-  onClose(): void;
   /** The stored format after every load or change; null when the standard format applies. */
   onChange?(format: OutputFormat | null): void;
 }
 
-export function OutputFormatContainer({ api, open, onClose, onChange }: Props) {
-  const { t } = useI18n();
+export function OutputFormatContainer({ api, onChange }: Props) {
   const [format, setFormat] = useState<OutputFormat | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -35,7 +39,7 @@ export function OutputFormatContainer({ api, open, onClose, onChange }: Props) {
       .catch((failure: unknown) => { if (active) setError(message(failure)); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-    // The API instance is stable for the app lifetime; the format is loaded once.
+    // The API instance is stable for the app lifetime; the format is loaded once per mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api]);
 
@@ -52,16 +56,15 @@ export function OutputFormatContainer({ api, open, onClose, onChange }: Props) {
   }
 
   return (
-    <SideDrawer open={open} label={t("format.title")} closeLabel={t("format.close")} onClose={onClose} className="format-drawer">
-      <OutputFormatPanel
-        format={format}
-        loading={loading}
-        busy={busy}
-        error={error}
-        onUpload={(file) => void change(() => api.uploadOutputFormat(file))}
-        onConfirm={(sources) => void change(() => api.confirmOutputFormat(sources))}
-        onRemove={() => void change(async () => { await api.deleteOutputFormat(); return null; })}
-      />
-    </SideDrawer>
+    <OutputFormatPanel
+      format={format}
+      loading={loading}
+      busy={busy}
+      error={error}
+      fields={OUTPUT_FIELDS}
+      onUpload={(file) => void change(() => api.uploadOutputFormat(file))}
+      onSave={(columns) => void change(() => api.defineOutputFormat(columns))}
+      onRemove={() => void change(async () => { await api.deleteOutputFormat(); return null; })}
+    />
   );
 }

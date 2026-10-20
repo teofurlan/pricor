@@ -279,25 +279,26 @@ describe("ImportWizard", () => {
     expect(api.report).toHaveBeenCalledWith("s1", undefined);
   });
 
-  it("says which format the export will use, and opens the output format panel", async () => {
+  it("shows the products file columns beside the upload form, without opening a panel", async () => {
     const template = {
       name: "mi-sistema.xlsx", state: "confirmed" as const, fields: ["supplier_code"],
       columns: [{ index: 0, name: "Código", samples: [], proposal: { source: "field:supplier_code", proposed_by: "gemma" as const, confidence: 0.9 }, source: "field:supplier_code" }],
     };
     const formatApi = {
       getOutputFormat: vi.fn().mockResolvedValue(template),
-      uploadOutputFormat: vi.fn(), confirmOutputFormat: vi.fn(), deleteOutputFormat: vi.fn(),
+      uploadOutputFormat: vi.fn(), confirmOutputFormat: vi.fn(), defineOutputFormat: vi.fn(), deleteOutputFormat: vi.fn(),
     };
     renderWithI18n(<ImportWizard api={{ ...fakeApi(), ...formatApi }} />);
-    expect(await screen.findByText("Export format: mi-sistema.xlsx")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Output format" }));
-    expect(await screen.findByRole("complementary", { name: "Output format" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Products file columns" })).toBeInTheDocument();
+    expect(await screen.findByText("In use: the products file has exactly these columns, in this order.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Price list file")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Output format" })).toBeNull();
   });
 
-  it("uses the standard export format when no template is confirmed", async () => {
+  it("has no columns panel when the server offers no output format", async () => {
     renderWithI18n(<ImportWizard api={fakeApi()} />);
-    expect(await screen.findByText("Export format: Pricor standard")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Output format" })).toBeNull();
+    expect(await screen.findByLabelText("Price list file")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Products file columns" })).toBeNull();
   });
 
   it("previews both approved files, and only after the user signs", async () => {

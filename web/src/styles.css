@@ -524,16 +524,31 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
 .download__format:hover { background: var(--ground); border-color: var(--ink); }
 .download__format:active { transform: translateY(1px); box-shadow: 0 1px 0 var(--muted); }
 .output-sheet { margin-top: 8px; }
-/* The output-format panel needs room for a table; it is wider than the notes drawer. */
-.drawer.format-drawer { width: min(720px, 100vw); }
+/* Step 1: the price-list form on the left, the products file columns on the right. */
+.upload-step { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 440px); gap: 40px; align-items: start; min-width: 0; }
+.upload-step .upload { max-width: none; }
+.upload-step .output-format { padding-left: 32px; border-left: 1px solid var(--rule); }
 .output-format__upload { display: grid; gap: 7px; }
 .output-format__upload .button { justify-self: start; }
 .output-format__state { font-size: 0.875rem; font-weight: 600; padding-block: 10px; border-block: 1px solid var(--rule); }
-.output-format__state--proposed { color: var(--muted); }
-.table--format select { min-width: 14ch; font-size: 0.8125rem; padding: 8px; }
+.output-format__state--proposed, .output-format__state--standard { color: var(--muted); }
+.output-format__columns { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+.output-format__column { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding-block: 12px; border-bottom: 1px dashed var(--rule); }
+.output-format__position { padding-top: 9px; font: 600 0.75rem var(--figures); color: var(--muted); font-variant-numeric: tabular-nums; }
+.output-format__fields { display: grid; gap: 6px; min-width: 0; }
+.output-format__fields input, .output-format__fields select { width: 100%; font-size: 0.8125rem; padding: 8px; }
+.output-format__name { font-weight: 600; }
 .output-format__source { display: grid; gap: 6px; }
-.output-format__source input { font-size: 0.8125rem; padding: 8px; }
-.upload__format { margin-top: -4px; }
+.output-format__meta { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 0.75rem; color: var(--muted); }
+.output-format__meta .cell__samples { margin-top: 0; }
+.output-format__issue { font-size: 0.8125rem; color: var(--red); }
+.output-format input[aria-invalid="true"] { border-color: var(--red); }
+.output-format__keys { display: flex; gap: 4px; padding-top: 3px; }
+.output-format__add { justify-self: start; }
+.icon-key { display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--muted); border-radius: 3px; background: var(--paper); box-shadow: 0 2px 0 var(--muted); font: 600 0.875rem var(--figures); color: var(--ink); cursor: pointer; }
+.icon-key:hover:not(:disabled) { background: var(--ground); border-color: var(--ink); }
+.icon-key:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 1px 0 var(--muted); }
+.icon-key:disabled { color: var(--rule); border-color: var(--rule); box-shadow: none; cursor: not-allowed; }
 .table--sheet th, .table--sheet td { white-space: nowrap; font-family: var(--figures); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
 .table--sheet thead th { text-transform: none; letter-spacing: 0; }
 
@@ -598,6 +613,8 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
   .masthead__promise { max-width: none; white-space: nowrap; }
 }
 @media (max-width: 1140px) {
+  .upload-step { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  .upload-step .output-format { padding-left: 0; border-left: 0; padding-top: 24px; border-top: 1px solid var(--rule); }
   .shell { padding-inline: 24px; }
   .layout { grid-template-columns: 120px minmax(0, 1fr); gap: 24px; }
   .question__options { grid-template-columns: 1fr; }
@@ -664,7 +681,6 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
   .downloads { max-width: none; }
   .drawer { position: static; width: 100%; padding: 24px 0; border-left: 0; border-bottom: 1px solid var(--ink); box-shadow: none; transform: none; transition: none; }
   .drawer--closing { display: none; }
-  .drawer.format-drawer { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }

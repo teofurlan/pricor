@@ -106,3 +106,21 @@ def test_real_wiring_supplies_persistent_manager(tmp_path):
     client = TestClient(create_app(dependencies))
     # Avoid a live model call in this wiring test; manager fallbacks are covered separately.
     assert client.get("/output-format").status_code == 404
+
+
+def test_hand_defined_columns_shape_the_products_file(api):
+    client, flow = api
+    response = client.put("/output-format", json={"columns": [
+        {"name": "Nota", "source": "constant:x"},
+        {"name": "SKU", "source": "field:supplier_code", "template_index": None},
+    ]})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["state"] == "confirmed" and body["name"] == ""
+    assert [(c["name"], c["source"]) for c in body["columns"]] == [("Nota", "constant:x"), ("SKU", "field:supplier_code")]
+    session = flow.approved()
+    assert client.get(f"/imports/{session.id}/export").content.startswith(b"\xef\xbb\xbfNota,SKU\r\n")
+    refused = client.put("/output-format", json={"columns": [{"name": "A", "source": "empty"}, {"name": "a", "source": "empty"}]})
+    assert refused.status_code == 422
+    assert client.get("/output-format").json() == body
+    assert client.put("/output-format", json={"columns": [{"name": "A", "source": "empty", "x": 1}]}).status_code == 422

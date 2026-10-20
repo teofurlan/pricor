@@ -13,10 +13,14 @@ from pricor.ports.output_format import (
     OutputFormatNotFoundError,
     OutputFormatProposer,
     OutputFormatStore,
+    OutputProposal,
     TemplateColumn,
     validate_source,
 )
 from pricor.ports.spreadsheet import SpreadsheetError, SpreadsheetReader
+
+MAX_COLUMNS = 200
+MAX_NAME_LENGTH = 100
 
 
 class ManageOutputFormat:
@@ -83,6 +87,41 @@ class ManageOutputFormat:
         )
         self.store.save(confirmed)
         return confirmed
+
+    def define(self, columns: Sequence[tuple[str, str, int | None]]) -> OutputFormat:
+        """Save the user's own column list, confirmed: exactly these columns, in this order.
+
+        Each column is `(name, source, template_index)`. A template index links the
+        column to a column of the stored template, keeping its samples and proposal.
+        """
+        if not 1 <= len(columns) <= MAX_COLUMNS:
+            raise InvalidInputError(f"provide at least one column and at most {MAX_COLUMNS}")
+        stored = self.store.get()
+        template = {column.index: column for column in stored.columns} if stored else {}
+        seen: set[str] = set()
+        result: list[OutputColumn] = []
+        for position, (raw_name, source, template_index) in enumerate(columns):
+            name = raw_name.strip() if isinstance(raw_name, str) else ""
+            if not 1 <= len(name) <= MAX_NAME_LENGTH:
+                raise InvalidInputError(f"every column needs a name of 1 to {MAX_NAME_LENGTH} characters")
+            if name.casefold() in seen:
+                raise InvalidInputError(f"column names must be unique; {name!r} is repeated")
+            seen.add(name.casefold())
+            try:
+                validated = validate_source(source)
+            except ValueError as error:
+                raise InvalidInputError(str(error)) from error
+            if template_index is None:
+                result.append(OutputColumn(position, name, (), OutputProposal(validated, "user", 1.0), validated))
+                continue
+            linked = template.get(template_index)
+            if linked is None:
+                raise InvalidInputError(f"there is no template column {template_index}")
+            result.append(OutputColumn(position, name, linked.samples, linked.proposal, validated))
+        linked_template = any(index is not None for _, _, index in columns)
+        defined = OutputFormat(stored.name if stored and linked_template else "", "confirmed", tuple(result))
+        self.store.save(defined)
+        return defined
 
     def delete(self) -> None:
         self.store.delete()
