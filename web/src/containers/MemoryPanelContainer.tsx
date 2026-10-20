@@ -4,6 +4,7 @@ import type { Memory } from "../api/types";
 import { MemoryPanel } from "../components/organisms/MemoryPanel";
 import { SideDrawer } from "../components/organisms/SideDrawer";
 import { useI18n } from "../i18n";
+import { describeError } from "../i18n/serverText";
 
 interface Props {
   api: MemoryApiClient;
@@ -13,7 +14,11 @@ interface Props {
 }
 
 export function MemoryPanelContainer({ api, open, onClose, onMemoriesChange }: Props) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
+  const describe = (failure: unknown) =>
+    failure instanceof ApiError
+      ? failure.status === 503 ? t("memory.unavailable") : describeError(failure, language)
+      : failure instanceof Error ? failure.message : String(failure);
   const [memories, setMemories] = useState<Memory[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -32,7 +37,7 @@ export function MemoryPanelContainer({ api, open, onClose, onMemoriesChange }: P
       })
       .catch((failure: unknown) => {
         if (!active) return;
-        setError(failure instanceof ApiError && failure.status === 503 ? t("memory.unavailable") : failure instanceof Error ? failure.message : String(failure));
+        setError(describe(failure));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -48,7 +53,7 @@ export function MemoryPanelContainer({ api, open, onClose, onMemoriesChange }: P
     try {
       publish(await action());
     } catch (failure) {
-      setError(failure instanceof ApiError && failure.status === 503 ? t("memory.unavailable") : failure instanceof Error ? failure.message : String(failure));
+      setError(describe(failure));
     } finally {
       setBusy(false);
     }

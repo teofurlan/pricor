@@ -195,6 +195,20 @@ describe("QuestionCard", () => {
     expect(screen.getByRole("radio", { name: /US dollars/ })).toBeChecked();
   });
 
+  it("explains why it asks in Spanish", () => {
+    renderWithI18n(<QuestionCard question={question({ reason: "the currency of the prices is not known" })} answer={undefined} onAnswer={vi.fn()} />, "es");
+    expect(screen.getByText("Por qué lo preguntamos: no se sabe en qué moneda están los precios")).toBeInTheDocument();
+  });
+
+  it("shows a typed value the way the interface language writes it", () => {
+    const vat = question({ id: "vat_rate", allows_custom: true });
+    const { unmount } = renderWithI18n(<QuestionCard question={vat} answer="constant:10.5" onAnswer={vi.fn()} />, "es");
+    expect(screen.getByText("Su valor: 10,5 %")).toBeInTheDocument();
+    unmount();
+    renderWithI18n(<QuestionCard question={vat} answer="constant:10.5" onAnswer={vi.fn()} />);
+    expect(screen.getByText("Your value: 10.5%")).toBeInTheDocument();
+  });
+
   it("asks in the interface language", () => {
     renderWithI18n(<QuestionCard question={question()} answer={undefined} onAnswer={vi.fn()} />, "es");
     expect(screen.getByText("¿En qué moneda están los precios?")).toBeInTheDocument();

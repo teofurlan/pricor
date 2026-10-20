@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ApiError } from "../../api/client";
 import type { AskReply, AskTurn, ColumnState, Memory, Question } from "../../api/types";
 import { useI18n } from "../../i18n";
+import { formatTypedValue } from "../../i18n/serverText";
 import { Button } from "../atoms/Button";
 import { usePendingAction } from "../atoms/usePendingAction";
 import { AskGemma } from "../molecules/AskGemma";
@@ -59,7 +60,7 @@ export function QuestionsPanel({
   function answerLabel(item: Question): string {
     const token = answers[item.id];
     const option = item.options.find((candidate) => candidate.token === token);
-    return option ? option.label[language] : t("question.custom.chosen", { value: token.replace(/^constant:/, "") });
+    return option ? option.label[language] : t("question.custom.chosen", { value: formatTypedValue(item.id, token, language) });
   }
 
   function answer(questionId: string, option: string) {

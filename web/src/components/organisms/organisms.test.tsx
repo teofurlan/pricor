@@ -223,6 +223,13 @@ describe("HeaderChoice", () => {
   });
 });
 
+describe("ColumnsTable issues", () => {
+  it("explains a column issue in Spanish", () => {
+    renderWithI18n(<ColumnsTable columns={[column()]} issues={["no column was identified as the cost price"]} busy={false} onConfirm={vi.fn()} />, "es");
+    expect(screen.getByText("ninguna columna se identificó como el precio de costo")).toBeInTheDocument();
+  });
+});
+
 describe("ColumnsTable", () => {
   const columns = [
     column({ index: 0, header: "Codigo", role: "code", decided_by: "heuristics", score: 0.95, rationale: "heuristics: code (0.95)", samples: ["A1", "A2"], proposals: [{ stage: "heuristics", role: "code", score: 0.95, rationale: "code rule" }] }),
@@ -783,6 +790,11 @@ describe("waiting keys", () => {
 });
 
 describe("ErrorBanner", () => {
+  it("says what went wrong in Spanish instead of the server's English message", () => {
+    renderWithI18n(<ErrorBanner error={new ApiError(404, "session_not_found", "session 's1' does not exist")} />, "es");
+    expect(screen.getByRole("alert")).toHaveTextContent("Esta importación ya no existe. Empiece una nueva.");
+  });
+
   it("renders nothing without an error", () => {
     renderWithI18n(<ErrorBanner error={null} />);
     expect(screen.queryByRole("alert")).toBeNull();

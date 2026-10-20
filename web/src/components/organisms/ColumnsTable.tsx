@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { COLUMN_ROLES, type ColumnRole, type ColumnState } from "../../api/types";
+import { localizeServerText } from "../../i18n/serverText";
 import { useI18n } from "../../i18n";
 import { Button } from "../atoms/Button";
 import { SamplePreview, type SampleData } from "../molecules/SamplePreview";
@@ -189,7 +190,7 @@ function RolePicker({
 }
 
 export function ColumnsTable({ columns, issues, busy, sample, onConfirm }: Props) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const pending = usePendingAction<"confirm">(busy);
   const [edits, setEdits] = useState<Record<number, ColumnRole>>({});
 
@@ -219,7 +220,7 @@ export function ColumnsTable({ columns, issues, busy, sample, onConfirm }: Props
       {issues.length > 0 && (
         <ul className="issues">
           {issues.map((issue) => (
-            <li key={issue}>{issue}</li>
+            <li key={issue}>{localizeServerText(issue, language)}</li>
           ))}
         </ul>
       )}

@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import type { Memory, Question } from "../../api/types";
 import { useI18n } from "../../i18n";
+import { formatTypedValue, localizeServerText } from "../../i18n/serverText";
 import { Button } from "../atoms/Button";
 import { SuggestionBadge } from "./SuggestionBadge";
 import { MemoryCitation } from "./MemoryCitation";
@@ -42,7 +43,7 @@ export function QuestionCard({ question, answer, onAnswer, disabled = false, mem
   const [custom, setCustom] = useState("");
   const customId = useId();
   const listed = question.options.some((option) => option.token === answer);
-  const customAnswer = answer !== undefined && !listed ? answer.replace(/^constant:/, "") : null;
+  const customAnswer = answer !== undefined && !listed ? formatTypedValue(question.id, answer, language) : null;
   const suggestionAccepted = acceptedModelSuggestion(question, answer);
   const token = customToken(question.id, custom);
   const customInvalid = custom.trim() !== "" && token === null;
@@ -50,7 +51,7 @@ export function QuestionCard({ question, answer, onAnswer, disabled = false, mem
   return (
     <fieldset className="question" disabled={disabled}>
       <legend className="question__text">{question.text[language]}</legend>
-      <p className="question__reason">{t("question.reason", { reason: question.reason })}</p>
+      <p className="question__reason">{t("question.reason", { reason: localizeServerText(question.reason, language) })}</p>
       {question.model_phrasing && <p className="question__phrasing">{question.model_phrasing}</p>}
       <div className="question__options">
         {question.options.map((option) => {

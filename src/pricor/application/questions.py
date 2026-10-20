@@ -42,7 +42,12 @@ def _yes_no(yes: LocalizedText, no: LocalizedText) -> tuple[Option, ...]:
 
 def _constants(values: Sequence[str], suffix: str = "") -> tuple[Option, ...]:
     return tuple(
-        Option(f"constant:{value}", _text(f"{value}{suffix}", f"{value}{suffix}")) for value in values
+        # Spanish writes a decimal comma and spaces the percent sign: "10,5 %".
+        Option(
+            f"constant:{value}",
+            _text(f"{value}{suffix}", value.replace(".", ",") + (f" {suffix}" if suffix else "")),
+        )
+        for value in values
     )
 
 

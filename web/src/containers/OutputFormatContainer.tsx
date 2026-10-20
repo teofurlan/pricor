@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { ApiError, type OutputFormatApiClient } from "../api/client";
 import type { OutputFormat } from "../api/types";
 import { OutputFormatPanel } from "../components/organisms/OutputFormatPanel";
+import { useI18n } from "../i18n";
+import { describeError } from "../i18n/serverText";
 
 /**
  * The product file's fields, in file order, mirroring the server's `OUTPUT_FIELDS`. The server
@@ -29,8 +31,9 @@ export function OutputFormatContainer({ api, onChange }: Props) {
     onChange?.(next);
   }
 
+  const { language } = useI18n();
   const message = (failure: unknown) =>
-    failure instanceof ApiError || failure instanceof Error ? failure.message : String(failure);
+    failure instanceof ApiError ? describeError(failure, language) : failure instanceof Error ? failure.message : String(failure);
 
   useEffect(() => {
     let active = true;
