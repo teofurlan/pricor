@@ -135,7 +135,8 @@ the existing exact number/text and formula-safety rules. Unavailable optional
 fields and `empty` sources yield empty cells; fixed values are text. Without a
 confirmed format, exports use the unchanged standard format. Uploading a new
 template returns exports to that standard format until confirmation; deleting
-also restores it. Rejected-row downloads and the XLSX rejected sheet never change.
+also restores it. An approved import keeps the layout that was in force when it was
+approved: changing or removing the format later never changes its downloads. Rejected-row downloads and the XLSX rejected sheet never change.
 The format persists in SQLite through migration 4; earlier migrations are unchanged.
 
 ### Models (Ollama)

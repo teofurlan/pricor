@@ -52,6 +52,7 @@ from pricor.ports.import_session import (
 from pricor.ports.approval_unit_of_work import ApprovalUnitOfWork
 from pricor.ports.import_session_repository import ImportSessionRepository
 from pricor.ports.model_errors import ModelError, ModelTimeoutError, ModelUnavailableError
+from pricor.ports.output_format import OutputFormatStore
 from pricor.ports.plan_advisor import ParameterId, PlanAdvisor, parse_value, with_answer
 from pricor.ports.price_history import ImportedRecord
 from pricor.ports.question_model import Suggestion
@@ -108,6 +109,7 @@ class ImportFirstTime:
         default_fx_rate_type: str = "oficial",
         memory: ManageMemory | None = None,
         memory_top_k: int = 3,
+        output_formats: OutputFormatStore | None = None,
     ):
         self._reader = reader
         self._repository = repository
@@ -120,6 +122,7 @@ class ImportFirstTime:
         self._default_fx_rate_type = default_fx_rate_type
         self._memory = memory
         self._memory_top_k = memory_top_k
+        self._output_formats = output_formats
 
     # -- operations ------------------------------------------------------------
 
@@ -269,6 +272,11 @@ class ImportFirstTime:
         session.approved_plan = session.plan
         session.approved_result = result
         session.approved = True
+        if self._output_formats is not None:
+            # The download must match what was approved, even if the layout changes later.
+            stored = self._output_formats.get()
+            session.approved_output_format = stored if stored and stored.state == "confirmed" else None
+            session.output_format_frozen = True
         try:
             self._persist_approval(session, result)
         except BaseException:
@@ -277,6 +285,8 @@ class ImportFirstTime:
             session.approved = False
             session.approved_plan = None
             session.approved_result = None
+            session.approved_output_format = None
+            session.output_format_frozen = False
             raise
         return session
 

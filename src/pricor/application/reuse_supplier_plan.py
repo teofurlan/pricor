@@ -20,6 +20,7 @@ from pricor.ports.approval_unit_of_work import ApprovalUnitOfWork
 from pricor.ports.fx_rates import FxRateProvider
 from pricor.ports.import_session import ColumnDecision, ImportSession, PlanChange
 from pricor.ports.import_session_repository import ImportSessionRepository
+from pricor.ports.output_format import OutputFormatStore
 from pricor.ports.plan_advisor import ParameterId, PlanAdvisor
 from pricor.ports.plan_repository import PlanRepository, StoredPlan
 from pricor.ports.spreadsheet import SpreadsheetReader
@@ -62,6 +63,7 @@ class ReuseSupplierPlan(ImportFirstTime):
         default_fx_rate_type: str = "oficial",
         memory: ManageMemory | None = None,
         memory_top_k: int = 3,
+        output_formats: OutputFormatStore | None = None,
     ):
         extra = {}
         if id_factory is not None:
@@ -78,6 +80,7 @@ class ReuseSupplierPlan(ImportFirstTime):
             default_fx_rate_type=default_fx_rate_type,
             memory=memory,
             memory_top_k=memory_top_k,
+            output_formats=output_formats,
             **extra,
         )
         self._plans = plans

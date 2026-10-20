@@ -11,6 +11,7 @@ from pricor.domain.fx import FxSnapshot
 from pricor.domain.plan import ConvertCurrency, ImportPlan
 from pricor.domain.profile import SheetProfile
 from pricor.domain.roles import ColumnRole
+from pricor.ports.output_format import OutputFormat
 from pricor.ports.plan_advisor import ParameterId, PlanProposal
 
 
@@ -141,6 +142,11 @@ class ImportSession:
     changes: tuple[PlanChange, ...] = ()
     fx_snapshot: FxSnapshot | None = None  # the exchange rate of this run
     fx_error: str | None = None  # why no rate could be obtained automatically
+    # The products layout in force at approval (None: Pricor's standard columns). Sessions
+    # approved before layouts were frozen have `output_format_frozen` False and follow the
+    # store-wide layout, as they always did.
+    approved_output_format: OutputFormat | None = None
+    output_format_frozen: bool = False
 
     @property
     def conversion(self) -> ConvertCurrency | None:

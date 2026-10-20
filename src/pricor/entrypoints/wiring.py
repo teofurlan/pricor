@@ -200,6 +200,7 @@ def dependencies_from_env(env: Mapping[str, str]) -> ApiDependencies:
         default_fx_rate_type=rate_type,
         memory=memory,
         memory_top_k=memory_top_k,
+        output_formats=database.output_format,
     )
     reports = ReportPriceChanges(use_case.get, database.history, ReportCsvExporter())
     return ApiDependencies(

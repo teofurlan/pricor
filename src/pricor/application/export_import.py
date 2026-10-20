@@ -1,7 +1,8 @@
 """`ExportImport`: renders an approved import as files.
 
 Only an approved session can be exported: the files are built from the frozen
-`approved_result`, so they always match what the user approved.
+`approved_result` and the products layout in force at approval, so they always
+match what the user approved.
 """
 
 import re
@@ -49,7 +50,10 @@ class ExportImport:
 
     def products(self, session_id: str, format: str) -> ExportedFile:
         exporter, session = self._resolve(session_id, format)
-        output_format = self._output_format.get() if self._output_format else None
+        if session.output_format_frozen:
+            output_format = session.approved_output_format
+        else:  # approved before layouts were frozen: the store-wide layout, as before
+            output_format = self._output_format.get() if self._output_format else None
         view = self._view(session)
         if output_format is not None and output_format.state == "confirmed":
             content = cast(OutputFormatExporter, exporter).export_formatted(view, output_format)
