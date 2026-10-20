@@ -119,4 +119,25 @@ describe("ImportWizard: currency conversion", () => {
     expect(api.refreshRate).toHaveBeenCalledWith("s1");
     expect(await screen.findByText("1 USD = 1535 ARS")).toBeInTheDocument();
   });
+
+  it("reloads the preview after the rate is changed on the preview step", async () => {
+    const page = (converted: string) => previewPage({
+      items: [previewItem({ record: { supplier_code: "A2", description: "x", unit_cost_net: "2.50", currency: "USD", unit_cost_net_converted: converted } })],
+    });
+    const retyped = session({ ...ready, fx: fxState({ snapshot: { ...ready.fx!.snapshot!, rate: "1500" } }) });
+    const api = fakeApi({
+      createImport: vi.fn().mockResolvedValue(ready),
+      setManualRate: vi.fn().mockResolvedValue(retyped),
+      preview: vi.fn().mockResolvedValueOnce(page("3551.25")).mockResolvedValue(page("3750.00")),
+    });
+    renderWithI18n(<ImportWizard api={api} />);
+    await startImport(); // a ready import goes straight to the preview
+    expect(await screen.findByText("3551.25 ARS")).toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText("Rate typed by you (USD to ARS)"), "1500");
+    await userEvent.click(screen.getByRole("button", { name: "Use this rate" }));
+    expect(await screen.findByText("3750.00 ARS")).toBeInTheDocument();
+    expect(screen.queryByText("3551.25 ARS")).toBeNull();
+  });
 });
+

@@ -50,6 +50,29 @@ const ready: SessionState = session({ status: "ready_for_preview", answers: { cu
 const approved: SessionState = { ...ready, status: "approved", approved: true };
 
 describe("ImportWizard", () => {
+  it("reloads the preview when an answer changes after the import was ready", async () => {
+    const vat = question({ id: "vat_rate", allows_custom: true, options: [
+      { token: "constant:21", label: { en: "21%", es: "21%" } },
+      { token: "constant:10.5", label: { en: "10.5%", es: "10,5%" } },
+    ] });
+    const at21 = session({ status: "ready_for_preview", questions: [vat], answers: { vat_rate: "constant:21" } });
+    const at105 = session({ status: "ready_for_preview", questions: [vat], answers: { vat_rate: "constant:10.5" } });
+    const api = fakeApi({
+      createImport: vi.fn().mockResolvedValue(at21),
+      answer: vi.fn().mockResolvedValue(at105),
+      preview: vi.fn().mockResolvedValue(previewPage()),
+    });
+    renderWithI18n(<ImportWizard api={api} />);
+    await startImport();
+    await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
+    await waitFor(() => expect(api.preview).toHaveBeenCalledTimes(1));
+    await userEvent.click(screen.getByRole("button", { name: /Questions/ })); // back from the preview
+    await userEvent.click(await screen.findByRole("button", { name: "Change" }));
+
+    await userEvent.click(await screen.findByRole("radio", { name: "10.5%" }));
+    await waitFor(() => expect(api.preview).toHaveBeenCalledTimes(2));
+  });
+
   it("drops an answer the server refuses instead of showing it as chosen", async () => {
     const vat = question({ id: "vat_rate", allows_custom: true, options: [{ token: "constant:21", label: { en: "21%", es: "21%" } }] });
     const api = fakeApi({

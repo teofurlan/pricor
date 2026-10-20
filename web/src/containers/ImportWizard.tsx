@@ -108,7 +108,11 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   const previewEnabled =
     session !== null &&
     (step === "preview" || step === "approve" || (step === "questions" && session.status === "ready_for_preview"));
-  const preview = usePreview(api, session?.id ?? null, previewEnabled);
+  // Everything the server uses to compute the preview; when it changes, the preview is stale.
+  const planRevision = session
+    ? JSON.stringify([session.header.row_index, session.columns.map((item) => item.role), session.answers, session.fx?.snapshot])
+    : "";
+  const preview = usePreview(api, session?.id ?? null, previewEnabled, planRevision);
 
   const finalCosts = preview.page?.items
     ? preview.page.items
