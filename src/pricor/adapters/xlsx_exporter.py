@@ -17,6 +17,7 @@ from openpyxl.styles import Font
 from openpyxl.worksheet.worksheet import Worksheet
 
 from pricor.adapters.export_common import (
+    formatted_product_values,
     has_conversion,
     product_columns,
     product_values,
@@ -24,6 +25,7 @@ from pricor.adapters.export_common import (
     rejected_width,
 )
 from pricor.ports.exporter import ImportExport
+from pricor.ports.output_format import OutputFormat
 
 PRODUCTS_SHEET = "Products"
 REJECTED_SHEET = "Rejected rows"
@@ -55,16 +57,19 @@ def _header(sheet: Worksheet, names: list[str]) -> None:
     sheet.freeze_panes = "A2"
 
 
-def _products(sheet: Worksheet, data: ImportExport) -> None:
-    names = product_columns(data)
+def _products(sheet: Worksheet, data: ImportExport, output_format: OutputFormat | None = None) -> None:
+    names = tuple(c.name for c in output_format.columns) if output_format else product_columns(data)
     converted = has_conversion(data)
     _header(sheet, list(names))
     for row, item in enumerate(data.accepted, start=2):
-        values = product_values(item.row_number, item.record, converted)
+        values = (
+            formatted_product_values(item.row_number, item.record, output_format)
+            if output_format else product_values(item.row_number, item.record, converted)
+        )
         for column, (name, value) in enumerate(zip(names, values, strict=True), start=1):
             if value is None:
                 continue
-            if name in _TEXT_COLUMNS:
+            if (isinstance(value, str) if output_format else name in _TEXT_COLUMNS):
                 _set_text(sheet, row, column, value)
             else:
                 _set_number(sheet, row, column, value)
@@ -97,6 +102,16 @@ class XlsxExporter:
         products = book.active
         products.title = PRODUCTS_SHEET
         _products(products, data)
+        _rejected(book.create_sheet(REJECTED_SHEET), data)
+        return _save(book)
+
+    def export_formatted(self, data: ImportExport, output_format: OutputFormat) -> bytes:
+        if output_format.state != "confirmed":
+            return self.export(data)
+        book = Workbook()
+        products = book.active
+        products.title = PRODUCTS_SHEET
+        _products(products, data, output_format)
         _rejected(book.create_sheet(REJECTED_SHEET), data)
         return _save(book)
 

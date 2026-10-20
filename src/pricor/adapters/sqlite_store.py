@@ -18,6 +18,7 @@ import sqlite3
 import threading
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
+from dataclasses import asdict
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -29,6 +30,7 @@ from pricor.domain.parsing import lookup_key
 from pricor.domain.plan import ImportPlan, parse_plan, plan_to_dict
 from pricor.ports.fx_rates import CachedQuote
 from pricor.ports.import_session import ImportSession
+from pricor.ports.output_format import OutputColumn, OutputFormat, OutputProposal
 from pricor.ports.import_session_repository import SessionNotFoundError
 from pricor.ports.plan_repository import ColumnFingerprint, SheetFingerprint, StoredPlan
 from pricor.ports.price_history import (
@@ -134,6 +136,15 @@ MIGRATIONS: tuple[Migration, ...] = (
             )""",
         ],
     ),
+    (
+        4,
+        [
+            """create table output_format (
+                id integer primary key check (id = 1),
+                data text not null
+            )""",
+        ],
+    ),
 )
 
 
@@ -163,6 +174,7 @@ class SqliteDatabase:
         self.plans = SqlitePlanRepository(self)
         self.history = SqlitePriceHistory(self)
         self.fx_quotes = SqliteFxQuoteCache(self)
+        self.output_format = SqliteOutputFormatStore(self)
 
     def close(self) -> None:
         with self._lock:
@@ -223,6 +235,40 @@ class SqliteDatabase:
                     "insert into schema_version (version, applied_at) values (?, ?)",
                     (version, _now()),
                 )
+
+
+# -- store-wide output format -------------------------------------------------------
+
+
+class SqliteOutputFormatStore:
+    def __init__(self, database: SqliteDatabase):
+        self._db = database
+
+    def get(self) -> OutputFormat | None:
+        with self._db.transaction() as connection:
+            row = connection.execute("select data from output_format where id = 1").fetchone()
+        if row is None:
+            return None
+        data = json.loads(row[0])
+        return OutputFormat(data["name"], data["state"], tuple(
+            OutputColumn(
+                column["index"], column["name"], tuple(column["samples"]),
+                OutputProposal(**column["proposal"]), column["source"],
+            )
+            for column in data["columns"]
+        ))
+
+    def save(self, output_format: OutputFormat) -> None:
+        with self._db.transaction() as connection:
+            connection.execute(
+                "insert into output_format (id, data) values (1, ?) "
+                "on conflict(id) do update set data = excluded.data",
+                (json.dumps(asdict(output_format), ensure_ascii=False),),
+            )
+
+    def delete(self) -> None:
+        with self._db.transaction() as connection:
+            connection.execute("delete from output_format where id = 1")
 
 
 # -- sessions -----------------------------------------------------------------------

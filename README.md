@@ -83,6 +83,53 @@ Once a session is approved, `GET /imports/{id}/export?format=csv|xlsx` returns t
 - XLSX: sheets `Products` and `Rejected rows` (the standalone rejected report has only the second one). Codes, barcodes and original cells are text cells; prices and rates are numeric cells. A number with more than 15 significant digits is written as text instead of being rounded.
 - Text that spreadsheet software could run as a formula (`=`, `+`, `-`, `@` at the start) is stored as text in XLSX and prefixed with `'` in CSV; plain numbers such as `-123` are left alone.
 
+### Output format from a template
+
+Upload a CSV/XLS/XLSX template to define the products file your store needs.
+There is one format for the whole store, shared by all suppliers and imports.
+The first non-empty row supplies the column names, in their original order;
+blank names become `Column N` (1-based). Up to five following rows are samples.
+An empty file returns 422. The optional `sheet` selects a workbook sheet.
+
+- `POST /output-format` (multipart `file`, optional `sheet`) returns 201 and
+  **replaces** the saved template in `proposed` state. It is not active yet.
+- `GET /output-format` returns 200 with the saved format, or 404 if absent.
+- `PUT /output-format/mapping` confirms every column with
+  `{"sources": ["field:supplier_code", "empty", "constant:My store"]}` in column
+  order. A wrong count, unknown field or invalid constant returns 422 without
+  changing the saved format; no saved format returns 404. Fixed text must be
+  non-blank and 1–200 characters; it is preserved verbatim.
+- `DELETE /output-format` removes the format and returns 204.
+
+POST, GET and PUT return the same shape:
+
+```json
+{
+  "name": "template.xlsx",
+  "state": "proposed",
+  "fields": ["supplier_code", "description", "unit_cost_net", "currency", "vat_rate", "units_per_pack", "barcode", "suggested_retail_price", "unit_cost_net_converted", "fx_rate", "fx_source", "fx_date", "source_row"],
+  "columns": [{"index": 0, "name": "SKU", "samples": ["001"], "proposal": {"source": "field:supplier_code", "proposed_by": "gemma", "confidence": 0.8}, "source": null}]
+}
+```
+
+Each source is `field:<name>` from `fields`, `empty`, or `constant:<text>`.
+Gemma proposes a source with structured output checked against this closed list;
+invalid replies or an unavailable Gemma fall back to deterministic header
+heuristics (`proposed_by: "heuristics"`; unmatched names propose `empty`).
+Confidence is an uncalibrated estimate, not a measured probability. The model
+never executes anything or activates a mapping: review every column, enter or
+edit fixed values, then confirm. A field may feed more than one output column.
+After confirmation, `state` is `confirmed` and each column's `source` holds its
+confirmed value; proposals remain visible for comparison.
+
+A confirmed format changes only product CSV/XLSX columns, names and order, using
+the existing exact number/text and formula-safety rules. Unavailable optional
+fields and `empty` sources yield empty cells; fixed values are text. Without a
+confirmed format, exports use the unchanged standard format. Uploading a new
+template returns exports to that standard format until confirmation; deleting
+also restores it. Rejected-row downloads and the XLSX rejected sheet never change.
+The format persists in SQLite through migration 4; earlier migrations are unchanged.
+
 ### Models (Ollama)
 
 Column classification and question suggestions use Gemma through a local [Ollama](https://ollama.com) server. Settings:

@@ -14,6 +14,8 @@ from pricor.ports.exporter import (
     ImportExport,
 )
 
+from pricor.ports.output_format import OUTPUT_FIELDS, OutputFormat
+
 _BOM = b"\xef\xbb\xbf"
 _CRLF = "\r\n"
 _FORMULA_STARTS = ("=", "+", "-", "@", "\t", "\r")
@@ -89,6 +91,27 @@ def product_values(
         row_number,
     ]
 
+
+
+def formatted_product_values(
+    row_number: int, record: ContractRecord, output_format: OutputFormat
+) -> list[object]:
+    """Project already-computed values, never interpret source text as code."""
+    fields = dict(zip(OUTPUT_FIELDS, product_values(row_number, record, converted=True), strict=True))
+    values = []
+    for column in output_format.columns:
+        source = column.source
+        if source is None:
+            raise ValueError("output format has an unconfirmed source")
+        if source == "empty":
+            values.append(None)
+        elif source.startswith("field:"):
+            values.append(fields[source.removeprefix("field:")])
+        elif source.startswith("constant:"):
+            values.append(source.removeprefix("constant:"))
+        else:
+            raise ValueError("output format has an invalid source")
+    return values
 
 
 def csv_cell(value: object) -> str:

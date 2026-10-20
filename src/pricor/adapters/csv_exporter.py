@@ -13,6 +13,7 @@ Text that a spreadsheet would run as a formula is neutralized (see `neutralize`)
 
 from pricor.adapters.export_common import (
     csv_bytes,
+    formatted_product_values,
     has_conversion,
     product_columns,
     product_values,
@@ -20,6 +21,7 @@ from pricor.adapters.export_common import (
     rejected_width,
 )
 from pricor.ports.exporter import ImportExport
+from pricor.ports.output_format import OutputFormat
 
 
 class CsvExporter:
@@ -34,6 +36,12 @@ class CsvExporter:
         converted = has_conversion(data)
         rows = (product_values(item.row_number, item.record, converted) for item in data.accepted)
         return csv_bytes(product_columns(data), rows, self.delimiter)
+
+    def export_formatted(self, data: ImportExport, output_format: OutputFormat) -> bytes:
+        if output_format.state != "confirmed":
+            return self.export(data)
+        rows = (formatted_product_values(item.row_number, item.record, output_format) for item in data.accepted)
+        return csv_bytes((column.name for column in output_format.columns), rows, self.delimiter)
 
     def export_rejected(self, data: ImportExport) -> bytes:
         width = rejected_width(data)

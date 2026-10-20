@@ -262,6 +262,27 @@ describe("ImportWizard", () => {
     expect(api.report).toHaveBeenCalledWith("s1", undefined);
   });
 
+  it("says which format the export will use, and opens the output format panel", async () => {
+    const template = {
+      name: "mi-sistema.xlsx", state: "confirmed" as const, fields: ["supplier_code"],
+      columns: [{ index: 0, name: "Código", samples: [], proposal: { source: "field:supplier_code", proposed_by: "gemma" as const, confidence: 0.9 }, source: "field:supplier_code" }],
+    };
+    const formatApi = {
+      getOutputFormat: vi.fn().mockResolvedValue(template),
+      uploadOutputFormat: vi.fn(), confirmOutputFormat: vi.fn(), deleteOutputFormat: vi.fn(),
+    };
+    renderWithI18n(<ImportWizard api={{ ...fakeApi(), ...formatApi }} />);
+    expect(await screen.findByText("Export format: mi-sistema.xlsx")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Output format" }));
+    expect(await screen.findByRole("complementary", { name: "Output format" })).toBeInTheDocument();
+  });
+
+  it("uses the standard export format when no template is confirmed", async () => {
+    renderWithI18n(<ImportWizard api={fakeApi()} />);
+    expect(await screen.findByText("Export format: Pricor standard")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Output format" })).toBeNull();
+  });
+
   it("previews both approved files, and only after the user signs", async () => {
     const sheet = { header: ["supplier_code", "description"], rows: [["A1", "Bolt"]], total: 5 };
     const rejectedSheet = { header: ["source_row", "reasons"], rows: [["8", "Invalid cost"]], total: 1 };

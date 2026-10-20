@@ -14,6 +14,7 @@ from typing import Any
 
 from pricor.domain.profile import ColumnProfile
 from pricor.ports.column_classifier import ColumnClassification, ColumnRole
+from pricor.ports.output_format import OUTPUT_FIELDS, TemplateColumn
 from pricor.ports.question_helper import (
     MAX_MESSAGE_LENGTH,
     MAX_REPLY_LENGTH,
@@ -114,6 +115,28 @@ def render_data_block(
         ]
         body = f"{body}\n" + "\n".join(notes)
     return f"{DATA_BEGIN}\n{body}\n{DATA_END}"
+
+
+OUTPUT_FORMAT_SYSTEM = (
+    "Propose a source for every column of a store's output template, in column order. "
+    "Allowed field sources (closed set): "
+    + ", ".join(f"field:{name}" for name in OUTPUT_FIELDS)
+    + ". Alternatively propose empty, or constant:<text> (1–200 characters) for a fixed "
+    "value the user must enter or confirm. Do not infer an unknown field or generate code. "
+    "A field may feed multiple columns. Give each column its index, source and confidence "
+    "between 0 and 1 (an uncalibrated estimate). These are proposals only: the user must "
+    "confirm every source before it is applied. "
+    + UNTRUSTED_RULES
+)
+
+
+def render_output_format_data_block(columns: Sequence[TemplateColumn]) -> str:
+    document = {"columns": [
+        {"index": column.index, "name": defang(column.name),
+         "samples": [defang(sample) for sample in column.samples[:MAX_SAMPLES]]}
+        for column in columns
+    ]}
+    return f"{DATA_BEGIN}\n{json.dumps(document, ensure_ascii=False, indent=1)}\n{DATA_END}"
 
 
 def render_question_data_block(

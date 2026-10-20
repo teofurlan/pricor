@@ -14,6 +14,11 @@ always returned in the same shape (`id`, `status`, `header`, `columns`,
 
 Endpoints:
 
+    POST /output-format           multipart: file, [sheet] -> 201 proposed format
+    GET  /output-format           saved proposed or confirmed format (404 when absent)
+    PUT  /output-format/mapping   {"sources": ["field:supplier_code", "empty", "constant:..."]}
+                                  -> confirmed format (422 for wrong count or invalid source)
+    DELETE /output-format         remove the store-wide format -> 204
     POST /sheets                  multipart: file -> {"sheets": ["..."]}
     POST /imports                 multipart: file, supplier_name, [sheet], [language],
                                   [force_first_import]  -> 201 state
@@ -65,6 +70,17 @@ large), 415 (unsupported file type) and 422 (invalid input or unreadable file).
 Nothing a model says is ever executed: questions are deterministic and a model
 hypothesis is only a suggestion.
 
+Output templates read the first non-empty row as names (blank names become Column N)
+and up to five following rows as samples. POST replaces the saved format and leaves
+it proposed, never active until PUT confirms every column. GET, POST and PUT return
+{name, state, fields, columns: [{index, name, samples, proposal: {source,
+proposed_by, confidence}, source}]}; source is null until confirmation. Sources
+are field:<name> from fields (the complete product field list, including conversion
+and source_row), empty, or constant:<1–200 characters>. Model proposals are validated
+and fall back to header heuristics on failure; confidence is uncalibrated. Confirmed
+formats affect only product downloads, never the rejected report. Deleting the format
+or uploading an unconfirmed replacement restores the standard products format.
+
 Question help is read-only, including for answered questions: only POST /answers
 confirms an option. The message is trimmed to 1–500 characters; optional history
 contains at most 6 earlier turns of that same question, each at most 1,200
@@ -77,7 +93,7 @@ replies 503 with code model_unavailable in the same error envelope.
 import re
 import shutil
 import tempfile
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -104,6 +120,7 @@ from pricor.application.ask_about_question import AskAboutQuestion
 from pricor.application.export_import import ExportedFile, ExportImport
 from pricor.application.import_first_time import ImportFirstTime
 from pricor.application.manage_memory import InvalidMemoryTextError, ManageMemory
+from pricor.application.manage_output_format import ManageOutputFormat
 from pricor.application.questions import Question
 from pricor.application.report_price_changes import (
     ImportComparison,
@@ -116,6 +133,7 @@ from pricor.ports.import_session import ImportSession, PlanChange, PreviewPage
 from pricor.ports.import_session_repository import SessionNotFoundError
 from pricor.ports.memory import Memory, MemoryNotFoundError
 from pricor.ports.price_history import ImportSummary
+from pricor.ports.output_format import OUTPUT_FIELDS, OutputFormat, OutputFormatNotFoundError
 from pricor.ports.model_errors import ModelError
 from pricor.ports.question_helper import (
     MAX_HISTORY_TURNS,
@@ -151,6 +169,13 @@ class ApiDependencies:
     memory_top_k: int = 3  # retrieval count used by the later Gemma integration
     reader: SpreadsheetReader | None = None
     question_helper: QuestionHelper | None = None  # read-only model explanations; optional
+    output_format: ManageOutputFormat | None = None  # one persistent store-wide template
+
+
+class OutputMappingBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sources: list[Annotated[str, StringConstraints(strict=True)]]
 
 
 class HeaderBody(BaseModel):
@@ -250,6 +275,10 @@ def _change(change: PlanChange) -> dict[str, Any]:
         "old_value": change.old_value,
         "new_value": change.new_value,
     }
+
+
+def output_format_body(output_format: OutputFormat) -> dict[str, Any]:
+    return {**asdict(output_format), "fields": list(OUTPUT_FIELDS)}
 
 
 def memory_body(memory: Memory) -> dict[str, Any]:
@@ -478,6 +507,10 @@ def _install_error_handlers(app: FastAPI) -> None:
     async def not_found(_: Request, error: SessionNotFoundError) -> JSONResponse:
         return _error(404, "session_not_found", str(error))
 
+    @app.exception_handler(OutputFormatNotFoundError)
+    async def output_format_not_found(_: Request, error: OutputFormatNotFoundError) -> JSONResponse:
+        return _error(404, "output_format_not_found", str(error))
+
     @app.exception_handler(MemoryNotFoundError)
     async def memory_not_found(_: Request, error: MemoryNotFoundError) -> JSONResponse:
         return _error(404, "memory_not_found", str(error))
@@ -580,9 +613,42 @@ def create_app(dependencies: ApiDependencies) -> FastAPI:
     reader = dependencies.reader or getattr(use_case, "_reader", None)
     question_help = AskAboutQuestion(use_case.get, dependencies.question_helper)
     exports = dependencies.exports or ExportImport(
-        use_case.get, [CsvExporter(), XlsxExporter()]
+        use_case.get, [CsvExporter(), XlsxExporter()],
+        output_format=dependencies.output_format.store if dependencies.output_format else None,
     )
     _install_error_handlers(app)
+
+    def output_formats() -> ManageOutputFormat:
+        if dependencies.output_format is None:
+            raise InvalidOperationError("output format storage is not configured")
+        return dependencies.output_format
+
+    @app.post("/output-format", status_code=201)
+    def upload_output_format(
+        file: UploadFile = File(...), sheet: str | None = Form(None),
+    ) -> dict[str, Any]:
+        manager = output_formats()
+        parent = None if dependencies.upload_dir is None else str(dependencies.upload_dir)
+        directory = Path(tempfile.mkdtemp(prefix="pricor-template-", dir=parent))
+        try:
+            path = _store_upload(file, directory, dependencies.max_upload_bytes)
+            result = manager.upload(path, sheet or None, name=file.filename or path.name)
+        finally:
+            shutil.rmtree(directory, ignore_errors=True)
+        return output_format_body(result)
+
+    @app.get("/output-format")
+    def get_output_format() -> dict[str, Any]:
+        return output_format_body(output_formats().get())
+
+    @app.put("/output-format/mapping")
+    def confirm_output_format(body: OutputMappingBody) -> dict[str, Any]:
+        return output_format_body(output_formats().confirm(body.sources))
+
+    @app.delete("/output-format", status_code=204)
+    def delete_output_format() -> Response:
+        output_formats().delete()
+        return Response(status_code=204)
 
     @app.post("/sheets")
     def list_sheets(file: UploadFile = File(...)) -> dict[str, list[str]]:

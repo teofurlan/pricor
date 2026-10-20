@@ -99,6 +99,26 @@ export interface Memory {
   updated_at: string;
 }
 
+/** A template column's source: `field:<name>`, `empty` or `constant:<text>`. */
+export type OutputSource = string;
+
+export interface OutputFormatColumn {
+  index: number;
+  name: string;
+  samples: string[];
+  proposal: { source: OutputSource; proposed_by: "gemma" | "heuristics"; confidence: number };
+  /** The confirmed source; null while the format is only proposed. */
+  source: OutputSource | null;
+}
+
+/** The store-wide layout of the products file, taken from a template the user uploaded. */
+export interface OutputFormat {
+  name: string;
+  state: "proposed" | "confirmed";
+  fields: string[];
+  columns: OutputFormatColumn[];
+}
+
 /** One turn of the side conversation about a question. */
 export interface AskTurn {
   role: "user" | "model";

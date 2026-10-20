@@ -8,11 +8,13 @@ import re
 import unicodedata
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from typing import cast
 
 from pricor.application.errors import InvalidInputError, InvalidOperationError
 from pricor.domain.cells import display
 from pricor.ports.exporter import Exporter, ImportExport, RejectedEntry
 from pricor.ports.import_session import ImportSession
+from pricor.ports.output_format import OutputFormatExporter, OutputFormatStore
 from pricor.ports.price_history import ImportedRecord
 
 _SLUG_CHARS = re.compile(r"[^a-z0-9]+")
@@ -37,13 +39,23 @@ def _text(cell: object) -> str:
 
 
 class ExportImport:
-    def __init__(self, get_session: Callable[[str], ImportSession], exporters: Sequence[Exporter]):
+    def __init__(
+        self, get_session: Callable[[str], ImportSession], exporters: Sequence[Exporter],
+        output_format: OutputFormatStore | None = None,
+    ):
         self._get_session = get_session
         self._exporters = {exporter.format: exporter for exporter in exporters}
+        self._output_format = output_format
 
     def products(self, session_id: str, format: str) -> ExportedFile:
         exporter, session = self._resolve(session_id, format)
-        return self._file(session, exporter, "products", exporter.export(self._view(session)))
+        output_format = self._output_format.get() if self._output_format else None
+        view = self._view(session)
+        if output_format is not None and output_format.state == "confirmed":
+            content = cast(OutputFormatExporter, exporter).export_formatted(view, output_format)
+        else:
+            content = exporter.export(view)
+        return self._file(session, exporter, "products", content)
 
     def rejected(self, session_id: str, format: str) -> ExportedFile:
         exporter, session = self._resolve(session_id, format)

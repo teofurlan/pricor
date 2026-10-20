@@ -26,6 +26,8 @@ from fastapi import FastAPI
 from pricor.adapters.dolarapi_provider import DEFAULT_TIMEOUT_SECONDS as FX_TIMEOUT
 from pricor.adapters.dolarapi_provider import DolarApiProvider
 from pricor.adapters.gemma_advisor import GemmaPlanAdvisor
+from pricor.adapters.gemma_output_format import GemmaOutputFormat
+from pricor.adapters.heuristic_output_format import HeuristicOutputFormat
 from pricor.adapters.gemma_question_helper import GemmaQuestionHelper
 from pricor.adapters.gemma_classifier import GemmaColumnClassifier
 from pricor.adapters.heuristic_classifier import HeuristicColumnClassifier
@@ -49,6 +51,7 @@ from pricor.adapters.sqlite_memory_store import SqliteMemoryStore
 from pricor.adapters.sqlite_store import SqliteDatabase
 from pricor.application.cascade import AgreementStage, ClassifierStage, Member, Stage
 from pricor.application.manage_memory import ManageMemory
+from pricor.application.manage_output_format import ManageOutputFormat
 from pricor.application.report_price_changes import ReportPriceChanges
 from pricor.application.reuse_supplier_plan import ReuseSupplierPlan
 from pricor.entrypoints.calibration_file import DEFAULT_CALIBRATION_PATH, load_calibration
@@ -206,6 +209,10 @@ def dependencies_from_env(env: Mapping[str, str]) -> ApiDependencies:
         memory=memory,
         memory_top_k=memory_top_k,
         question_helper=GemmaQuestionHelper(client),
+        output_format=ManageOutputFormat(
+            FileSpreadsheetReader(), database.output_format, HeuristicOutputFormat(),
+            GemmaOutputFormat(client),
+        ),
     )
 
 

@@ -1,5 +1,7 @@
 import { parseCsv } from "./csv";
 import type {
+  OutputFormat,
+  OutputSource,
   AskReply,
   AskTurn,
   CreateImportInput,
@@ -66,6 +68,16 @@ export interface MemoryApiClient {
   deleteMemory(id: string): Promise<void>;
 }
 
+/** The store-wide output format read from a template (`/output-format`). */
+export interface OutputFormatApiClient {
+  /** The stored format, or null when the standard columns apply. */
+  getOutputFormat(): Promise<OutputFormat | null>;
+  uploadOutputFormat(file: File): Promise<OutputFormat>;
+  /** Every column's source in template order; the format is used only after this. */
+  confirmOutputFormat(sources: OutputSource[]): Promise<OutputFormat>;
+  deleteOutputFormat(): Promise<void>;
+}
+
 type Fetch = typeof fetch;
 
 async function fail(response: Response): Promise<never> {
@@ -82,7 +94,7 @@ async function fail(response: Response): Promise<never> {
   throw new ApiError(response.status, "unexpected_response", `The server answered ${response.status}.`);
 }
 
-export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), baseUrl = ""): ApiClient & MemoryApiClient {
+export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), baseUrl = ""): ApiClient & MemoryApiClient & OutputFormatApiClient {
   async function call<T>(path: string, init?: RequestInit): Promise<T> {
     let response: Response;
     try {
@@ -130,6 +142,21 @@ export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), 
     report: (id, threshold) =>
       call(`${base(id)}/report${threshold === undefined ? "" : `?threshold=${encodeURIComponent(threshold)}`}`),
     getSample: (id, limit = 5) => call(`${base(id)}/sample?limit=${limit}`),
+    async getOutputFormat() {
+      try {
+        return await call<OutputFormat>("/output-format");
+      } catch (failure) {
+        if (failure instanceof ApiError && failure.status === 404) return null;
+        throw failure;
+      }
+    },
+    uploadOutputFormat(file) {
+      const form = new FormData();
+      form.set("file", file);
+      return call<OutputFormat>("/output-format", { method: "POST", body: form });
+    },
+    confirmOutputFormat: (sources) => call<OutputFormat>("/output-format/mapping", json("PUT", { sources })),
+    deleteOutputFormat: () => call<void>("/output-format", { method: "DELETE" }),
     askQuestion: (id, questionId, message, history) =>
       call<AskReply>(`${base(id)}/questions/${encodeURIComponent(questionId)}/ask`, json("POST", { message, history })),
     async exportSheet(id, file, limit = 10) {

@@ -522,6 +522,16 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
 .download__format:hover { background: var(--ground); border-color: var(--ink); }
 .download__format:active { transform: translateY(1px); box-shadow: 0 1px 0 var(--muted); }
 .output-sheet { margin-top: 8px; }
+/* The output-format panel needs room for a table; it is wider than the notes drawer. */
+.drawer.format-drawer { width: min(720px, 100vw); }
+.output-format__upload { display: grid; gap: 7px; }
+.output-format__upload .button { justify-self: start; }
+.output-format__state { font-size: 0.875rem; font-weight: 600; padding-block: 10px; border-block: 1px solid var(--rule); }
+.output-format__state--proposed { color: var(--muted); }
+.table--format select { min-width: 14ch; font-size: 0.8125rem; padding: 8px; }
+.output-format__source { display: grid; gap: 6px; }
+.output-format__source input { font-size: 0.8125rem; padding: 8px; }
+.upload__format { margin-top: -4px; }
 .table--sheet th, .table--sheet td { white-space: nowrap; font-family: var(--figures); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
 .table--sheet thead th { text-transform: none; letter-spacing: 0; }
 
@@ -652,6 +662,7 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
   .downloads { max-width: none; }
   .drawer { position: static; width: 100%; padding: 24px 0; border-left: 0; border-bottom: 1px solid var(--ink); box-shadow: none; transform: none; transition: none; }
   .drawer--closing { display: none; }
+  .drawer.format-drawer { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
