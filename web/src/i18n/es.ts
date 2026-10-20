@@ -100,6 +100,8 @@ export const es: Record<TextKey, string> = {
   "question.custom.label": "Otro valor",
   "question.custom.use": "Usar este valor",
   "question.custom.chosen": "Su valor: {value}",
+  "question.custom.invalidPercent": "Ingrese un porcentaje entre 0 y 100, por ejemplo 10,5.",
+  "question.custom.invalidPositive": "Ingrese un número mayor que 0, por ejemplo 12.",
 
   "language.label": "Idioma",
   "language.en": "Inglés",

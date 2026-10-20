@@ -50,6 +50,23 @@ const ready: SessionState = session({ status: "ready_for_preview", answers: { cu
 const approved: SessionState = { ...ready, status: "approved", approved: true };
 
 describe("ImportWizard", () => {
+  it("drops an answer the server refuses instead of showing it as chosen", async () => {
+    const vat = question({ id: "vat_rate", allows_custom: true, options: [{ token: "constant:21", label: { en: "21%", es: "21%" } }] });
+    const api = fakeApi({
+      createImport: vi.fn().mockResolvedValue(session({ status: "questions_pending", questions: [vat], answers: {} })),
+      answer: vi.fn().mockRejectedValue(new ApiError(422, "invalid_input", "the answer was refused")),
+    });
+    renderWithI18n(<ImportWizard api={api} />);
+    await startImport();
+    await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
+
+    // The card only lets numbers through; this stands in for any value the server still refuses.
+    await userEvent.click(await screen.findByRole("radio", { name: "21%" }));
+    await waitFor(() => expect(api.answer).toHaveBeenCalledWith("s1", "vat_rate", "constant:21"));
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("radio", { name: "21%" })).not.toBeChecked());
+  });
+
   it("walks a first import from upload to approved exports", async () => {
     const api = fakeApi({
       createImport: vi.fn().mockResolvedValue(withQuestion),

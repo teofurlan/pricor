@@ -17,6 +17,22 @@ interface Props {
   chatSuggestion?: string | null;
 }
 
+const NUMBER = /^[0-9]+(?:[.,][0-9]+)?$/;
+
+/**
+ * The `constant:` token for a typed value, or null when the server would refuse it.
+ * A decimal comma is accepted and sent with a decimal point.
+ */
+function customToken(questionId: string, text: string): string | null {
+  const trimmed = text.trim();
+  if (!NUMBER.test(trimmed)) return null;
+  const value = trimmed.replace(",", ".");
+  const number = Number(value);
+  if (questionId === "vat_rate" && number > 100) return null;
+  if (questionId === "units_per_pack" && number === 0) return null;
+  return `constant:${value}`;
+}
+
 /**
  * One closed question. A model suggestion is shown on its option as a label,
  * but nothing is ever selected until the user picks it.
@@ -28,6 +44,8 @@ export function QuestionCard({ question, answer, onAnswer, disabled = false, mem
   const listed = question.options.some((option) => option.token === answer);
   const customAnswer = answer !== undefined && !listed ? answer.replace(/^constant:/, "") : null;
   const suggestionAccepted = acceptedModelSuggestion(question, answer);
+  const token = customToken(question.id, custom);
+  const customInvalid = custom.trim() !== "" && token === null;
 
   return (
     <fieldset className="question" disabled={disabled}>
@@ -62,10 +80,22 @@ export function QuestionCard({ question, answer, onAnswer, disabled = false, mem
       {question.allows_custom && (
         <div className="question__custom">
           <label htmlFor={customId}>{t("question.custom.label")}</label>
-          <input id={customId} inputMode="decimal" value={custom} onChange={(event) => setCustom(event.target.value)} />
-          <Button disabled={custom.trim() === ""} onClick={() => onAnswer(question.id, `constant:${custom.trim()}`)}>
+          <input
+            id={customId}
+            inputMode="decimal"
+            value={custom}
+            aria-invalid={customInvalid}
+            aria-describedby={customInvalid ? `${customId}-error` : undefined}
+            onChange={(event) => setCustom(event.target.value)}
+          />
+          <Button disabled={token === null} onClick={() => token && onAnswer(question.id, token)}>
             {t("question.custom.use")}
           </Button>
+          {customInvalid && (
+            <span id={`${customId}-error`} className="question__invalid">
+              {t(question.id === "vat_rate" ? "question.custom.invalidPercent" : "question.custom.invalidPositive")}
+            </span>
+          )}
           {customAnswer !== null && (
             <span className="question__chosen">{t("question.custom.chosen", { value: customAnswer })}</span>
           )}

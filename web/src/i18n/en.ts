@@ -97,6 +97,8 @@ export const en = {
   "question.custom.label": "Another value",
   "question.custom.use": "Use this value",
   "question.custom.chosen": "Your value: {value}",
+  "question.custom.invalidPercent": "Enter a percentage between 0 and 100, such as 10,5.",
+  "question.custom.invalidPositive": "Enter a number greater than 0, such as 12.",
 
   "language.label": "Language",
   "language.en": "English",

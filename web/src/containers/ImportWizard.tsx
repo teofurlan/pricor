@@ -176,6 +176,11 @@ export function ImportWizard({ api }: { api: ApiClient }) {
           remember(next);
           setLocalAnswers(() => ({ ...next.answers, ...pendingAnswersRef.current }));
         } catch (failure) {
+          // A refused answer must not stay on screen as chosen; fall back to the server's answer.
+          if (pendingAnswersRef.current[questionId] === option) {
+            delete pendingAnswersRef.current[questionId];
+            setLocalAnswers(({ [questionId]: _refused, ...rest }) => rest);
+          }
           setError(toApiError(failure));
         } finally {
           setAnsweringCount((count) => Math.max(0, count - 1));

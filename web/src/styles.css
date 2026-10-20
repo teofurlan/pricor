@@ -385,6 +385,8 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
 .question__custom { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 0.875rem; }
 .question__custom input { width: 120px; }
 .question__chosen { font-size: 0.8125rem; }
+.question__invalid { flex-basis: 100%; font-size: 0.8125rem; color: var(--red); }
+.question__custom input[aria-invalid="true"] { border-color: var(--red); }
 .question__remember { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 /* Answered questions read as a printed history; the open one is asked in full below. */
 .exchanges { list-style: none; margin: 0; padding: 0; display: grid; border-top: 1px solid var(--ink); }

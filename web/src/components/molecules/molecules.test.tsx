@@ -210,4 +210,41 @@ describe("QuestionCard", () => {
     await userEvent.click(screen.getByRole("button", { name: "Use this value" }));
     expect(onAnswer).toHaveBeenCalledWith("vat_rate", "constant:27");
   });
+
+  it("refuses a custom value that is not a number and says why", async () => {
+    const onAnswer = vi.fn();
+    renderWithI18n(
+      <QuestionCard question={question({ id: "vat_rate", allows_custom: true })} answer={undefined} onAnswer={onAnswer} />,
+    );
+    await userEvent.type(screen.getByLabelText("Another value"), "45,sfdgsdfgsd");
+    expect(screen.getByRole("button", { name: "Use this value" })).toBeDisabled();
+    expect(screen.getByText("Enter a percentage between 0 and 100, such as 10,5.")).toBeInTheDocument();
+    expect(onAnswer).not.toHaveBeenCalled();
+  });
+
+  it("accepts a decimal comma and sends the value with a decimal point", async () => {
+    const onAnswer = vi.fn();
+    renderWithI18n(
+      <QuestionCard question={question({ id: "vat_rate", allows_custom: true })} answer={undefined} onAnswer={onAnswer} />,
+    );
+    await userEvent.type(screen.getByLabelText("Another value"), "10,5");
+    await userEvent.click(screen.getByRole("button", { name: "Use this value" }));
+    expect(onAnswer).toHaveBeenCalledWith("vat_rate", "constant:10.5");
+  });
+
+  it("refuses a VAT rate above 100 and a pack of zero units", async () => {
+    const { unmount } = renderWithI18n(
+      <QuestionCard question={question({ id: "vat_rate", allows_custom: true })} answer={undefined} onAnswer={vi.fn()} />,
+    );
+    await userEvent.type(screen.getByLabelText("Another value"), "150");
+    expect(screen.getByRole("button", { name: "Use this value" })).toBeDisabled();
+    unmount();
+
+    renderWithI18n(
+      <QuestionCard question={question({ id: "units_per_pack", allows_custom: true })} answer={undefined} onAnswer={vi.fn()} />,
+    );
+    await userEvent.type(screen.getByLabelText("Another value"), "0");
+    expect(screen.getByRole("button", { name: "Use this value" })).toBeDisabled();
+    expect(screen.getByText("Enter a number greater than 0, such as 12.")).toBeInTheDocument();
+  });
 });
