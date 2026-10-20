@@ -48,6 +48,30 @@ export function localizeServerText(text: string, language: Language): string {
   return text;
 }
 
+/**
+ * Session notices name a stage and quote the error behind it. In Spanish the sentence is
+ * translated and the error (class and message, which only the library can word) is kept apart
+ * as technical detail. Keep them in step with `application/cascade.py` and
+ * `application/import_first_time.py`.
+ */
+const NOTICE_RULES: Array<[RegExp, (...groups: string[]) => { text: string; detail: string }]> = [
+  [/^stage '(.+?)' could not classify columns \((\w+)\): ([\s\S]*)$/, (stage, kind, message) => ({ text: `La etapa '${stage}' no pudo clasificar las columnas.`, detail: `${kind}: ${message}` })],
+  [/^stage '(.+?)' was skipped: ([\s\S]*)$/, (stage, reason) => ({ text: `Se omitió la etapa '${stage}'.`, detail: reason })],
+  [/^the plan advisor could not help \((\w+)\): ([\s\S]*)$/, (kind, message) => ({ text: "El asesor del plan no pudo ayudar.", detail: `${kind}: ${message}` })],
+  [/^semantic memory could not be retrieved \((\w+)\): ([\s\S]*)$/, (kind, message) => ({ text: "No se pudo consultar la memoria semántica.", detail: `${kind}: ${message}` })],
+];
+
+/** A session notice: the server's text in English; in Spanish a sentence plus its technical detail. */
+export function localizeNotice(message: string, language: Language): { text: string; detail: string | null } {
+  if (language === "es") {
+    for (const [pattern, translate] of NOTICE_RULES) {
+      const match = pattern.exec(message);
+      if (match) return translate(...match.slice(1));
+    }
+  }
+  return { text: message, detail: null };
+}
+
 const SPANISH_ERRORS: Record<string, string> = {
   invalid_input: "El servidor rechazó ese dato. Revíselo e intente de nuevo.",
   invalid_request: "El servidor no entendió el pedido. Revise los datos e intente de nuevo.",

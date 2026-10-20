@@ -97,6 +97,7 @@ export const es: Record<TextKey, string> = {
   "counts.skipped.preamble": "{count} de encabezado",
 
   "notice.modelUnavailable.title": "Gemma no estaba disponible",
+  "notice.detail": "Detalle técnico: {detail}",
   "notice.modelUnavailable.body": "La importación sigue solo con heurísticas. Revise las columnas usted mismo y responda todas las preguntas.",
 
   "question.reason": "Por qué lo preguntamos: {reason}",

@@ -94,6 +94,7 @@ export const en = {
   "counts.skipped.preamble": "{count} preamble",
 
   "notice.modelUnavailable.title": "Gemma was not available",
+  "notice.detail": "Technical detail: {detail}",
   "notice.modelUnavailable.body": "The import continues with heuristics only. Check the columns yourself and answer every question.",
 
   "question.reason": "Why we ask: {reason}",

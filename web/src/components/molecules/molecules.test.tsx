@@ -157,6 +157,20 @@ describe("NoticeList", () => {
     expect(notice).toHaveTextContent("connection refused");
   });
 
+  it("explains a model notice in Spanish and keeps the error only as technical detail", () => {
+    renderWithI18n(
+      <NoticeList
+        notices={[{ code: "model_unavailable", message: "stage 'gemma' could not classify columns (ModelUnavailableError): connection refused", stage: "gemma" }]}
+      />,
+      "es",
+    );
+    const notice = screen.getByRole("status");
+    expect(notice).toHaveTextContent("Gemma no estaba disponible");
+    expect(notice).toHaveTextContent("La etapa 'gemma' no pudo clasificar las columnas.");
+    expect(notice).toHaveTextContent("Detalle técnico: ModelUnavailableError: connection refused");
+    expect(notice).not.toHaveTextContent("could not classify columns");
+  });
+
   it("shows other notices with the server message", () => {
     renderWithI18n(<NoticeList notices={[{ code: "other", message: "Something to know", stage: null }]} />);
     expect(screen.getByRole("status")).toHaveTextContent("Something to know");

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeError, localizeServerText } from "./serverText";
+import { describeError, localizeNotice, localizeServerText } from "./serverText";
 
 describe("localizeServerText", () => {
   it.each([
@@ -43,5 +43,37 @@ describe("describeError", () => {
 
   it("falls back to a Spanish sentence with the technical detail for an unknown code", () => {
     expect(describeError({ code: "teapot", message: "short and stout" }, "es")).toBe("Ocurrió un error inesperado (detalle: short and stout).");
+  });
+});
+
+describe("localizeNotice", () => {
+  it.each([
+    [
+      "stage 'gemma' could not classify columns (ModelUnavailableError): connection refused",
+      "La etapa 'gemma' no pudo clasificar las columnas.",
+      "ModelUnavailableError: connection refused",
+    ],
+    [
+      "stage 'laya' was skipped: the Laya model could not be loaded (ImportError: no module); install it",
+      "Se omitió la etapa 'laya'.",
+      "the Laya model could not be loaded (ImportError: no module); install it",
+    ],
+    [
+      "the plan advisor could not help (ModelTimeoutError): timed out after 30s",
+      "El asesor del plan no pudo ayudar.",
+      "ModelTimeoutError: timed out after 30s",
+    ],
+    [
+      "semantic memory could not be retrieved (EmbedderUnavailableError): no vector",
+      "No se pudo consultar la memoria semántica.",
+      "EmbedderUnavailableError: no vector",
+    ],
+  ])("gives a Spanish sentence for %j and keeps the technical detail apart", (english, sentence, detail) => {
+    expect(localizeNotice(english, "es")).toEqual({ text: sentence, detail });
+    expect(localizeNotice(english, "en")).toEqual({ text: english, detail: null });
+  });
+
+  it("keeps a notice it does not know as the server wrote it", () => {
+    expect(localizeNotice("something new happened", "es")).toEqual({ text: "something new happened", detail: null });
   });
 });
