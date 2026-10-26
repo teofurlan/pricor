@@ -170,6 +170,7 @@ export const es: Record<TextKey, string> = {
   "columns.score": "Puntaje",
   "columns.rationale": "Motivo",
   "columns.noHeader": "Columna {n}",
+  "columns.quantityDiscount": "Descuento por cantidad: depende de cuánto se compre, no se aplica al costo unitario",
   "columns.roleFor": "Cambiar rol de {header}",
   "columns.confirm": "Confirmar columnas",
   "columns.remaining.one": "Falta {count} por elegir.",

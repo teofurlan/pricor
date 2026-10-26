@@ -70,6 +70,8 @@ export interface ColumnState {
   rationale: string;
   /** A few representative cell values from the column. */
   samples: string[];
+  /** Most values are conditional quantity discounts ("10% x 10 UN"), which cannot lower a unit cost. */
+  quantity_discount?: boolean;
   proposals: StageProposal[];
 }
 

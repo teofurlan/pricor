@@ -12,6 +12,11 @@ MAX_CELL_LENGTH = 64
 _PLAIN_NUMBER = re.compile(r"[0-9]+(?:[.,][0-9]+)?", re.ASCII)
 _SIGNED_PLAIN_NUMBER = re.compile(r"-?[0-9]+(?:[.,][0-9]+)?", re.ASCII)
 _NUMERIC_CHARS = frozenset("0123456789")
+# A percentage that only applies when enough units are bought: `10% x 10 UN`, `15% por 6 unidades`.
+_QUANTITY_DISCOUNT = re.compile(
+    r"[0-9]+(?:[.,][0-9]+)?\s*%\s*(?:x|por)\s*[0-9]+\s*(?:u|un|und|unid|uds?|unidad(?:es)?)?\.?",
+    re.ASCII | re.IGNORECASE,
+)
 _ZERO_WIDTH = dict.fromkeys(map(ord, "​‌‍﻿"))
 
 
@@ -76,8 +81,17 @@ def parse_number(text: str, decimal_sep: str, thousands_sep: str) -> Decimal:
     return Decimal(literal)
 
 
+def is_quantity_discount(text: str) -> bool:
+    """True for a conditional quantity discount, which depends on how much is bought."""
+    return _QUANTITY_DISCOUNT.fullmatch(_clean(text)) is not None
+
+
 def parse_discounts(text: str) -> tuple[Decimal, ...]:
     """Parse chained discounts such as `10+5` or `10% + 5%`. Empty means none."""
+    if is_quantity_discount(text):
+        raise CellError(
+            f"conditional quantity discount {text.strip()!r} cannot be applied to a unit cost"
+        )
     value = re.sub(r"[%\s]", "", _clean(text))
     if not value:
         return ()

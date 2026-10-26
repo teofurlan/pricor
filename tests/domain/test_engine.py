@@ -287,3 +287,9 @@ def test_map_values_collapses_inner_whitespace_in_cell_and_key():
     plan["steps"][5] = {"op": "strip_vat", "rate_from": {"constant": 21}}
     record = run([row_with(vat="sin  iva")], plan).accepted[0].record
     assert record.vat_rate == Decimal("0")
+
+
+def test_conditional_quantity_discount_rejects_row_with_specific_reason():
+    rejected = only_rejection([row_with(disc=" 10% x  10 UN")])
+    assert any("conditional quantity discount '10% x  10 UN' cannot be applied to a unit cost" in r for r in rejected.reasons)
+    assert not any("unreadable discount" in r for r in rejected.reasons)

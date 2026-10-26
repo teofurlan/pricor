@@ -4,6 +4,7 @@ import pytest
 
 from pricor.domain.parsing import (
     CellError,
+    is_quantity_discount,
     normalize_text,
     parse_discounts,
     parse_number,
@@ -121,3 +122,21 @@ def test_parse_units_rejects_invalid_values(text, fragment):
 )
 def test_normalize_text(text, expected):
     assert normalize_text(text) == expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["10% x  10 UN", " 5% x 12 u.", "15% por 6 unidades", "10%X10un", "7,5 % x 3"],
+)
+def test_conditional_quantity_discounts_are_recognized(text):
+    assert is_quantity_discount(text)
+
+
+@pytest.mark.parametrize("text", ["10%", "5+3", "10% + 5%", "", "abc", "x 10 UN"])
+def test_ordinary_discounts_are_not_quantity_conditions(text):
+    assert not is_quantity_discount(text)
+
+
+def test_a_quantity_discount_is_rejected_with_a_specific_reason():
+    with pytest.raises(CellError, match=r"conditional quantity discount '10% x  10 UN' cannot be applied"):
+        parse_discounts(" 10% x  10 UN ")

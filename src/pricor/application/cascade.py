@@ -10,6 +10,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
 from pricor.domain.profile import SheetProfile
+from pricor.domain.roles import ColumnRole
 from pricor.ports.column_classifier import ColumnClassifier
 from pricor.ports.import_session import ColumnDecision, Notice, StageProposal
 from pricor.ports.model_errors import (
@@ -22,6 +23,10 @@ from pricor.ports.model_errors import (
 # PLACEHOLDER: not calibrated on held-out data. It is calibrated in T21 (Q24);
 # until then it only decides which columns are shown to the user for confirmation.
 UNCALIBRATED_THRESHOLD = 0.75
+
+QUANTITY_DISCOUNT_RATIONALE = (
+    "quantity discount: its values depend on how much is bought, so no stage settles it as a discount"
+)
 
 
 @dataclass(frozen=True)
@@ -129,8 +134,15 @@ def run_cascade(
     Returns the decisions, any model notices, and whether a model server could
     not be reached (unavailable or timed out), so callers can avoid waiting on it again.
     """
-    remaining = list(profile.columns)
-    proposals: dict[int, list[StageProposal]] = {column.index: [] for column in remaining}
+    # A conditional quantity discount is never applicable to a unit cost: no stage may settle it
+    # as a discount, so those columns skip the stages and wait for the user, with `ignore` suggested.
+    held = [column for column in profile.columns if column.quantity_discount]
+    remaining = [column for column in profile.columns if not column.quantity_discount]
+    proposals: dict[int, list[StageProposal]] = {column.index: [] for column in profile.columns}
+    for column in held:
+        proposals[column.index].append(
+            StageProposal("heuristics", ColumnRole.IGNORE, 0.9, QUANTITY_DISCOUNT_RATIONALE)
+        )
     decisions: dict[int, ColumnDecision] = {}
     notices: list[Notice] = []
     unreachable = False
@@ -180,7 +192,7 @@ def run_cascade(
                 undecided.append(column)
         remaining = undecided
 
-    for column in remaining:
+    for column in [*remaining, *held]:
         seen = proposals[column.index]
         best = max(seen, key=lambda item: item.score, default=None)
         decisions[column.index] = ColumnDecision(

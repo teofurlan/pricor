@@ -167,6 +167,7 @@ export const en = {
   "columns.score": "Score",
   "columns.rationale": "Why",
   "columns.noHeader": "Column {n}",
+  "columns.quantityDiscount": "Quantity discount: it depends on how much is bought, so it is not applied to the unit cost",
   "columns.roleFor": "Change role for {header}",
   "columns.confirm": "Confirm columns",
   "columns.remaining.one": "{count} still needs your choice.",

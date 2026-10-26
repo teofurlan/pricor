@@ -513,3 +513,19 @@ def test_distinct_values_are_normalized_and_deduplicated():
 def test_a_high_cardinality_column_does_not_list_its_values():
     rows = [("Item", "Descripcion")] + [(f"a{i}", f"Producto {i}") for i in range(200)]
     assert profile_sheet(rows).columns[1].distinct_values is None
+
+
+def _discount_sheet(values):
+    return [("Codigo", "DTO_X_CANT"), *[(f"A-{i}", value) for i, value in enumerate(values)]]
+
+
+def test_a_column_of_quantity_conditions_is_flagged():
+    profile = profile_sheet(_discount_sheet([" 10% x  10 UN", "5% x 12 u.", None, "15% por 6 unidades"]))
+    assert [column.quantity_discount for column in profile.columns] == [False, True]
+
+
+def test_ordinary_discounts_and_mixed_columns_are_not_flagged():
+    ordinary = profile_sheet(_discount_sheet(["10%", "5+3", "15%"]))
+    mostly_plain = profile_sheet(_discount_sheet(["10%", "5%", "10% x 10 UN", "3%"]))
+    assert not ordinary.columns[1].quantity_discount
+    assert not mostly_plain.columns[1].quantity_discount

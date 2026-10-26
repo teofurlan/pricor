@@ -342,6 +342,7 @@ def _fx_state(session: ImportSession) -> dict[str, Any] | None:
 def session_state(session: ImportSession) -> dict[str, Any]:
     profile = session.profile
     samples = {column.index: list(column.samples) for column in profile.columns}
+    quantity_discounts = {column.index for column in profile.columns if column.quantity_discount}
     return {
         "id": session.id,
         "status": session.status.value,
@@ -366,6 +367,7 @@ def session_state(session: ImportSession) -> dict[str, Any]:
                 "score": column.score,
                 "rationale": column.rationale,
                 "samples": samples.get(column.index, []),
+                "quantity_discount": column.index in quantity_discounts,
                 "proposals": [
                     {
                         "stage": item.stage,

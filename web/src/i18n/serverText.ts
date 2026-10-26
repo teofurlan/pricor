@@ -54,6 +54,7 @@ const RULES: Array<[RegExp, (...groups: string[]) => string]> = [
   [/^no values$/, () => "no hay valores"],
   [/^the discount column (.+) that plan v(\d+) applies is no longer in the file; assign the discount role to another column or start again as a first import$/, (name, version) => `la columna de descuento ${name} que aplica el plan v${version} ya no está en el archivo; asigne el rol de descuento a otra columna o empiece de nuevo como primera importación`],
   [/^(.+): (.+) is empty$/, (column, roleName) => `${column}: ${role(roleName)} está vacío`],
+  [/^(.+): conditional quantity discount '([^']*)' cannot be applied to a unit cost$/, (column, value) => `${column}: el descuento por cantidad condicional '${value}' no se puede aplicar a un costo unitario`],
   [/^(.+): unreadable discount: '([^']*)'$/, (column, value) => `${column}: descuento ilegible: '${value}'`],
 ];
 

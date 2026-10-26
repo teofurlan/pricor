@@ -27,7 +27,7 @@ from .cells import (
     find_currency_markers,
     is_blank,
 )
-from .parsing import CellError, normalize_text, parse_number
+from .parsing import CellError, is_quantity_discount, normalize_text, parse_number
 from .plan import column_header
 
 HEADER_SEARCH_ROWS = 30
@@ -95,6 +95,8 @@ class ColumnProfile:
     # Every distinct (whitespace-normalized) value, or None when the column has more than
     # `MAX_DISTINCT_VALUES`; unlike `samples` it is complete, so it can be checked against.
     distinct_values: tuple[str, ...] | None = None
+    # Most non-empty values are conditional quantity discounts (`10% x 10 UN`): not a unit-cost discount.
+    quantity_discount: bool = False
 
     @property
     def plan_header(self) -> str:
@@ -369,6 +371,7 @@ def _profile_column(index: int, raw_header: str, data: list[tuple[int, Row]]) ->
         samples=_representative(texts),
         atypical=_atypical(entries, column_type, fmt),
         distinct_values=_distinct_values(normalized),
+        quantity_discount=bool(texts) and 2 * sum(map(is_quantity_discount, texts)) > len(texts),
     )
 
 

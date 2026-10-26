@@ -287,6 +287,7 @@ export function ColumnsTable({ columns, issues, busy, sample, onConfirm }: Props
                   <th scope="row">
                     <span className="cell__name">{item.header || t("columns.noHeader", { n: item.index + 1 })}</span>
                     <span className="cell__samples">{item.samples.join(", ")}</span>
+                    {item.quantity_discount && <span className="cell__samples">{t("columns.quantityDiscount")}</span>}
                   </th>
                   <td className="cell--role">
                     {role !== null ? <span className="role-decision__value">{t(`role.${role}`)}</span> : <span className="role-decision__empty" aria-hidden="true">—</span>}

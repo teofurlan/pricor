@@ -340,3 +340,17 @@ def test_columns_carry_a_few_sample_values_for_the_review_table():
     assert by_header["Descripcion"]["samples"]
     assert set(by_header["Descripcion"]["samples"]) <= {"Tornillo", "Tuerca", "Arandela", "Clavo", "Taco", "Brida"}
     assert all(isinstance(value, str) for column in state["columns"] for value in column["samples"])
+
+
+def test_columns_flag_quantity_discounts_for_the_ui():
+    client = make_client()
+    rows = [
+        ["Codigo", "Descripcion", "Precio lista", "DTO_X_CANT"],
+        ["A-1", "Tornillo", "1.210,00", "10% x 10 UN"],
+        ["A-2", "Tuerca", "968,00", "5% x 12 u."],
+    ]
+    state = upload(client, rows=rows).json()
+    by_header = {column["header"]: column for column in state["columns"]}
+    assert by_header["DTO_X_CANT"]["quantity_discount"] is True
+    assert by_header["DTO_X_CANT"]["role"] is None
+    assert by_header["Codigo"]["quantity_discount"] is False
