@@ -92,6 +92,9 @@ def test_the_conversion_question_is_part_of_the_questions(client):
     (question,) = [q for q in state["questions"] if q["id"] == "fx_conversion"]
     tokens = [option["token"] for option in question["options"]]
     assert tokens[0] == "keep" and tokens[-1] == "manual" and "blue:compra" in tokens
+    groups = {option["token"]: option["group"] for option in question["options"]}
+    assert {t for t, g in groups.items() if g == "primary"} == {"keep", "oficial:venta", "manual"}
+    assert groups["blue:compra"] == "more"
     assert question["suggestion"]["option"] == "oficial:venta"
     assert question["suggestion"]["suggested_by"] == "setting"
     assert state["fx"] is None
@@ -128,7 +131,37 @@ def test_the_preview_carries_original_and_converted_values(client):
     assert foreign["unit_cost_net"] == "2.50" and foreign["currency"] == "USD"
     assert foreign["unit_cost_net_converted"] == "3837.50"
     trace = next(i for i in items if i["record"]["supplier_code"] == "A2")["trace"]
-    assert trace[-1] == {"step": "convert_currency", "value": "3837.50"}
+    assert trace[-1] == {"step": "convert_currency", "value": "3837.50", "source": "2.50", "rate": "1535"}
+    assert all(set(step) == {"step", "value"} for step in trace[:-1])
+
+
+def test_a_question_without_groups_has_no_group_key_on_its_options(client):
+    state = upload(client, rows=ROWS, supplier="Emilio").json()
+
+    (question,) = [q for q in state["questions"] if q["id"] == "price_includes_vat"]
+
+    assert all("group" not in option for option in question["options"])
+
+
+def test_the_conversion_step_exposes_the_unrounded_source_it_was_computed_from():
+    client, database = make_client(FakeFx(rate="1550"))
+    try:
+        rows = [*ROWS[:2], ["A2", "Mini antenna", "u$s", "2.588"]]
+        state = upload(client, rows=rows, supplier="Emilio").json()
+        answer(client, state["id"], "number_format", "decimal_point")
+        answer(client, state["id"], "price_includes_vat", "no")
+        answer(client, state["id"], "currency", CONFIRMED_MAP)
+        state = answer(client, state["id"], "fx_conversion", "oficial:venta").json()
+
+        items = client.get(f"/imports/{state['id']}/preview").json()["items"]
+        item = next(i for i in items if i["record"]["supplier_code"] == "A2")
+
+        assert item["record"]["unit_cost_net"] == "2.59"
+        assert item["trace"][-1] == {
+            "step": "convert_currency", "value": "4011.40", "source": "2.588", "rate": "1550",
+        }
+    finally:
+        database.close()
 
 
 def test_an_offline_source_blocks_the_session_until_a_manual_rate_is_entered():

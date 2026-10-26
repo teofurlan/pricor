@@ -80,8 +80,8 @@ def test_a_recognized_currency_column_is_a_question_with_a_labeled_suggestion(ha
     assert asked.suggestion.option == DETECTED_TOKEN
     assert asked.suggestion.suggested_by == "detected"
     label = next(o.label for o in asked.options if o.token == DETECTED_TOKEN)
-    assert label.en == "Detected: `$` → ARS, `u$s` → USD"
-    assert label.es == "Detectado: `$` → ARS, `u$s` → USD"
+    assert label.en == 'Detected: "$" → ARS, "u$s" → USD'
+    assert label.es == 'Detectado: "$" → ARS, "u$s" → USD'
 
 
 def test_confirming_the_suggestion_builds_the_plan_with_that_map(harness):

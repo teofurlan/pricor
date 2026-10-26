@@ -102,6 +102,7 @@ export const es: Record<TextKey, string> = {
   "notice.modelUnavailable.body": "La importación sigue solo con heurísticas. Revise las columnas usted mismo y responda todas las preguntas.",
 
   "question.reason": "Por qué lo preguntamos: {reason}",
+  "question.moreOptions": "Otra cotización…",
   "question.custom.label": "Otro valor",
   "question.custom.use": "Usar este valor",
   "question.custom.chosen": "Su valor: {value}",

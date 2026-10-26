@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { TraceStep } from "../../api/types";
 import { isTextKey, useI18n } from "../../i18n";
+import { conversionText } from "../../lib/decimalText";
 import { splitFigure, TapeFigure } from "../atoms/TapeFigure";
 
 const LONG_DECIMAL = /^(-?\d+)\.(\d{7,})$/;
@@ -49,7 +50,7 @@ export function StepTrace({
 function TracePrint({ trace, currency, convertedCurrency, animate, announce }: {
   trace: TraceStep[]; currency: string | null; convertedCurrency: string | null; animate: boolean; announce: boolean;
 }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const reduced = useReducedMotion();
   const [printed, setPrinted] = useState(1);
   const count = !animate || reduced ? trace.length : printed;
@@ -81,7 +82,14 @@ function TracePrint({ trace, currency, convertedCurrency, animate, announce }: {
           return (
             <li key={`${item.step}-${position}`} className={`trace__step${isTotal ? " trace__step--final" : ""}`}>
               <span className="trace__operator" aria-hidden="true">{isTotal ? "=" : OPERATORS[item.step] ?? "◇"}</span>
-              <span className="trace__label">{label}</span>
+              <span className="trace__label">
+                {label}
+                {item.step === "convert_currency" && item.source !== undefined && item.rate !== undefined && currency && convertedCurrency && (
+                  <small className="trace__basis">
+                    {conversionText({ source: item.source, rate: item.rate, value: item.value }, currency, convertedCurrency, language)}
+                  </small>
+                )}
+              </span>
               <TapeFigure className="trace__value" value={shown.text} full={shown.full} fracWidth={decimalColumn} />
               {isTotal && <span className="trace__mark" aria-hidden="true">✱</span>}
             </li>

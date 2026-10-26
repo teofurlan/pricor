@@ -343,3 +343,90 @@ describe("QuestionCard", () => {
     expect(screen.getByText("Enter a number greater than 0, such as 12.")).toBeInTheDocument();
   });
 });
+
+describe("QuestionCard with grouped options", () => {
+  const grouped = question({
+    id: "fx_conversion",
+    text: { en: "Convert?", es: "¿Se convierte?" },
+    options: [
+      { token: "keep", label: { en: "Keep", es: "Mantener" }, group: "primary" },
+      { token: "oficial:venta", label: { en: "Official, sell", es: "Oficial, venta" }, group: "primary" },
+      { token: "manual", label: { en: "Type a rate", es: "Escribir cotización" }, group: "primary" },
+      { token: "blue:venta", label: { en: "Blue, sell", es: "Blue, venta" }, group: "more" },
+      { token: "bolsa:compra", label: { en: "MEP, buy", es: "MEP, compra" }, group: "more" },
+    ],
+  });
+
+  it("keeps the primary options as buttons and puts the rest in one labeled select", () => {
+    renderWithI18n(<QuestionCard question={grouped} answer={undefined} onAnswer={vi.fn()} />);
+
+    expect(screen.getAllByRole("radio").map((radio) => (radio as HTMLInputElement).value)).toEqual(["keep", "oficial:venta", "manual"]);
+    const select = screen.getByRole("combobox", { name: "Another rate…" });
+    expect(within(select).getAllByRole("option").map((option) => option.textContent)).toEqual(["Another rate…", "Blue, sell", "MEP, buy"]);
+    expect(select).toHaveValue("");
+  });
+
+  it("answers exactly like a button when a rate is picked from the select", async () => {
+    const onAnswer = vi.fn();
+    renderWithI18n(<QuestionCard question={grouped} answer={undefined} onAnswer={onAnswer} />);
+
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Another rate…" }), "bolsa:compra");
+
+    expect(onAnswer).toHaveBeenCalledWith("fx_conversion", "bolsa:compra");
+  });
+
+  it("shows a stored answer that lives in the select as selected, and no button as pressed", () => {
+    renderWithI18n(<QuestionCard question={grouped} answer="blue:venta" onAnswer={vi.fn()} />);
+
+    expect(screen.getByRole("combobox", { name: "Another rate…" })).toHaveValue("blue:venta");
+    expect(screen.getAllByRole("radio").every((radio) => !(radio as HTMLInputElement).checked)).toBe(true);
+  });
+
+  it("marks a suggestion that lives in the select without choosing it", () => {
+    const suggestion = { suggested_by: "gemma", option: "blue:venta", confidence: 0.7, calibrated: false, evidence: [] };
+    renderWithI18n(<QuestionCard question={{ ...grouped, suggestion }} answer={undefined} onAnswer={vi.fn()} />);
+
+    const select = screen.getByRole("combobox", { name: "Another rate…" });
+    expect(select).toHaveValue("");
+    expect(screen.getByText("GEMMA ~70%")).toBeInTheDocument();
+  });
+
+  it("labels the select in Spanish", () => {
+    renderWithI18n(<QuestionCard question={grouped} answer={undefined} onAnswer={vi.fn()} />, "es");
+
+    expect(screen.getByRole("combobox", { name: "Otra cotización…" })).toBeInTheDocument();
+  });
+
+  it("renders questions without groups exactly as before", () => {
+    renderWithI18n(<QuestionCard question={question()} answer={undefined} onAnswer={vi.fn()} />);
+
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.getAllByRole("radio")).toHaveLength(2);
+  });
+});
+
+describe("StepTrace conversion", () => {
+  const converted = [
+    { step: "parse_number", value: "2.588" },
+    { step: "rounding", value: "2.59" },
+    { step: "convert_currency", value: "4011.40", source: "2.588", rate: "1550" },
+  ];
+
+  it("shows the unrounded source and the rate under the conversion step", () => {
+    renderWithI18n(<StepTrace trace={converted} currency="USD" convertedCurrency="ARS" />, "es");
+
+    expect(screen.getByText("2,588 USD × 1.550 = 4.011,40 ARS")).toBeInTheDocument();
+  });
+
+  it("uses the language's number format in English", () => {
+    renderWithI18n(<StepTrace trace={converted} currency="USD" convertedCurrency="ARS" />);
+
+    expect(screen.getByText("2.588 USD × 1,550 = 4,011.40 ARS")).toBeInTheDocument();
+  });
+
+  it("prints nothing extra when the server sent no source", () => {
+    renderWithI18n(<StepTrace trace={[converted[1], { step: "convert_currency", value: "4011.40" }]} currency="USD" convertedCurrency="ARS" />);
+
+    expect(screen.queryByText(/×/)).toBeNull();
+  });
+});

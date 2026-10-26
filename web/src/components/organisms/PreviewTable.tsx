@@ -1,6 +1,7 @@
 import { useId, useRef, useState, type KeyboardEvent } from "react";
-import type { FxState, PreviewPage } from "../../api/types";
+import type { FxState, Language, PreviewItem, PreviewPage } from "../../api/types";
 import { useI18n } from "../../i18n";
+import { conversionText } from "../../lib/decimalText";
 import { Badge } from "../atoms/Badge";
 import { Button } from "../atoms/Button";
 import { StepTrace } from "../molecules/StepTrace";
@@ -13,9 +14,17 @@ interface Props {
   fx?: FxState | null;
 }
 
+/** The accessible hint of a converted cell: the unrounded input and the rate behind the figure. */
+function conversionTitle(item: PreviewItem, to: string, language: Language): string | undefined {
+  const step = item.trace.find((entry) => entry.step === "convert_currency");
+  const currency = item.record?.currency;
+  if (!step || step.source === undefined || step.rate === undefined || !currency) return undefined;
+  return conversionText({ source: step.source, rate: step.rate, value: step.value }, currency, to, language);
+}
+
 /** The ruled journal keeps every row; the selected row feeds the adjacent tape. */
 export function PreviewTable({ page, busy, onPage, fx = null }: Props) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const pending = usePendingAction<"previous" | "next">(busy);
   const [selection, setSelection] = useState({ offset: page.offset, row: page.items[0]?.row_number });
   // Only the first trace is printed line by line; once the user browses, results appear at once.
@@ -86,7 +95,7 @@ export function PreviewTable({ page, busy, onPage, fx = null }: Props) {
                     <td className="num cell--cost">
                       {item.record?.unit_cost_net ? <><span>{item.record.unit_cost_net}</span><small>{item.record.currency}</small></> : "—"}
                     </td>
-                    {fx && <td className="num cell--converted">{item.record?.unit_cost_net_converted ? `${item.record.unit_cost_net_converted} ${fx.to}` : "—"}</td>}
+                    {fx && <td className="num cell--converted" title={conversionTitle(item, fx.to, language)}>{item.record?.unit_cost_net_converted ? `${item.record.unit_cost_net_converted} ${fx.to}` : "—"}</td>}
                   </tr>
                 ))}
               </tbody>

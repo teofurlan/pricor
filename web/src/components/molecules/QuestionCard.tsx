@@ -42,9 +42,12 @@ export function QuestionCard({ question, answer, onAnswer, disabled = false, mem
   const { t, language } = useI18n();
   const [custom, setCustom] = useState("");
   const customId = useId();
+  const moreId = useId();
   const listed = question.options.some((option) => option.token === answer);
   const customAnswer = answer !== undefined && !listed ? formatTypedValue(question.id, answer, language) : null;
   const suggestionAccepted = acceptedModelSuggestion(question, answer);
+  const primary = question.options.filter((option) => option.group !== "more");
+  const more = question.options.filter((option) => option.group === "more");
   const token = customToken(question.id, custom);
   const customInvalid = custom.trim() !== "" && token === null;
 
@@ -54,7 +57,7 @@ export function QuestionCard({ question, answer, onAnswer, disabled = false, mem
       <p className="question__reason">{t("question.reason", { reason: localizeServerText(question.reason, language) })}</p>
       {question.model_phrasing && <p className="question__phrasing">{question.model_phrasing}</p>}
       <div className="question__options">
-        {question.options.map((option) => {
+        {primary.map((option) => {
           const isSelected = answer === option.token;
           return (
             <label key={option.token} className={`choice choice--key${isSelected ? " choice--pressed" : ""}`}>
@@ -76,6 +79,28 @@ export function QuestionCard({ question, answer, onAnswer, disabled = false, mem
           );
         })}
       </div>
+      {more.length > 0 && (
+        <div className="question__custom">
+          <label htmlFor={moreId}>{t("question.moreOptions")}</label>
+          <select
+            id={moreId}
+            value={more.some((option) => option.token === answer) ? answer : ""}
+            onChange={(event) => event.target.value && onAnswer(question.id, event.target.value)}
+          >
+            <option value="">{t("question.moreOptions")}</option>
+            {more.map((option) => (
+              <option key={option.token} value={option.token}>{option.label[language]}</option>
+            ))}
+          </select>
+          {question.suggestion && more.some((option) => option.token === question.suggestion?.option) && (
+            <>
+              <span>{more.find((option) => option.token === question.suggestion?.option)?.label[language]}</span>
+              <SuggestionBadge suggestion={question.suggestion} />
+            </>
+          )}
+          {more.some((option) => option.token === chatSuggestion) && <span className="badge badge--chat">{t("ask.suggested")}</span>}
+        </div>
+      )}
       <MemoryCitation memoryIds={question.suggestion?.memory_ids} memories={memories} />
       {suggestionAccepted && onRemember && <RememberSuggestion questionId={question.id} disabled={disabled} onRemember={onRemember} />}
       {question.allows_custom && (

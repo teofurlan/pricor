@@ -86,6 +86,8 @@ export interface LocalizedText {
 export interface QuestionOption {
   token: string;
   label: LocalizedText;
+  /** Only on questions with a long list: "primary" options are buttons, "more" ones go in a select. */
+  group?: "primary" | "more";
 }
 
 export interface Suggestion {
@@ -243,6 +245,9 @@ export interface SessionState {
 export interface TraceStep {
   step: string;
   value: string;
+  /** On `convert_currency` only: the unrounded amount that was converted, and the rate it was multiplied by. */
+  source?: string;
+  rate?: string;
 }
 
 export interface PreviewItem {

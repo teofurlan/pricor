@@ -185,13 +185,37 @@ def build_questions(
 def _with_detected_map(question: Question, detected: Mapping[str, str]) -> Question:
     """Offer what the column's values read as: a labeled option, suggested but never applied."""
     token = currency_map_token(dict(detected))
-    listing = ", ".join(f"`{key}` → {code}" for key, code in detected.items())
+    listing = ", ".join(f'"{key}" → {code}' for key, code in detected.items())
     option = Option(token, _text(f"Detected: {listing}", f"Detectado: {listing}"))
     return replace(
         question,
         options=(option, *question.options),
         suggestion=Suggestion(token, 1.0, suggested_by="detected", calibrated=True),
     )
+
+
+_DEFAULT_PRIMARY_RATE = "oficial:venta"
+
+
+def option_groups(question: Question) -> dict[str, str] | None:
+    """Presentation groups for a question with a long list: token -> "primary" | "more".
+
+    Only the exchange-rate question has them. Primary options are keeping the
+    original currency, the manual rate and the configured default rate (the
+    suggestion that comes from the setting, else the official sell rate); the
+    other market rates are "more". Purely presentational: the set of valid
+    answers does not depend on it.
+    """
+    if question.id is not ParameterId.FX_CONVERSION:
+        return None
+    suggestion = question.suggestion
+    default = (
+        suggestion.option
+        if suggestion is not None and suggestion.suggested_by == "setting"
+        else _DEFAULT_PRIMARY_RATE
+    )
+    primary = {"keep", MANUAL, default}
+    return {option.token: "primary" if option.token in primary else "more" for option in question.options}
 
 
 def question_for(parameter: ParameterId) -> Question | None:

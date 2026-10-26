@@ -125,7 +125,7 @@ from pricor.application.export_import import ExportedFile, ExportImport
 from pricor.application.import_first_time import ImportFirstTime
 from pricor.application.manage_memory import InvalidMemoryTextError, ManageMemory
 from pricor.application.manage_output_format import ManageOutputFormat
-from pricor.application.questions import Question
+from pricor.application.questions import Question, option_groups
 from pricor.application.report_price_changes import (
     ImportComparison,
     ReportPriceChanges,
@@ -133,10 +133,11 @@ from pricor.application.report_price_changes import (
 )
 from pricor.domain.price_report import PriceChange, ProductPrice, percent_text
 from pricor.domain.roles import ColumnRole
-from pricor.ports.import_session import ImportSession, PlanChange, PreviewPage
+from pricor.ports.import_session import ImportSession, PlanChange, PreviewPage, PreviewRow
 from pricor.ports.import_session_repository import SessionNotFoundError
 from pricor.ports.memory import Memory, MemoryNotFoundError
 from pricor.ports.price_history import ImportSummary
+from pricor.ports.question_model import Option
 from pricor.ports.output_format import OUTPUT_FIELDS, OutputFormat, OutputFormatNotFoundError
 from pricor.ports.model_errors import ModelError
 from pricor.ports.question_helper import (
@@ -257,14 +258,20 @@ class EditMemoryBody(BaseModel):
 # -- serialization ----------------------------------------------------------------
 
 
+def _option(option: Option, groups: dict[str, str] | None) -> dict[str, Any]:
+    body: dict[str, Any] = {"token": option.token, "label": option.label.as_dict()}
+    if groups is not None:
+        body["group"] = groups[option.token]
+    return body
+
+
 def _question(question: Question) -> dict[str, Any]:
     suggestion = question.suggestion
+    groups = option_groups(question)
     return {
         "id": question.id.value,
         "text": question.text.as_dict(),
-        "options": [
-            {"token": option.token, "label": option.label.as_dict()} for option in question.options
-        ],
+        "options": [_option(option, groups) for option in question.options],
         "allows_custom": question.allows_custom,
         "reason": question.reason,
         "model_phrasing": question.model_phrasing,
@@ -399,6 +406,23 @@ def session_state(session: ImportSession) -> dict[str, Any]:
     }
 
 
+def _trace(item: PreviewRow) -> list[dict[str, Any]]:
+    """The value after each step; the conversion also carries what it was computed from.
+
+    The engine converts the unrounded cost, which is the step just before
+    "rounding", so showing it next to the rate explains a converted figure that
+    does not match the rounded cost.
+    """
+    steps = [{"step": step.step, "value": step.value} for step in item.trace]
+    names = [step.step for step in item.trace]
+    if "rounding" in names and item.record is not None and item.record.get("fx_rate"):
+        position = names.index("rounding")
+        if position > 0 and steps[-1]["step"] == "convert_currency":
+            steps[-1]["source"] = steps[position - 1]["value"]
+            steps[-1]["rate"] = item.record["fx_rate"]
+    return steps
+
+
 def preview_body(page: PreviewPage) -> dict[str, Any]:
     return {
         "offset": page.offset,
@@ -410,7 +434,7 @@ def preview_body(page: PreviewPage) -> dict[str, Any]:
                 "row_number": item.row_number,
                 "status": item.status,
                 "original": list(item.original),
-                "trace": [{"step": step.step, "value": step.value} for step in item.trace],
+                "trace": _trace(item),
                 "record": item.record,
                 "reasons": list(item.reasons),
             }

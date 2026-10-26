@@ -128,6 +128,28 @@ describe("converted costs in the preview", () => {
     expect(await screen.findByText("Converted")).toBeInTheDocument();
   });
 
+  it("explains the converted cell with the unrounded input and the rate", () => {
+    const precise = previewItem({
+      row_number: 4,
+      record: {
+        supplier_code: "A2",
+        description: "Antenna",
+        unit_cost_net: "2.59",
+        currency: "USD",
+        unit_cost_net_converted: "4011.40",
+      },
+      trace: [
+        { step: "parse_number", value: "2.588" },
+        { step: "rounding", value: "2.59" },
+        { step: "convert_currency", value: "4011.40", source: "2.588", rate: "1550" },
+      ],
+    });
+    renderWithI18n(<PreviewTable page={previewPage({ items: [precise] })} busy={false} onPage={noop} fx={fxState()} />);
+
+    const cell = screen.getAllByText("4011.40 ARS")[0].closest("td")!;
+    expect(cell).toHaveAttribute("title", "2.588 USD × 1,550 = 4,011.40 ARS");
+  });
+
   it("has no converted column when nothing is converted", () => {
     renderWithI18n(<PreviewTable page={previewPage()} busy={false} onPage={noop} fx={null} />);
 

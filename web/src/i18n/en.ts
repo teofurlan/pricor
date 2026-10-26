@@ -99,6 +99,7 @@ export const en = {
   "notice.modelUnavailable.body": "Import continues with heuristics only. Review the columns yourself and answer every question.",
 
   "question.reason": "Why we ask: {reason}",
+  "question.moreOptions": "Another rate…",
   "question.custom.label": "Another value",
   "question.custom.use": "Use this value",
   "question.custom.chosen": "Your value: {value}",
