@@ -1,15 +1,19 @@
 import { useId, useRef, useState, type FormEvent } from "react";
-import type { CreateImportInput, Language } from "../../api/types";
+import type { CreateImportInput, Language, SampleListing } from "../../api/types";
 import { ApiError } from "../../api/client";
 import { useI18n } from "../../i18n";
 import { describeError } from "../../i18n/serverText";
 import { Button } from "../atoms/Button";
 import { TapeLoader } from "../atoms/TapeLoader";
+import { SamplePicker } from "../molecules/SamplePicker";
 
 interface Props {
   busy: boolean;
   onSubmit(input: CreateImportInput): void;
   onInspectSheets?(file: File): Promise<string[]>;
+  /** Sample lists to try; the picker shows only when both are given and the list is not empty. */
+  onListSamples?(): Promise<SampleListing[]>;
+  onLoadSample?(sample: SampleListing): Promise<File>;
 }
 
 function formatFileSize(bytes: number): string {
@@ -18,7 +22,7 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function UploadForm({ busy, onSubmit, onInspectSheets }: Props) {
+export function UploadForm({ busy, onSubmit, onInspectSheets, onListSamples, onLoadSample }: Props) {
   const { t, language: interfaceLanguage } = useI18n();
   const [inspectError, setInspectError] = useState<string | null>(null);
   // Only the file picked last may fill the sheet list.
@@ -59,6 +63,17 @@ export function UploadForm({ busy, onSubmit, onInspectSheets }: Props) {
         .finally(() => { if (ticket === inspection.current) setInspectingSheets(false); });
     } else {
       setInspectingSheets(false);
+    }
+  }
+
+  async function chooseSample(sample: SampleListing) {
+    try {
+      const sampleFile = await onLoadSample!(sample);
+      setSupplierName(sample.supplier_name);
+      handleFile(sampleFile);
+    } catch (failure: unknown) {
+      const reason = failure instanceof ApiError ? describeError(failure, interfaceLanguage) : failure instanceof Error ? failure.message : String(failure);
+      setInspectError(t("upload.sampleFailed", { reason }));
     }
   }
 
@@ -169,6 +184,7 @@ export function UploadForm({ busy, onSubmit, onInspectSheets }: Props) {
           )}
         </div>
       </div>
+      {onListSamples && onLoadSample && <SamplePicker list={onListSamples} onChoose={chooseSample} disabled={busy} />}
       {inspectError && <p className="field__error" role="status">{inspectError}</p>}
       <div className="form__row">
         {availableSheets && availableSheets.length > 1 && (

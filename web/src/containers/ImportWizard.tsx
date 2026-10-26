@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ApiClient, ApiError, ExportFile, ExportSheet, MemoryApiClient, OutputFormatApiClient } from "../api/client";
+import type { ApiClient, ApiError, ExportFile, ExportSheet, MemoryApiClient, OutputFormatApiClient, SampleApiClient } from "../api/client";
 import { useServerConfig } from "../api/serverConfig";
 import type { ColumnRole, CreateImportInput, Memory, Question, SessionState } from "../api/types";
 import { Button } from "../components/atoms/Button";
@@ -56,6 +56,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const memoryApi = "listMemories" in api ? (api as ApiClient & MemoryApiClient) : null;
+  const sampleApi = typeof (api as Partial<SampleApiClient>).listSamples === "function" ? (api as ApiClient & SampleApiClient) : null;
   const formatApi = "getOutputFormat" in api ? (api as ApiClient & OutputFormatApiClient) : null;
 
   // Optimistic answers & serialized request queue
@@ -323,7 +324,15 @@ export function ImportWizard({ api }: { api: ApiClient }) {
 
           {step === "upload" && (
             <div className="upload-step">
-              <UploadForm busy={busy} onSubmit={upload} onInspectSheets={(file) => api.listSheets(file)} />
+              <UploadForm
+                busy={busy}
+                onSubmit={upload}
+                onInspectSheets={(file) => api.listSheets(file)}
+                {...(sampleApi && {
+                  onListSamples: () => sampleApi.listSamples(),
+                  onLoadSample: (sample) => sampleApi.downloadSample(sample),
+                })}
+              />
               {formatApi && <OutputFormatContainer api={formatApi} />}
             </div>
           )}

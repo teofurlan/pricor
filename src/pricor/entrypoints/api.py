@@ -68,6 +68,10 @@ sessions (409 otherwise); an unknown `format` is a 422. The XLSX export carries 
 rejected rows as a second sheet. Column order and text/number rules are in
 `pricor.ports.exporter` and the exporter modules.
 
+`GET /samples` lists the synthetic sample price lists shipped with the package (`id`,
+`file_name`, `supplier_name`, `week`, and `title`/`description` keyed by language `en`/`es`);
+`GET /samples/{id}` downloads one as XLSX, or 404 `sample_not_found`.
+
 Errors share one body, `{"error": {"code": "...", "message": "..."}}`, with
 404 (unknown session), 409 (operation not allowed in this state), 413 (file too
 large), 415 (unsupported file type) and 422 (invalid input or unreadable file).
@@ -148,6 +152,7 @@ from pricor.ports.question_helper import (
     QuestionTurn,
 )
 from pricor.entrypoints.web_app import install_web_app
+from pricor.samples import SAMPLES, XLSX_CONTENT_TYPE, find_sample
 from pricor.ports.spreadsheet import (
     FileTooLargeError,
     SpreadsheetError,
@@ -843,6 +848,31 @@ def create_app(dependencies: ApiDependencies) -> FastAPI:
         if format != "csv":
             raise InvalidInputError(f"unknown format {format!r}; use: csv")
         return _download(reporter().export(session_id, parse_threshold(threshold)))
+
+    @app.get("/samples")
+    def list_samples() -> list[dict[str, Any]]:
+        return [
+            {
+                "id": sample.id,
+                "file_name": sample.file_name,
+                "supplier_name": sample.supplier_name,
+                "week": sample.week,
+                "title": sample.title,
+                "description": sample.description,
+            }
+            for sample in SAMPLES
+        ]
+
+    @app.get("/samples/{sample_id}")
+    def get_sample_file(sample_id: str) -> Response:
+        sample = find_sample(sample_id)
+        if sample is None or not sample.path.is_file():
+            return _error(404, "sample_not_found", f"no sample list {sample_id!r}")
+        return Response(
+            sample.path.read_bytes(),
+            media_type=XLSX_CONTENT_TYPE,
+            headers={"Content-Disposition": f'attachment; filename="{sample.file_name}"'},
+        )
 
     @app.get("/config")
     def get_config() -> dict[str, Any]:

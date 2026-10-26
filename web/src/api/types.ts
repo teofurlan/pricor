@@ -2,6 +2,16 @@
 
 export type Language = "en" | "es";
 
+/** A synthetic sample price list shipped with the server (`GET /samples`). */
+export interface SampleListing {
+  id: string;
+  file_name: string;
+  supplier_name: string;
+  week: number;
+  title: Record<Language, string>;
+  description: Record<Language, string>;
+}
+
 export interface ServerConfig {
   model_provider: "ollama" | "gemini";
   demo: boolean;

@@ -13,6 +13,7 @@ import type {
   ColumnRole,
   Memory,
   ServerConfig,
+  SampleListing,
 } from "./types";
 
 /** A failed API call, normalized from the server's `{"error": {code, message}}` envelope. */
@@ -63,6 +64,13 @@ export interface ApiClient {
   config(): Promise<ServerConfig>;
 }
 
+/** The synthetic sample lists a visitor can try (`/samples`). */
+export interface SampleApiClient {
+  listSamples(): Promise<SampleListing[]>;
+  /** The sample's file, ready to load into the upload form like a dropped one. */
+  downloadSample(sample: SampleListing): Promise<File>;
+}
+
 export interface MemoryApiClient {
   listMemories(): Promise<Memory[]>;
   createMemoryNote(text: string, supplierName?: string): Promise<Memory>;
@@ -99,7 +107,7 @@ async function fail(response: Response): Promise<never> {
   throw new ApiError(response.status, "unexpected_response", `The server answered ${response.status}.`);
 }
 
-export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), baseUrl = ""): ApiClient & MemoryApiClient & OutputFormatApiClient {
+export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), baseUrl = ""): ApiClient & MemoryApiClient & OutputFormatApiClient & SampleApiClient {
   async function call<T>(path: string, init?: RequestInit): Promise<T> {
     let response: Response;
     try {
@@ -188,5 +196,17 @@ export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), 
     editMemory: (id, text) => call(`/memories/${encodeURIComponent(id)}`, json("PATCH", { text })),
     deleteMemory: (id) => call(`/memories/${encodeURIComponent(id)}`, { method: "DELETE" }),
     config: () => call<ServerConfig>("/config"),
+    listSamples: () => call<SampleListing[]>("/samples"),
+    async downloadSample(sample) {
+      let response: Response;
+      try {
+        response = await fetchImpl(`${baseUrl}/samples/${encodeURIComponent(sample.id)}`);
+      } catch {
+        throw new ApiError(0, "network_error", "The Pricor server cannot be reached.");
+      }
+      if (!response.ok) await fail(response);
+      const bytes = await response.arrayBuffer();
+      return new File([bytes], sample.file_name, { type: response.headers.get("Content-Type") ?? "" });
+    },
   };
 }
