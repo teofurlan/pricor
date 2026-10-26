@@ -176,6 +176,8 @@ class ApiDependencies:
     reader: SpreadsheetReader | None = None
     question_helper: QuestionHelper | None = None  # read-only model explanations; optional
     output_format: ManageOutputFormat | None = None  # one persistent store-wide template
+    model_provider: str = "ollama"
+    demo: bool = False
 
 
 class OutputMappingBody(BaseModel):
@@ -811,6 +813,13 @@ def create_app(dependencies: ApiDependencies) -> FastAPI:
         if format != "csv":
             raise InvalidInputError(f"unknown format {format!r}; use: csv")
         return _download(reporter().export(session_id, parse_threshold(threshold)))
+
+    @app.get("/config")
+    def get_config() -> dict[str, Any]:
+        return {
+            "model_provider": dependencies.model_provider,
+            "demo": dependencies.demo,
+        }
 
     if dependencies.web_dist is not None:
         install_web_app(app, dependencies.web_dist)

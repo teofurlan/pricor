@@ -10,6 +10,7 @@ model call that produced the classification (shared by every column of a sheet).
 from typing import Any, Protocol
 
 from pricor.domain.profile import ColumnProfile, SheetProfile
+from pricor.ports.chat_client import ChatClient, ChatReply
 from pricor.ports.column_classifier import ColumnClassification, ColumnRole
 
 from .gemma_prompts import CLASSIFIER_SYSTEM, render_data_block
@@ -22,7 +23,6 @@ from .model_output import (
     expect_unit_interval,
     fail,
 )
-from .ollama_client import ChatReply
 
 _ROLES = [role.value for role in ColumnRole]
 _ITEM_KEYS = ("index", "role", "confidence", "rationale")
@@ -46,10 +46,6 @@ CLASSIFIER_SCHEMA: dict[str, Any] = {
     },
     "required": ["columns"],
 }
-
-
-class ChatClient(Protocol):
-    def chat_json(self, system: str, user: str, schema: dict[str, Any]) -> ChatReply: ...
 
 
 class GemmaColumnClassifier:

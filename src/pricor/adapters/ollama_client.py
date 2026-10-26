@@ -11,9 +11,9 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable
-from dataclasses import dataclass
 from typing import Any
 
+from pricor.ports.chat_client import ChatReply  # re-exported: older code imports it from here
 from pricor.ports.model_errors import (
     ModelInvalidJsonError,
     ModelTimeoutError,
@@ -36,11 +36,6 @@ def urllib_transport(url: str, body: bytes, timeout: float) -> bytes:
     with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
         return response.read(_MAX_RESPONSE_BYTES)
 
-
-@dataclass(frozen=True)
-class ChatReply:
-    content: dict[str, Any]
-    latency_seconds: float
 
 
 class OllamaClient:

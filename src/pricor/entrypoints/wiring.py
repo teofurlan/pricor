@@ -2,9 +2,15 @@
 
 Environment variables:
 
+    PRICOR_MODEL_PROVIDER  ollama | gemini                 (default ollama)
     PRICOR_OLLAMA_URL      base URL of the Ollama server   (default http://localhost:11434)
     PRICOR_OLLAMA_MODEL    model name                      (default gemma4:e4b)
     PRICOR_OLLAMA_TIMEOUT  seconds per model call          (default 180)
+    PRICOR_GEMINI_API_KEY  Google AI Studio API key        (required when provider is gemini)
+    PRICOR_GEMINI_MODEL    Gemini/Gemma chat model         (default gemma-4-26b-a4b-it)
+    PRICOR_GEMINI_EMBED_MODEL Gemini embedding model       (default gemini-embedding-001)
+    PRICOR_GEMINI_TIMEOUT  seconds per Gemini model call   (default 60)
+    PRICOR_DEMO            enable demo mode: 1/true/yes    (default false)
     PRICOR_EMBED_MODEL     embedding model                 (default bge-m3)
     PRICOR_MEMORY_TOP_K    memories retrieved for Gemma    (default 3)
     PRICOR_DB              path of the SQLite file          (default: see `database_path_from_env`)
@@ -25,23 +31,32 @@ from fastapi import FastAPI
 
 from pricor.adapters.dolarapi_provider import DEFAULT_TIMEOUT_SECONDS as FX_TIMEOUT
 from pricor.adapters.dolarapi_provider import DolarApiProvider
-from pricor.adapters.gemma_advisor import GemmaPlanAdvisor
-from pricor.adapters.gemma_output_format import GemmaOutputFormat
-from pricor.adapters.heuristic_output_format import HeuristicOutputFormat
-from pricor.adapters.gemma_question_helper import GemmaQuestionHelper
-from pricor.adapters.gemma_classifier import GemmaColumnClassifier
-from pricor.adapters.heuristic_classifier import HeuristicColumnClassifier
-from pricor.adapters.ollama_client import (
-    DEFAULT_BASE_URL,
-    DEFAULT_MODEL,
-    DEFAULT_TIMEOUT_SECONDS,
-    OllamaClient,
+from pricor.adapters.gemini_client import (
+    DEFAULT_MODEL as DEFAULT_GEMINI_MODEL,
+    DEFAULT_TIMEOUT_SECONDS as DEFAULT_GEMINI_TIMEOUT_SECONDS,
+    GeminiChatClient,
 )
+from pricor.adapters.gemini_embedder import (
+    DEFAULT_MODEL as DEFAULT_GEMINI_EMBED_MODEL,
+    GeminiEmbedder,
+)
+from pricor.adapters.gemma_advisor import GemmaPlanAdvisor
+from pricor.adapters.gemma_classifier import GemmaColumnClassifier
+from pricor.adapters.gemma_output_format import GemmaOutputFormat
+from pricor.adapters.gemma_question_helper import GemmaQuestionHelper
+from pricor.adapters.heuristic_classifier import HeuristicColumnClassifier
+from pricor.adapters.heuristic_output_format import HeuristicOutputFormat
 from pricor.adapters.laya_classifier import (
     DEFAULT_MODEL_PATH,
     DEVICES,
     LayaColumnClassifier,
     laya_unavailable_reason,
+)
+from pricor.adapters.ollama_client import (
+    DEFAULT_BASE_URL,
+    DEFAULT_MODEL,
+    DEFAULT_TIMEOUT_SECONDS,
+    OllamaClient,
 )
 from pricor.adapters.ollama_embedder import DEFAULT_MODEL as DEFAULT_EMBED_MODEL
 from pricor.adapters.ollama_embedder import OllamaEmbedder
@@ -49,15 +64,23 @@ from pricor.adapters.report_csv_exporter import ReportCsvExporter
 from pricor.adapters.spreadsheet_reader import FileSpreadsheetReader
 from pricor.adapters.sqlite_memory_store import SqliteMemoryStore
 from pricor.adapters.sqlite_store import SqliteDatabase
-from pricor.application.cascade import AgreementStage, ClassifierStage, Member, Stage
+from pricor.application.cascade import (
+    UNCALIBRATED_THRESHOLD,
+    AgreementStage,
+    ClassifierStage,
+    Member,
+    Stage,
+)
 from pricor.application.manage_memory import ManageMemory
 from pricor.application.manage_output_format import ManageOutputFormat
 from pricor.application.report_price_changes import ReportPriceChanges
 from pricor.application.reuse_supplier_plan import ReuseSupplierPlan
-from pricor.entrypoints.calibration_file import DEFAULT_CALIBRATION_PATH, load_calibration
-from pricor.entrypoints.api import ApiDependencies, create_app
 from pricor.domain.fx import MARKET_RATE_TYPES
+from pricor.entrypoints.api import ApiDependencies, create_app
+from pricor.entrypoints.calibration_file import DEFAULT_CALIBRATION_PATH, load_calibration
 from pricor.entrypoints.web_app import DEFAULT_WEB_DIST
+from pricor.ports.chat_client import ChatClient
+from pricor.ports.embedder import Embedder
 
 
 def ollama_client_from_env(env: Mapping[str, str]) -> OllamaClient:
@@ -70,6 +93,61 @@ def ollama_client_from_env(env: Mapping[str, str]) -> OllamaClient:
         model=env.get("PRICOR_OLLAMA_MODEL", DEFAULT_MODEL),
         timeout=timeout,
     )
+
+
+def gemini_client_from_env(env: Mapping[str, str]) -> GeminiChatClient:
+    api_key = env.get("PRICOR_GEMINI_API_KEY")
+    if not api_key or not api_key.strip():
+        raise ValueError("PRICOR_GEMINI_API_KEY is required when PRICOR_MODEL_PROVIDER is 'gemini'")
+    try:
+        timeout = float(env.get("PRICOR_GEMINI_TIMEOUT", DEFAULT_GEMINI_TIMEOUT_SECONDS))
+    except ValueError as error:
+        raise ValueError("PRICOR_GEMINI_TIMEOUT must be a number of seconds") from error
+    return GeminiChatClient(
+        api_key=api_key.strip(),
+        model=env.get("PRICOR_GEMINI_MODEL", DEFAULT_GEMINI_MODEL),
+        timeout=timeout,
+    )
+
+
+PROVIDERS = ("ollama", "gemini")
+
+
+def model_provider_from_env(env: Mapping[str, str]) -> str:
+    """`PRICOR_MODEL_PROVIDER`, ignoring case and spaces; blank or unset means `ollama`."""
+    provider = (env.get("PRICOR_MODEL_PROVIDER") or "").strip().lower() or "ollama"
+    if provider not in PROVIDERS:
+        raise ValueError(f"PRICOR_MODEL_PROVIDER must be 'ollama' or 'gemini', got {provider!r}")
+    return provider
+
+
+def chat_client_from_env(env: Mapping[str, str]) -> ChatClient:
+    if model_provider_from_env(env) == "gemini":
+        return gemini_client_from_env(env)
+    return ollama_client_from_env(env)
+
+
+def embedder_from_env(env: Mapping[str, str], chat_client: ChatClient) -> Embedder:
+    """The memory embedder for the same provider, sharing the chat client's server and timeout."""
+    if isinstance(chat_client, GeminiChatClient):
+        return GeminiEmbedder(
+            api_key=env.get("PRICOR_GEMINI_API_KEY", "").strip(),
+            model=env.get("PRICOR_GEMINI_EMBED_MODEL", DEFAULT_GEMINI_EMBED_MODEL),
+            timeout=chat_client.timeout,
+            base_url=chat_client.base_url,
+        )
+    if isinstance(chat_client, OllamaClient):
+        return OllamaEmbedder(
+            base_url=chat_client.base_url,
+            model=env.get("PRICOR_EMBED_MODEL", DEFAULT_EMBED_MODEL),
+            timeout=chat_client.timeout,
+        )
+    raise TypeError(f"no embedder for chat client {type(chat_client).__name__}")
+
+
+def demo_from_env(env: Mapping[str, str]) -> bool:
+    val = env.get("PRICOR_DEMO", "").strip().lower()
+    return val in ("1", "true", "yes")
 
 
 def laya_settings_from_env(env: Mapping[str, str]) -> tuple[Path, str]:
@@ -86,7 +164,7 @@ STAGE_NAMES = ("agreement", "laya", "heuristics", "gemma")
 
 def build_stages(
     env: Mapping[str, str],
-    client: OllamaClient,
+    client: ChatClient,
     laya_unavailable_reason: Callable[[Path], str | None] = laya_unavailable_reason,
 ) -> list[Stage]:
     """The classification cascade in the order the calibration file decided, then the user.
@@ -108,8 +186,13 @@ def build_stages(
 
     laya = LayaColumnClassifier(model_path, device)
     heuristics = HeuristicColumnClassifier()
+    is_gemini_without_explicit_cal = (
+        model_provider_from_env(env) == "gemini" and not env.get("PRICOR_CALIBRATION")
+    )
 
     def classifier_stage(name: str, classifier, skipped_reason: str | None = None) -> ClassifierStage:
+        if name == "gemma" and is_gemini_without_explicit_cal:
+            return ClassifierStage(name, classifier, UNCALIBRATED_THRESHOLD, False, skipped_reason)
         threshold, calibrated = calibration.threshold_for(name)
         return ClassifierStage(name, classifier, threshold, calibrated, skipped_reason)
 
@@ -176,16 +259,13 @@ def memory_top_k_from_env(env: Mapping[str, str]) -> int:
 
 
 def dependencies_from_env(env: Mapping[str, str]) -> ApiDependencies:
-    client = ollama_client_from_env(env)
+    provider = model_provider_from_env(env)
+    client = chat_client_from_env(env)
     rate_type, fx_timeout = fx_settings_from_env(env)
     memory_top_k = memory_top_k_from_env(env)
     database = SqliteDatabase(database_path_from_env(env))
     stages = build_stages(env, client)
-    embedder = OllamaEmbedder(
-        base_url=client.base_url,
-        model=env.get("PRICOR_EMBED_MODEL", DEFAULT_EMBED_MODEL),
-        timeout=client.timeout,
-    )
+    embedder = embedder_from_env(env, client)
     memory = ManageMemory(
         SqliteMemoryStore(database, embedder.model), embedder, database.sessions.get
     )
@@ -214,6 +294,8 @@ def dependencies_from_env(env: Mapping[str, str]) -> ApiDependencies:
             FileSpreadsheetReader(), database.output_format, HeuristicOutputFormat(),
             GemmaOutputFormat(client),
         ),
+        model_provider=provider,
+        demo=demo_from_env(env),
     )
 
 

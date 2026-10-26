@@ -2,11 +2,11 @@
 
 from collections.abc import Sequence
 
-from pricor.adapters.gemma_classifier import ChatClient
 from pricor.adapters.gemma_prompts import OUTPUT_FORMAT_SYSTEM, render_output_format_data_block
 from pricor.adapters.model_output import (
     expect_index, expect_list, expect_object, expect_unit_interval, fail,
 )
+from pricor.ports.chat_client import ChatClient
 from pricor.ports.output_format import OutputProposal, TemplateColumn, validate_source
 
 OUTPUT_FORMAT_SCHEMA = {

@@ -9,6 +9,7 @@ the whole proposal fail with `ModelSchemaError`. Nothing is guessed or repaired.
 from typing import Any
 
 from pricor.domain.profile import SheetProfile
+from pricor.ports.chat_client import ChatClient
 from pricor.ports.column_classifier import ColumnClassification
 from pricor.ports.plan_advisor import (
     VALUE_TOKENS,
@@ -21,7 +22,6 @@ from pricor.ports.plan_advisor import (
     parse_value,
 )
 
-from .gemma_classifier import ChatClient
 from .gemma_prompts import UNTRUSTED_RULES, render_data_block
 from .model_output import (
     expect_index,

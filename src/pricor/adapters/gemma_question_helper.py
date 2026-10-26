@@ -3,6 +3,7 @@
 from collections.abc import Sequence
 from typing import Any
 
+from pricor.ports.chat_client import ChatClient
 from pricor.ports.question_helper import (
     MAX_REPLY_LENGTH,
     QuestionContext,
@@ -11,7 +12,6 @@ from pricor.ports.question_helper import (
 )
 
 from .gemma_advisor import LANGUAGES
-from .gemma_classifier import ChatClient
 from .gemma_prompts import UNTRUSTED_RULES, render_question_data_block
 from .model_output import expect_choice, expect_object, fail
 
