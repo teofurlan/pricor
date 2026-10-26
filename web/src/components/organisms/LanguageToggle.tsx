@@ -1,4 +1,4 @@
-import { useI18n } from "../../i18n";
+import { setStoredLanguage, useI18n } from "../../i18n";
 
 export function LanguageToggle() {
   const { language, setLanguage, t } = useI18n();
@@ -10,7 +10,10 @@ export function LanguageToggle() {
           type="button"
           className="lang__option"
           aria-pressed={language === code}
-          onClick={() => setLanguage(code)}
+          onClick={() => {
+            setLanguage(code);
+            setStoredLanguage(code);
+          }}
         >
           {code.toUpperCase()}
         </button>

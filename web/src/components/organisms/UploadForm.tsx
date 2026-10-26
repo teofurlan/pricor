@@ -29,7 +29,8 @@ export function UploadForm({ busy, onSubmit, onInspectSheets }: Props) {
   const [inspectingSheets, setInspectingSheets] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [sheet, setSheet] = useState("");
-  const [language, setLanguage] = useState<Language>(interfaceLanguage);
+  const [manualLanguage, setManualLanguage] = useState<Language | null>(null);
+  const language = manualLanguage ?? interfaceLanguage;
   const [fresh, setFresh] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileId = useId();
@@ -185,7 +186,7 @@ export function UploadForm({ busy, onSubmit, onInspectSheets }: Props) {
         )}
         <label className="field">
           <span className="field__label">{t("upload.language")}</span>
-          <select value={language} onChange={(event) => setLanguage(event.target.value as Language)}>
+          <select value={language} onChange={(event) => setManualLanguage(event.target.value as Language)}>
             <option value="en">{t("language.en")}</option>
             <option value="es">{t("language.es")}</option>
           </select>

@@ -21,6 +21,43 @@ export function isTextKey(key: string): key is TextKey {
   return key in en;
 }
 
+export const LANGUAGE_STORAGE_KEY = "pricor.language";
+
+export function getStoredLanguage(): Language | null {
+  try {
+    const value = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    if (value === "en" || value === "es") return value;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredLanguage(language: Language): void {
+  try {
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+  } catch {
+    // blocked storage never breaks the app
+  }
+}
+
+export function detectLanguage(): Language {
+  const stored = getStoredLanguage();
+  if (stored) return stored;
+
+  try {
+    if (typeof navigator !== "undefined" && typeof navigator.language === "string") {
+      if (navigator.language.startsWith("en")) {
+        return "en";
+      }
+    }
+  } catch {
+    // blocked or unavailable navigator falls back to Spanish
+  }
+
+  return "es";
+}
+
 export interface I18n {
   language: Language;
   setLanguage(language: Language): void;
@@ -31,12 +68,12 @@ const I18nContext = createContext<I18n | null>(null);
 
 export function I18nProvider({
   children,
-  initialLanguage = "en",
+  initialLanguage,
 }: {
   children: ReactNode;
   initialLanguage?: Language;
 }) {
-  const [language, setLanguage] = useState<Language>(initialLanguage);
+  const [language, setLanguage] = useState<Language>(() => initialLanguage ?? detectLanguage());
 
   useEffect(() => {
     document.documentElement.lang = language;

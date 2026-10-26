@@ -1,9 +1,10 @@
-import { act, fireEvent, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../api/client";
 import { column, previewItem, previewPage, question } from "../../test/fixtures";
 import { renderWithI18n } from "../../test/render";
+import { I18nProvider, useI18n } from "../../i18n";
 import { ApprovePanel } from "./ApprovePanel";
 import { ColumnsTable } from "./ColumnsTable";
 import { ErrorBanner } from "./ErrorBanner";
@@ -212,6 +213,48 @@ describe("UploadForm", () => {
     resolveSheets(["Hoja 1", "Hoja 2"]);
     await screen.findByLabelText("Sheet");
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("follows the UI language until changed by hand, then keeps the user value", async () => {
+    function Harness() {
+      const { setLanguage } = useI18n();
+      return (
+        <div>
+          <button onClick={() => setLanguage("es")}>set-es</button>
+          <button onClick={() => setLanguage("en")}>set-en</button>
+          <UploadForm busy={false} onSubmit={vi.fn()} />
+        </div>
+      );
+    }
+
+    render(
+      <I18nProvider initialLanguage="en">
+        <Harness />
+      </I18nProvider>,
+    );
+
+    const getSelect = () => screen.getByRole("combobox", { name: /questions|preguntas/i });
+    expect(getSelect()).toHaveValue("en");
+
+    // UI switches to Spanish -> select follows
+    await userEvent.click(screen.getByRole("button", { name: "set-es" }));
+    expect(getSelect()).toHaveValue("es");
+
+    // UI switches back to English -> select follows
+    await userEvent.click(screen.getByRole("button", { name: "set-en" }));
+    expect(getSelect()).toHaveValue("en");
+
+    // User changes select manually to Spanish
+    await userEvent.selectOptions(getSelect(), "es");
+    expect(getSelect()).toHaveValue("es");
+
+    // UI switches to English -> select keeps user's manual choice
+    await userEvent.click(screen.getByRole("button", { name: "set-en" }));
+    expect(getSelect()).toHaveValue("es");
+
+    // UI switches to Spanish -> select keeps user's manual choice
+    await userEvent.click(screen.getByRole("button", { name: "set-es" }));
+    expect(getSelect()).toHaveValue("es");
   });
 });
 
@@ -876,5 +919,14 @@ describe("LanguageToggle", () => {
     await userEvent.click(screen.getByRole("button", { name: "ES" }));
     expect(screen.getByRole("button", { name: "ES" })).toHaveAttribute("aria-pressed", "true");
     expect(document.documentElement.lang).toBe("es");
+  });
+
+  it("stores the user choice in localStorage", async () => {
+    localStorage.clear();
+    renderWithI18n(<LanguageToggle />);
+    await userEvent.click(screen.getByRole("button", { name: "ES" }));
+    expect(localStorage.getItem("pricor.language")).toBe("es");
+    await userEvent.click(screen.getByRole("button", { name: "EN" }));
+    expect(localStorage.getItem("pricor.language")).toBe("en");
   });
 });

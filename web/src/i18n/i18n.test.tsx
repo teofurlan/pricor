@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { en } from "./en";
 import { es } from "./es";
 import { I18nProvider, interpolate, useI18n } from "./index";
@@ -45,6 +45,14 @@ function Probe() {
 }
 
 describe("I18nProvider", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("starts in English and switches the whole tree to Spanish", async () => {
     render(
       <I18nProvider>
@@ -55,5 +63,70 @@ describe("I18nProvider", () => {
     await userEvent.click(screen.getByRole("button", { name: "switch" }));
     expect(screen.getByTestId("lang")).toHaveTextContent("es");
     expect(document.documentElement.lang).toBe("es");
+  });
+
+  it("defaults to Spanish when navigator.language is es-AR", () => {
+    vi.spyOn(navigator, "language", "get").mockReturnValue("es-AR");
+    render(
+      <I18nProvider>
+        <Probe />
+      </I18nProvider>,
+    );
+    expect(screen.getByTestId("lang")).toHaveTextContent("es");
+  });
+
+  it("defaults to English when navigator.language is en-US", () => {
+    vi.spyOn(navigator, "language", "get").mockReturnValue("en-US");
+    render(
+      <I18nProvider>
+        <Probe />
+      </I18nProvider>,
+    );
+    expect(screen.getByTestId("lang")).toHaveTextContent("en");
+  });
+
+  it("defaults to Spanish when navigator.language is pt-BR", () => {
+    vi.spyOn(navigator, "language", "get").mockReturnValue("pt-BR");
+    render(
+      <I18nProvider>
+        <Probe />
+      </I18nProvider>,
+    );
+    expect(screen.getByTestId("lang")).toHaveTextContent("es");
+  });
+
+  it("uses stored choice if present even when navigator is Spanish", () => {
+    localStorage.setItem("pricor.language", "en");
+    vi.spyOn(navigator, "language", "get").mockReturnValue("es-AR");
+    render(
+      <I18nProvider>
+        <Probe />
+      </I18nProvider>,
+    );
+    expect(screen.getByTestId("lang")).toHaveTextContent("en");
+  });
+
+  it("uses stored choice if present even when navigator is English", () => {
+    localStorage.setItem("pricor.language", "es");
+    vi.spyOn(navigator, "language", "get").mockReturnValue("en-US");
+    render(
+      <I18nProvider>
+        <Probe />
+      </I18nProvider>,
+    );
+    expect(screen.getByTestId("lang")).toHaveTextContent("es");
+  });
+
+  it("falls back to navigator when storage throws", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("storage blocked");
+    });
+    vi.spyOn(navigator, "language", "get").mockReturnValue("es-AR");
+    render(
+      <I18nProvider>
+        <Probe />
+      </I18nProvider>,
+    );
+    expect(screen.getByTestId("lang")).toHaveTextContent("es");
   });
 });
