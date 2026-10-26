@@ -97,6 +97,10 @@ class ColumnProfile:
     distinct_values: tuple[str, ...] | None = None
     # Most non-empty values are conditional quantity discounts (`10% x 10 UN`): not a unit-cost discount.
     quantity_discount: bool = False
+    # Data rows (not empty, section or total rows) whose cell in this column is empty, and how
+    # many data rows there are: a product code empty in half the rows is a poor row identity.
+    empty_rows: int = 0
+    data_rows: int = 0
 
     @property
     def plan_header(self) -> str:
@@ -371,6 +375,8 @@ def _profile_column(index: int, raw_header: str, data: list[tuple[int, Row]]) ->
         samples=_representative(texts),
         atypical=_atypical(entries, column_type, fmt),
         distinct_values=_distinct_values(normalized),
+        empty_rows=len(data) - len(entries),
+        data_rows=len(data),
         quantity_discount=bool(texts) and 2 * sum(map(is_quantity_discount, texts)) > len(texts),
     )
 

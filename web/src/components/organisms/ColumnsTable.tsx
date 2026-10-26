@@ -189,6 +189,11 @@ function RolePicker({
   );
 }
 
+/** Roles the plan needs exactly one column for; two columns with the same one cannot be confirmed. */
+const UNIQUE_ROLES: readonly ColumnRole[] = ["code", "description", "cost_price"];
+/** A column empty in at least this share of the data rows gets a completeness note. */
+const EMPTY_NOTE_SHARE = 0.05;
+
 export function ColumnsTable({ columns, issues, busy, sample, onConfirm }: Props) {
   const { t, language } = useI18n();
   const pending = usePendingAction<"confirm">(busy);
@@ -200,20 +205,38 @@ export function ColumnsTable({ columns, issues, busy, sample, onConfirm }: Props
     (item) => item.role === null && edits[item.index] === undefined && getBestProposal(item) !== null,
   ).length;
 
+  const roleCounts = new Map<ColumnRole, number>();
+  for (const item of columns) {
+    const role = edits[item.index] ?? item.role;
+    if (role !== null) roleCounts.set(role, (roleCounts.get(role) ?? 0) + 1);
+  }
+
   function handleAcceptAll() {
     setEdits((current) => {
       const next = { ...current };
+      const taken = new Set<ColumnRole>();
       for (const item of columns) {
-        if (item.role === null && next[item.index] === undefined) {
-          const best = getBestProposal(item);
-          if (best) {
-            next[item.index] = best.role;
-          }
-        }
+        const role = next[item.index] ?? item.role;
+        if (role !== null) taken.add(role);
+      }
+      // The best-scored suggestion goes first, so when two collide on a unique role it is the one
+      // accepted; the other stays for the user instead of creating a duplicate.
+      const pending = columns
+        .filter((item) => item.role === null && next[item.index] === undefined)
+        .map((item) => ({ item, best: getBestProposal(item) }))
+        .sort((a, b) => (b.best?.score ?? 0) - (a.best?.score ?? 0));
+      for (const { item, best } of pending) {
+        if (!best) continue;
+        if (UNIQUE_ROLES.includes(best.role) && taken.has(best.role)) continue;
+        next[item.index] = best.role;
+        taken.add(best.role);
       }
       return next;
     });
   }
+
+  // "always" keeps the Spanish thousands dot on four-digit numbers (2.043); older lib typings omit it.
+  const numbers = new Intl.NumberFormat(language, { useGrouping: "always" } as unknown as Intl.NumberFormatOptions);
 
   return (
     <div className="stack">
@@ -264,6 +287,10 @@ export function ColumnsTable({ columns, issues, busy, sample, onConfirm }: Props
               const needsUser = role === null;
               const bestProposal = getBestProposal(item);
               const allProposals = parseProposals(item);
+              const duplicated = role !== null && UNIQUE_ROLES.includes(role) && (roleCounts.get(role) ?? 0) > 1;
+              const emptyRows = item.empty_rows ?? 0;
+              const dataRows = item.data_rows ?? 0;
+              const mostlyFilled = dataRows === 0 || emptyRows < EMPTY_NOTE_SHARE * dataRows;
 
               // Status determination
               let statusText = t("status.needs_confirmation");
@@ -288,6 +315,12 @@ export function ColumnsTable({ columns, issues, busy, sample, onConfirm }: Props
                     <span className="cell__name">{item.header || t("columns.noHeader", { n: item.index + 1 })}</span>
                     <span className="cell__samples">{item.samples.join(", ")}</span>
                     {item.quantity_discount && <span className="cell__samples">{t("columns.quantityDiscount")}</span>}
+                    {!mostlyFilled && (
+                      <span className="cell__samples">
+                        {t("columns.emptyRows", { empty: numbers.format(emptyRows), total: numbers.format(dataRows) })}
+                      </span>
+                    )}
+                    {duplicated && <span className="cell__samples" role="alert">{t("columns.duplicateRole", { role: t(`role.${role}`) })}</span>}
                   </th>
                   <td className="cell--role">
                     {role !== null ? <span className="role-decision__value">{t(`role.${role}`)}</span> : <span className="role-decision__empty" aria-hidden="true">—</span>}

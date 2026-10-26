@@ -9,7 +9,7 @@ unsettled after the last stage get no role: the user decides.
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
-from pricor.domain.profile import SheetProfile
+from pricor.domain.profile import ColumnProfile, SheetProfile
 from pricor.domain.roles import ColumnRole
 from pricor.ports.column_classifier import ColumnClassifier
 from pricor.ports.import_session import ColumnDecision, Notice, StageProposal
@@ -126,6 +126,46 @@ def _agreement_outcomes(stage: AgreementStage, subset: SheetProfile) -> dict[int
     return outcomes
 
 
+def _one_code_suggestion(
+    outcomes: dict[int, _Outcome],
+    columns: dict[int, ColumnProfile],
+    code_settled: bool,
+    contested: int | None,
+) -> tuple[dict[int, _Outcome], int | None]:
+    """Keep the `code` suggestion on a single column.
+
+    Several columns proposed as the product code cannot all be right: only the most complete one
+    (fewest empty rows; a tie keeps the column order) keeps its suggestion, the rest lose theirs.
+    While candidates compete, nothing is settled as `code`: the user confirms which one it is.
+    `contested` is the winner of a competition seen by an earlier stage: the contest stays open,
+    so a later stage proposing a single column cannot settle it. Once an earlier stage settled
+    `code`, no later stage may propose it for another column. Returns the open contest's winner.
+    """
+    candidates = [
+        index
+        for index, outcome in sorted(outcomes.items())
+        if any(item.role is ColumnRole.CODE for item in outcome.proposals)
+    ]
+    if contested is not None and contested in columns and contested not in candidates:
+        candidates = sorted([*candidates, contested])
+    if not candidates or (len(candidates) == 1 and not code_settled and contested is None):
+        return outcomes, contested
+    winner = None if code_settled else min(candidates, key=lambda index: (columns[index].empty_rows, index))
+    result = dict(outcomes)
+    for index in candidates:
+        outcome = outcomes.get(index)
+        if outcome is None:
+            continue
+        proposals = tuple(
+            item for item in outcome.proposals if index == winner or item.role is not ColumnRole.CODE
+        )
+        settled = outcome.settled
+        if settled is not None and settled.role is ColumnRole.CODE:
+            settled = None
+        result[index] = _Outcome(proposals, settled)
+    return result, winner
+
+
 def run_cascade(
     stages: Sequence[Stage], profile: SheetProfile
 ) -> tuple[dict[int, ColumnDecision], list[Notice], bool]:
@@ -146,6 +186,7 @@ def run_cascade(
     decisions: dict[int, ColumnDecision] = {}
     notices: list[Notice] = []
     unreachable = False
+    contested_code: int | None = None
 
     for stage in stages:
         if not remaining:
@@ -171,6 +212,10 @@ def run_cascade(
             )
             unreachable = isinstance(error, ModelUnavailableError | ModelTimeoutError)
             break
+        code_settled = any(decision.role is ColumnRole.CODE for decision in decisions.values())
+        outcomes, contested_code = _one_code_suggestion(
+            outcomes, {column.index: column for column in remaining}, code_settled, contested_code
+        )
         undecided = []
         for column in remaining:
             outcome = outcomes.get(column.index)

@@ -343,6 +343,8 @@ def session_state(session: ImportSession) -> dict[str, Any]:
     profile = session.profile
     samples = {column.index: list(column.samples) for column in profile.columns}
     quantity_discounts = {column.index for column in profile.columns if column.quantity_discount}
+    empty_rows = {column.index: column.empty_rows for column in profile.columns}
+    data_rows = {column.index: column.data_rows for column in profile.columns}
     return {
         "id": session.id,
         "status": session.status.value,
@@ -368,6 +370,8 @@ def session_state(session: ImportSession) -> dict[str, Any]:
                 "rationale": column.rationale,
                 "samples": samples.get(column.index, []),
                 "quantity_discount": column.index in quantity_discounts,
+                "empty_rows": empty_rows.get(column.index, 0),
+                "data_rows": data_rows.get(column.index, 0),
                 "proposals": [
                     {
                         "stage": item.stage,

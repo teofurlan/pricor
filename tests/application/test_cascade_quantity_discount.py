@@ -36,3 +36,75 @@ def test_the_column_is_suggested_as_ignore_for_the_user_to_confirm():
 
     suggestion = decisions[1].proposals[-1]
     assert (suggestion.role, suggestion.stage) == (ColumnRole.IGNORE, "heuristics")
+
+
+CODE_ROWS = [
+    ["CODIGO", "COD_PROV", "DESCRIP"],
+    ["", "P-1", "Tornillo"],
+    ["", "P-2", "Tuerca"],
+    ["C-3", "P-3", "Arandela"],
+    ["C-4", "P-4", "Clavo"],
+]
+TWO_CODES = {
+    "CODIGO": (ColumnRole.CODE, 0.99),
+    "COD_PROV": (ColumnRole.CODE, 0.99),
+    "DESCRIP": (ColumnRole.DESCRIPTION, 0.99),
+}
+
+
+def _code_proposals(decision):
+    return [item for item in decision.proposals if item.role is ColumnRole.CODE]
+
+
+def test_only_the_most_complete_code_candidate_is_suggested_and_it_is_not_pre_settled():
+    decisions, _, _ = run_cascade([ClassifierStage("heuristics", FakeClassifier(TWO_CODES), 0.5)], profile_sheet(CODE_ROWS))
+
+    assert _code_proposals(decisions[0]) == []
+    assert len(_code_proposals(decisions[1])) == 1
+    assert decisions[0].role is None and decisions[1].role is None
+    assert decisions[2].role is ColumnRole.DESCRIPTION
+
+
+def test_a_tie_keeps_the_first_code_candidate():
+    rows = [["CODIGO", "COD_PROV"], ["C-1", "P-1"], ["C-2", "P-2"]]
+    decisions, _, _ = run_cascade([ClassifierStage("heuristics", FakeClassifier(TWO_CODES), 0.5)], profile_sheet(rows))
+
+    assert len(_code_proposals(decisions[0])) == 1
+    assert _code_proposals(decisions[1]) == []
+
+
+def test_a_single_code_candidate_is_settled_as_before():
+    rows = [["CODIGO", "DESCRIP"], ["C-1", "Tornillo"]]
+    decisions, _, _ = run_cascade([ClassifierStage("heuristics", FakeClassifier(TWO_CODES), 0.5)], profile_sheet(rows))
+
+    assert decisions[0].role is ColumnRole.CODE and decisions[0].decided_by == "heuristics"
+
+
+def test_the_agreement_stage_does_not_settle_two_competing_code_columns():
+    stage = AgreementStage("agreement", Member("heuristics", FakeClassifier(TWO_CODES)), Member("laya", FakeClassifier(TWO_CODES)), 0.0, True)
+
+    decisions, _, _ = run_cascade([stage], profile_sheet(CODE_ROWS))
+
+    assert decisions[0].role is None and decisions[1].role is None
+    assert _code_proposals(decisions[0]) == [] and len(_code_proposals(decisions[1])) == 1
+
+
+def test_a_later_stage_does_not_propose_code_once_a_column_settled_it():
+    first = ClassifierStage("heuristics", FakeClassifier({"CODIGO": (ColumnRole.CODE, 0.99)}), 0.5)
+    second = ClassifierStage("model", FakeClassifier({"COD_PROV": (ColumnRole.CODE, 0.99)}), 0.5)
+
+    decisions, _, _ = run_cascade([first, second], profile_sheet(CODE_ROWS))
+
+    assert decisions[0].role is ColumnRole.CODE
+    assert _code_proposals(decisions[1]) == []
+
+
+def test_a_later_stage_cannot_settle_code_while_an_earlier_stage_saw_two_candidates():
+    first = ClassifierStage("heuristics", FakeClassifier(TWO_CODES), 0.5)
+    second = ClassifierStage("model", FakeClassifier({"CODIGO": (ColumnRole.CODE, 0.99)}), 0.5)
+
+    decisions, _, _ = run_cascade([first, second], profile_sheet(CODE_ROWS))
+
+    assert decisions[0].role is None and decisions[1].role is None
+    assert _code_proposals(decisions[0]) == []
+    assert len(_code_proposals(decisions[1])) == 1

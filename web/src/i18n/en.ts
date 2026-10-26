@@ -168,6 +168,8 @@ export const en = {
   "columns.rationale": "Why",
   "columns.noHeader": "Column {n}",
   "columns.quantityDiscount": "Quantity discount: it depends on how much is bought, so it is not applied to the unit cost",
+  "columns.emptyRows": "Empty in {empty} of {total} rows",
+  "columns.duplicateRole": "Another column is also {role}",
   "columns.roleFor": "Change role for {header}",
   "columns.confirm": "Confirm columns",
   "columns.remaining.one": "{count} still needs your choice.",

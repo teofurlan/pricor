@@ -354,3 +354,16 @@ def test_columns_flag_quantity_discounts_for_the_ui():
     assert by_header["DTO_X_CANT"]["quantity_discount"] is True
     assert by_header["DTO_X_CANT"]["role"] is None
     assert by_header["Codigo"]["quantity_discount"] is False
+
+
+def test_columns_report_how_many_data_rows_are_empty():
+    client = make_client()
+    rows = [
+        ["Codigo", "Descripcion", "Precio lista"],
+        ["", "Tornillo", "1.210,00"],
+        ["A-2", "Tuerca", "968,00"],
+    ]
+    state = upload(client, rows=rows).json()
+    by_header = {column["header"]: column for column in state["columns"]}
+    assert (by_header["Codigo"]["empty_rows"], by_header["Codigo"]["data_rows"]) == (1, 2)
+    assert by_header["Descripcion"]["empty_rows"] == 0

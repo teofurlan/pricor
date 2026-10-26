@@ -529,3 +529,19 @@ def test_ordinary_discounts_and_mixed_columns_are_not_flagged():
     mostly_plain = profile_sheet(_discount_sheet(["10%", "5%", "10% x 10 UN", "3%"]))
     assert not ordinary.columns[1].quantity_discount
     assert not mostly_plain.columns[1].quantity_discount
+
+
+def test_empty_rows_count_only_data_rows_with_an_empty_cell():
+    rows = [
+        ("Código", "Marca"),
+        ("A1", "X"),
+        ("A2", None),
+        (None, None),  # empty row: not a product row
+        ("A3", "  "),
+        ("Total", 10),  # total row: not a product row
+        ("A4", "Y"),
+    ]
+    profile = profile_sheet(rows)
+    marca = profile.columns[1]
+    assert (marca.empty_rows, marca.data_rows) == (2, 4)
+    assert (profile.columns[0].empty_rows, profile.columns[0].data_rows) == (0, 4)

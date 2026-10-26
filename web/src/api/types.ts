@@ -72,6 +72,9 @@ export interface ColumnState {
   samples: string[];
   /** Most values are conditional quantity discounts ("10% x 10 UN"), which cannot lower a unit cost. */
   quantity_discount?: boolean;
+  /** Data rows with an empty cell in this column, out of `data_rows`. */
+  empty_rows?: number;
+  data_rows?: number;
   proposals: StageProposal[];
 }
 
