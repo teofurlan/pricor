@@ -2,6 +2,11 @@
 
 export type Language = "en" | "es";
 
+export interface ServerConfig {
+  model_provider: "ollama" | "gemini";
+  demo: boolean;
+}
+
 export type SessionStatus =
   | "header_choice_required"
   | "role_confirmation_required"

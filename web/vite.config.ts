@@ -5,7 +5,7 @@ import { defineConfig } from "vite";
 // In development the UI runs on :5173 and forwards API calls to the FastAPI
 // server (`pricor serve --no-browser`, port 8000 by default).
 const API = process.env.PRICOR_API ?? "http://127.0.0.1:8000";
-const API_PATHS = ["/imports", "/memories", "/sheets", "/output-format"];
+const API_PATHS = ["/imports", "/memories", "/sheets", "/output-format", "/config"];
 
 export default defineConfig({
   plugins: [react()],
@@ -19,5 +19,6 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     css: false,
     testTimeout: 15000,
+    fileParallelism: false,
   },
 });

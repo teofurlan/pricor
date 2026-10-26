@@ -28,6 +28,7 @@ function fakeApi(overrides: Partial<ApiClient & MemoryApiClient> = {}): ApiClien
     exportSheet: vi.fn().mockResolvedValue({ header: [], rows: [], total: 0 }),
     askQuestion: vi.fn().mockResolvedValue({ reply: "", suggested_option: null }),
     exportUrl: () => "", rejectedUrl: () => "", reportUrl: () => "",
+    config: vi.fn().mockResolvedValue({ model_provider: "ollama", demo: false }),
     listMemories: vi.fn().mockResolvedValue([memory]), createMemoryNote: vi.fn(unexpected("createMemoryNote")),
     rememberSuggestion: vi.fn().mockResolvedValue(memory), editMemory: vi.fn(unexpected("editMemory")),
     deleteMemory: vi.fn(unexpected("deleteMemory")),

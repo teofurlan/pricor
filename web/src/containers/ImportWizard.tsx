@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ApiClient, ApiError, ExportFile, ExportSheet, MemoryApiClient, OutputFormatApiClient } from "../api/client";
+import { useServerConfig } from "../api/serverConfig";
 import type { ColumnRole, CreateImportInput, Memory, Question, SessionState } from "../api/types";
 import { Button } from "../components/atoms/Button";
 import { TapeLoader } from "../components/atoms/TapeLoader";
@@ -44,6 +45,7 @@ function stepAfterColumns(session: SessionState): StepId {
 /** Owns the import session and the calls to the API; the steps themselves are presentational. */
 export function ImportWizard({ api }: { api: ApiClient }) {
   const { t } = useI18n();
+  const { hosted } = useServerConfig();
   const [session, setSession] = useState<SessionState | null>(null);
   const [step, setStep] = useState<StepId>("upload");
   const [headerNeeded, setHeaderNeeded] = useState(false);
@@ -314,10 +316,10 @@ export function ImportWizard({ api }: { api: ApiClient }) {
         </aside>
         <main className="stage">
           <h1 className="stage__title">{t(TITLES[step].title)}</h1>
-          <p className="stage__lede">{t(TITLES[step].lede)}</p>
+          <p className="stage__lede">{t(step === "upload" && hosted ? "lede.upload.hosted" : TITLES[step].lede)}</p>
           {session && <NoticeList notices={session.notices} />}
           <ErrorBanner error={error ?? preview.error} />
-          {busy && <div className="working"><TapeLoader size="small" text={t("common.working")} /></div>}
+          {busy && <div className="working"><TapeLoader size="small" text={t(hosted ? "common.working.hosted" : "common.working")} /></div>}
 
           {step === "upload" && (
             <div className="upload-step">

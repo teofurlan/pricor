@@ -12,6 +12,7 @@ import type {
   SessionState,
   ColumnRole,
   Memory,
+  ServerConfig,
 } from "./types";
 
 /** A failed API call, normalized from the server's `{"error": {code, message}}` envelope. */
@@ -59,6 +60,7 @@ export interface ApiClient {
   exportUrl(id: string, format: ExportFormat): string;
   rejectedUrl(id: string, format: ExportFormat): string;
   reportUrl(id: string, threshold?: string): string;
+  config(): Promise<ServerConfig>;
 }
 
 export interface MemoryApiClient {
@@ -185,5 +187,6 @@ export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), 
       call("/memories", json("POST", { session_id: sessionId, question_id: questionId })),
     editMemory: (id, text) => call(`/memories/${encodeURIComponent(id)}`, json("PATCH", { text })),
     deleteMemory: (id) => call(`/memories/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    config: () => call<ServerConfig>("/config"),
   };
 }

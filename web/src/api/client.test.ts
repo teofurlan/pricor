@@ -113,4 +113,12 @@ describe("api client", () => {
     const failure = await api.getImport("s1").catch((error: unknown) => error);
     expect(failure).toMatchObject({ status: 0, code: "network_error" });
   });
+
+  it("fetches server config from GET /config", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ model_provider: "gemini", demo: false }));
+    const api = createApiClient(fetchMock);
+    const cfg = await api.config();
+    expect(cfg).toEqual({ model_provider: "gemini", demo: false });
+    expect(fetchMock).toHaveBeenCalledWith("/config", undefined);
+  });
 });

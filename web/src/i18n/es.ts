@@ -97,6 +97,7 @@ export const es: Record<TextKey, string> = {
   "counts.skipped.preamble": "{count} de encabezado",
 
   "notice.modelUnavailable.title": "Gemma no estaba disponible",
+  "notice.modelUnavailable.title.hosted": "Gemma no respondió",
   "notice.detail": "Detalle técnico: {detail}",
   "notice.modelUnavailable.body": "La importación sigue solo con heurísticas. Revise las columnas usted mismo y responda todas las preguntas.",
 
@@ -200,6 +201,7 @@ export const es: Record<TextKey, string> = {
   "ask.send": "Consultar",
   "ask.you": "Usted",
   "ask.waiting": "Gemma está pensando. Los modelos locales pueden tardar hasta un minuto.",
+  "ask.waiting.hosted": "Gemma está pensando. Puede demorar hasta un minuto.",
   "ask.unavailable": "Gemma no está disponible ahora. Puede responder igual con las teclas.",
   "ask.suggested": "Sugerida en la conversación",
   "questions.history": "Preguntas respondidas",
@@ -250,6 +252,7 @@ export const es: Record<TextKey, string> = {
   "session.file": "Archivo",
   "title.upload": "Traiga una lista de precios de un proveedor",
   "lede.upload": "Nada sale de esta computadora. La lista se lee aquí y cada fila queda contabilizada.",
+  "lede.upload.hosted": "La lista se procesa en el servidor de Pricor y Gemma corre en la API de Google. Cada fila queda contabilizada.",
   "title.header": "¿Dónde empiezan los nombres de las columnas?",
   "lede.header": "La fila de encabezado le dice al resto qué significa cada columna.",
   "title.columns": "¿Qué es cada columna?",
@@ -264,6 +267,7 @@ export const es: Record<TextKey, string> = {
   "preview.rateUpdated": "Vista previa actualizada con la nueva cotización.",
   "rejected.title": "Filas rechazadas ({count})",
   "common.working": "Trabajando. Los modelos locales pueden demorar hasta un minuto.",
+  "common.working.hosted": "Trabajando. Puede demorar hasta un minuto.",
   "questions.remaining": "Faltan {count} por responder.",
 
   "report.unchanged": "{count} sin cambios",

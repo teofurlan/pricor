@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ApiError, type ApiClient } from "../api/client";
+import { ServerConfigProvider } from "../api/serverConfig";
 import type { SessionState } from "../api/types";
 import { change, column, fxState, previewPage, priceReport, question, session } from "../test/fixtures";
 import { renderWithI18n } from "../test/render";
@@ -28,14 +29,18 @@ function fakeApi(overrides: Partial<ApiClient> = {}): ApiClient {
     exportUrl: (id, format) => `/imports/${id}/export?format=${format}`,
     rejectedUrl: (id, format) => `/imports/${id}/rejected?format=${format}`,
     reportUrl: (id) => `/imports/${id}/report/export?format=csv`,
+    config: vi.fn().mockResolvedValue({ model_provider: "ollama", demo: false }),
     ...overrides,
   };
 }
 
-async function startImport() {
-  await userEvent.type(screen.getByLabelText("Supplier name"), "Ferreteria Ejemplo");
-  await userEvent.upload(screen.getByLabelText("Price list file"), new File(["a,b"], "lista.csv"));
-  await userEvent.click(screen.getByRole("button", { name: "Start import" }));
+async function startImport(lang: "en" | "es" = "en") {
+  const supplierLabel = lang === "es" ? "Nombre del proveedor" : "Supplier name";
+  const fileLabel = lang === "es" ? "Archivo de la lista de precios" : "Price list file";
+  const buttonLabel = lang === "es" ? "Iniciar importación" : "Start import";
+  await userEvent.type(screen.getByLabelText(supplierLabel), "Ferreteria Ejemplo");
+  await userEvent.upload(screen.getByLabelText(fileLabel), new File(["a,b"], "lista.csv"));
+  await userEvent.click(screen.getByRole("button", { name: buttonLabel }));
 }
 
 const withQuestion: SessionState = session({
@@ -393,6 +398,39 @@ describe("ImportWizard", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Start import" })).toBeEnabled());
   });
 
+  it("shows local upload lede text by default", () => {
+    const api = fakeApi();
+    renderWithI18n(<ImportWizard api={api} />);
+    expect(screen.getByText("Nothing leaves this computer. The list is read here, and every row is accounted for.")).toBeInTheDocument();
+  });
+
+  it("shows local upload lede text in Spanish by default", () => {
+    const api = fakeApi();
+    renderWithI18n(<ImportWizard api={api} />, "es");
+    expect(screen.getByText("Nada sale de esta computadora. La lista se lee aquí y cada fila queda contabilizada.")).toBeInTheDocument();
+  });
+
+  it("shows hosted upload lede text in hosted mode", () => {
+    const api = fakeApi();
+    renderWithI18n(
+      <ServerConfigProvider hosted={true}>
+        <ImportWizard api={api} />
+      </ServerConfigProvider>,
+    );
+    expect(screen.getByText("The list is processed on Pricor's server and Gemma runs on Google's API. Every row is accounted for.")).toBeInTheDocument();
+  });
+
+  it("shows hosted upload lede text in Spanish in hosted mode", () => {
+    const api = fakeApi();
+    renderWithI18n(
+      <ServerConfigProvider hosted={true}>
+        <ImportWizard api={api} />
+      </ServerConfigProvider>,
+      "es",
+    );
+    expect(screen.getByText("La lista se procesa en el servidor de Pricor y Gemma corre en la API de Google. Cada fila queda contabilizada.")).toBeInTheDocument();
+  });
+
   it("says the local models are working while a slow call is pending", async () => {
     let finish: (value: SessionState) => void = () => {};
     const api = fakeApi({
@@ -404,6 +442,54 @@ describe("ImportWizard", () => {
     finish(withQuestion);
     await screen.findByRole("button", { name: "Confirm columns" });
     expect(screen.queryByText(/Working. Local models can take up to a minute/)).toBeNull();
+  });
+
+  it("says the local models are working in Spanish while a slow call is pending", async () => {
+    let finish: (value: SessionState) => void = () => {};
+    const api = fakeApi({
+      createImport: vi.fn().mockReturnValue(new Promise<SessionState>((resolve) => (finish = resolve))),
+    });
+    renderWithI18n(<ImportWizard api={api} />, "es");
+    await startImport("es");
+    expect(await screen.findByText(/Trabajando. Los modelos locales pueden demorar hasta un minuto/)).toBeInTheDocument();
+    finish(withQuestion);
+    await screen.findByRole("button", { name: "Confirmar columnas" });
+    expect(screen.queryByText(/Trabajando. Los modelos locales pueden demorar hasta un minuto/)).toBeNull();
+  });
+
+  it("says the models are working in hosted mode while a slow call is pending", async () => {
+    let finish: (value: SessionState) => void = () => {};
+    const api = fakeApi({
+      createImport: vi.fn().mockReturnValue(new Promise<SessionState>((resolve) => (finish = resolve))),
+    });
+    renderWithI18n(
+      <ServerConfigProvider hosted={true}>
+        <ImportWizard api={api} />
+      </ServerConfigProvider>,
+    );
+    await startImport();
+    expect(await screen.findByText(/Working. This can take up to a minute/)).toBeInTheDocument();
+    finish(withQuestion);
+    await screen.findByRole("button", { name: "Confirm columns" });
+    expect(screen.queryByText(/Working. This can take up to a minute/)).toBeNull();
+  });
+
+  it("says the models are working in Spanish in hosted mode while a slow call is pending", async () => {
+    let finish: (value: SessionState) => void = () => {};
+    const api = fakeApi({
+      createImport: vi.fn().mockReturnValue(new Promise<SessionState>((resolve) => (finish = resolve))),
+    });
+    renderWithI18n(
+      <ServerConfigProvider hosted={true}>
+        <ImportWizard api={api} />
+      </ServerConfigProvider>,
+      "es",
+    );
+    await startImport("es");
+    expect(await screen.findByText(/Trabajando. Puede demorar hasta un minuto/)).toBeInTheDocument();
+    finish(withQuestion);
+    await screen.findByRole("button", { name: "Confirmar columnas" });
+    expect(screen.queryByText(/Trabajando. Puede demorar hasta un minuto/)).toBeNull();
   });
 
   it("shows what changed in prices once the import is approved", async () => {

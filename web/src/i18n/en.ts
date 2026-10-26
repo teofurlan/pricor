@@ -94,6 +94,7 @@ export const en = {
   "counts.skipped.preamble": "{count} preamble",
 
   "notice.modelUnavailable.title": "Gemma was not available",
+  "notice.modelUnavailable.title.hosted": "Gemma did not answer",
   "notice.detail": "Technical detail: {detail}",
   "notice.modelUnavailable.body": "The import continues with heuristics only. Check the columns yourself and answer every question.",
 
@@ -197,6 +198,7 @@ export const en = {
   "ask.send": "Ask",
   "ask.you": "You",
   "ask.waiting": "Gemma is thinking. Local models can take up to a minute.",
+  "ask.waiting.hosted": "Gemma is thinking. This can take up to a minute.",
   "ask.unavailable": "Gemma is not available right now. You can still answer with the keys.",
   "ask.suggested": "Suggested in the conversation",
   "questions.history": "Answered questions",
@@ -247,6 +249,7 @@ export const en = {
   "session.file": "File",
   "title.upload": "Bring in a supplier price list",
   "lede.upload": "Nothing leaves this computer. The list is read here, and every row is accounted for.",
+  "lede.upload.hosted": "The list is processed on Pricor's server and Gemma runs on Google's API. Every row is accounted for.",
   "title.header": "Where do the column names start?",
   "lede.header": "The header row tells everything else what each column means.",
   "title.columns": "What is each column?",
@@ -261,6 +264,7 @@ export const en = {
   "preview.rateUpdated": "Preview updated with the new rate.",
   "rejected.title": "Rejected rows ({count})",
   "common.working": "Working. Local models can take up to a minute.",
+  "common.working.hosted": "Working. This can take up to a minute.",
   "questions.remaining": "{count} still to answer.",
 
   "report.unchanged": "{count} unchanged",

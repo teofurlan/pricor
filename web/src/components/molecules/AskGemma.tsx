@@ -1,4 +1,5 @@
 import { useId, useState, type FormEvent } from "react";
+import { useServerConfig } from "../../api/serverConfig";
 import type { AskTurn } from "../../api/types";
 import { useI18n } from "../../i18n";
 import { Button } from "../atoms/Button";
@@ -13,6 +14,7 @@ interface Props {
 /** A side conversation about one question. Gemma may explain or suggest; the keys still decide. */
 export function AskGemma({ thread, pending, error, onAsk }: Props) {
   const { t } = useI18n();
+  const { hosted } = useServerConfig();
   const [message, setMessage] = useState("");
   const fieldId = useId();
   const text = message.trim();
@@ -43,7 +45,7 @@ export function AskGemma({ thread, pending, error, onAsk }: Props) {
           <Button type="submit" disabled={text === ""} loading={pending}>{t("ask.send")}</Button>
         </div>
       </form>
-      {pending && <p className="hint">{t("ask.waiting")}</p>}
+      {pending && <p className="hint">{t(hosted ? "ask.waiting.hosted" : "ask.waiting")}</p>}
       {error && <p className="ask__error" role="alert">{error}</p>}
     </div>
   );

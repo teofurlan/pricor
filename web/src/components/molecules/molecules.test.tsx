@@ -10,6 +10,8 @@ import { QuestionCard } from "./QuestionCard";
 import { StepTrace } from "./StepTrace";
 import { SuggestionBadge } from "./SuggestionBadge";
 import { MemoryCitation } from "./MemoryCitation";
+import { AskGemma } from "./AskGemma";
+import { ServerConfigProvider } from "../../api/serverConfig";
 import type { Memory } from "../../api/types";
 
 describe("ProvenanceBadge", () => {
@@ -174,6 +176,56 @@ describe("NoticeList", () => {
   it("shows other notices with the server message", () => {
     renderWithI18n(<NoticeList notices={[{ code: "other", message: "Something to know", stage: null }]} />);
     expect(screen.getByRole("status")).toHaveTextContent("Something to know");
+  });
+
+  it("shows hosted-aware title when hosted is true", () => {
+    renderWithI18n(
+      <ServerConfigProvider hosted={true}>
+        <NoticeList notices={[{ code: "model_unavailable", message: "connection refused", stage: "gemma" }]} />
+      </ServerConfigProvider>,
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Gemma did not answer");
+  });
+
+  it("shows hosted-aware title in Spanish when hosted is true", () => {
+    renderWithI18n(
+      <ServerConfigProvider hosted={true}>
+        <NoticeList notices={[{ code: "model_unavailable", message: "connection refused", stage: "gemma" }]} />
+      </ServerConfigProvider>,
+      "es",
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Gemma no respondió");
+  });
+});
+
+describe("AskGemma", () => {
+  it("shows local waiting text while pending by default", () => {
+    renderWithI18n(<AskGemma thread={[]} pending={true} error={null} onAsk={vi.fn()} />);
+    expect(screen.getByText("Gemma is thinking. Local models can take up to a minute.")).toBeInTheDocument();
+  });
+
+  it("shows local waiting text in Spanish while pending by default", () => {
+    renderWithI18n(<AskGemma thread={[]} pending={true} error={null} onAsk={vi.fn()} />, "es");
+    expect(screen.getByText("Gemma está pensando. Los modelos locales pueden tardar hasta un minuto.")).toBeInTheDocument();
+  });
+
+  it("shows hosted waiting text while pending in hosted mode", () => {
+    renderWithI18n(
+      <ServerConfigProvider hosted={true}>
+        <AskGemma thread={[]} pending={true} error={null} onAsk={vi.fn()} />
+      </ServerConfigProvider>,
+    );
+    expect(screen.getByText("Gemma is thinking. This can take up to a minute.")).toBeInTheDocument();
+  });
+
+  it("shows hosted waiting text in Spanish while pending in hosted mode", () => {
+    renderWithI18n(
+      <ServerConfigProvider hosted={true}>
+        <AskGemma thread={[]} pending={true} error={null} onAsk={vi.fn()} />
+      </ServerConfigProvider>,
+      "es",
+    );
+    expect(screen.getByText("Gemma está pensando. Puede demorar hasta un minuto.")).toBeInTheDocument();
   });
 });
 

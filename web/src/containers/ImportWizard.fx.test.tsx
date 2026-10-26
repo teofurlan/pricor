@@ -27,6 +27,7 @@ function fakeApi(overrides: Partial<ApiClient> = {}): ApiClient {
     exportUrl: (id, format) => `/imports/${id}/export?format=${format}`,
     rejectedUrl: (id, format) => `/imports/${id}/rejected?format=${format}`,
     reportUrl: (id) => `/imports/${id}/report/export?format=csv`,
+    config: vi.fn().mockResolvedValue({ model_provider: "ollama", demo: false }),
     ...overrides,
   };
 }
