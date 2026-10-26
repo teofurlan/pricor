@@ -96,7 +96,7 @@ export const en = {
   "notice.modelUnavailable.title": "Gemma was not available",
   "notice.modelUnavailable.title.hosted": "Gemma did not answer",
   "notice.detail": "Technical detail: {detail}",
-  "notice.modelUnavailable.body": "The import continues with heuristics only. Check the columns yourself and answer every question.",
+  "notice.modelUnavailable.body": "Import continues with heuristics only. Review the columns yourself and answer every question.",
 
   "question.reason": "Why we ask: {reason}",
   "question.custom.label": "Another value",
@@ -169,7 +169,8 @@ export const en = {
   "columns.noHeader": "Column {n}",
   "columns.roleFor": "Change role for {header}",
   "columns.confirm": "Confirm columns",
-  "columns.remaining": "{count} still need your choice.",
+  "columns.remaining.one": "{count} still needs your choice.",
+  "columns.remaining.other": "{count} still need your choice.",
   "role.code": "Product code",
   "role.description": "Description",
   "role.cost_price": "Cost price",
@@ -265,7 +266,8 @@ export const en = {
   "rejected.title": "Rejected rows ({count})",
   "common.working": "Working. Local models can take up to a minute.",
   "common.working.hosted": "Working. This can take up to a minute.",
-  "questions.remaining": "{count} still to answer.",
+  "questions.remaining.one": "{count} still to answer.",
+  "questions.remaining.other": "{count} still to answer.",
 
   "report.unchanged": "{count} unchanged",
   "report.up": "{count} up",

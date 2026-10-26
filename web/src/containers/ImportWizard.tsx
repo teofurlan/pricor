@@ -317,7 +317,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
         <main className="stage">
           <h1 className="stage__title">{t(TITLES[step].title)}</h1>
           <p className="stage__lede">{t(step === "upload" && hosted ? "lede.upload.hosted" : TITLES[step].lede)}</p>
-          {session && <NoticeList notices={session.notices} />}
+          {session && <NoticeList notices={session.notices} compact={step !== "columns"} />}
           <ErrorBanner error={error ?? preview.error} />
           {busy && <div className="working"><TapeLoader size="small" text={t(hosted ? "common.working.hosted" : "common.working")} /></div>}
 

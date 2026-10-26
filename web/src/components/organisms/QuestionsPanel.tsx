@@ -130,7 +130,11 @@ export function QuestionsPanel({
         <Button variant="primary" disabled={busy || blocked || open.length > 0} loading={pending.isLoading("continue")} onClick={() => { pending.mark("continue"); onContinue(); }}>
           {t("questions.continue")}
         </Button>
-        {open.length > 0 && <span className="hint">{t("questions.remaining", { count: open.length })}</span>}
+        {open.length > 0 && (
+          <span className="hint">
+            {t(open.length === 1 ? "questions.remaining.one" : "questions.remaining.other", { count: open.length })}
+          </span>
+        )}
       </div>
       {sample && sample.rows.length > 0 && (
         <SamplePreview

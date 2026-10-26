@@ -21,6 +21,8 @@ describe("localizeServerText", () => {
     ["conflicting evidence: ',' is decimal in '1,5' but '.' is decimal in '2.5'", "la evidencia se contradice: ',' es decimal en '1,5' pero '.' es decimal en '2.5'"],
     ["no separators in any value", "ningún valor tiene separadores"],
     ["the discount column 'Desc' that plan v2 applies is no longer in the file; assign the discount role to another column or start again as a first import", "la columna de descuento 'Desc' que aplica el plan v2 ya no está en el archivo; asigne el rol de descuento a otra columna o empiece de nuevo como primera importación"],
+    ["CODIGO: supplier_code is empty", "CODIGO: el código de producto está vacío"],
+    ["DESC: unreadable discount: '10%'", "DESC: descuento ilegible: '10%'"],
   ])("translates %j", (english, spanish) => {
     expect(localizeServerText(english, "es")).toBe(spanish);
     expect(localizeServerText(english, "en")).toBe(english);

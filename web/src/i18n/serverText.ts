@@ -8,9 +8,25 @@ import type { Language } from "../api/types";
  */
 const ROLE_LABELS: Record<string, string> = {
   "the product code": "el código de producto",
+  "supplier_code": "el código de producto",
+  "code": "el código de producto",
   "the description": "la descripción",
+  "description": "la descripción",
   "the cost price": "el precio de costo",
+  "cost_price": "el precio de costo",
   "the barcode": "el código de barras",
+  "barcode": "el código de barras",
+  "the retail price": "el precio de venta sugerido",
+  "retail_price": "el precio de venta sugerido",
+  "suggested_retail_price": "el precio de venta sugerido",
+  "the vat rate": "la alícuota de IVA",
+  "vat_rate": "la alícuota de IVA",
+  "the units per pack": "las unidades por bulto",
+  "units_per_pack": "las unidades por bulto",
+  "the discount": "el descuento",
+  "discount": "el descuento",
+  "the currency": "la moneda",
+  "currency": "la moneda",
 };
 
 const role = (label: string) => ROLE_LABELS[label] ?? label;
@@ -37,6 +53,8 @@ const RULES: Array<[RegExp, (...groups: string[]) => string]> = [
   [/^native numeric cells carry no separators$/, () => "las celdas numéricas nativas no tienen separadores"],
   [/^no values$/, () => "no hay valores"],
   [/^the discount column (.+) that plan v(\d+) applies is no longer in the file; assign the discount role to another column or start again as a first import$/, (name, version) => `la columna de descuento ${name} que aplica el plan v${version} ya no está en el archivo; asigne el rol de descuento a otra columna o empiece de nuevo como primera importación`],
+  [/^(.+): (.+) is empty$/, (column, roleName) => `${column}: ${role(roleName)} está vacío`],
+  [/^(.+): unreadable discount: '([^']*)'$/, (column, value) => `${column}: descuento ilegible: '${value}'`],
 ];
 
 export function localizeServerText(text: string, language: Language): string {

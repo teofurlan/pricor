@@ -70,6 +70,28 @@ describe("OutputFormatContainer", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("The template has no column names.");
   });
 
+  it("localizes ApiError message in Spanish instead of showing raw error", async () => {
+    const api = fakeApi({
+      uploadOutputFormat: vi.fn().mockRejectedValue(new ApiError(502, "unexpected_response", "The server answered 502.")),
+    });
+    renderWithI18n(<OutputFormatContainer api={api} />, "es");
+    await userEvent.upload(await screen.findByLabelText("Archivo de plantilla"), new File([""], "vacio.csv"));
+    await userEvent.click(screen.getByRole("button", { name: "Leer la plantilla" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Ocurrió un error inesperado (detalle: The server answered 502.).");
+  });
+
+  it("translates a loading error again when the interface language changes", async () => {
+    const api = fakeApi({
+      getOutputFormat: vi.fn().mockRejectedValue(new ApiError(502, "unexpected_response", "The server answered 502.")),
+    });
+    const view = renderWithI18n(<OutputFormatContainer api={api} />, "en");
+    expect(await screen.findByRole("alert")).not.toHaveTextContent("Ocurrió");
+
+    view.rerender(<OutputFormatContainer api={api} />, "es");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Ocurrió un error inesperado (detalle: The server answered 502.).");
+  });
+
   it("offers every product field before any format is stored", async () => {
     renderWithI18n(<OutputFormatContainer api={fakeApi()} />);
     await userEvent.click(await screen.findByRole("button", { name: "Add column" }));

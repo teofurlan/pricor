@@ -376,16 +376,32 @@ describe("ImportWizard", () => {
     expect(screen.getByRole("button", { name: /Columns/ })).toBeInTheDocument();
   });
 
-  it("shows the model_unavailable notice prominently and keeps going", async () => {
+  it("shows the model_unavailable notice prominently on columns and compact on later steps", async () => {
     const degraded = {
       ...withQuestion,
       notices: [{ code: "model_unavailable", message: "connection refused", stage: "gemma" }],
     };
-    const api = fakeApi({ createImport: vi.fn().mockResolvedValue(degraded) });
+    const api = fakeApi({
+      createImport: vi.fn().mockResolvedValue(degraded),
+      setRoles: vi.fn().mockResolvedValue(degraded),
+    });
     renderWithI18n(<ImportWizard api={api} />);
     await startImport();
-    expect(await screen.findByRole("status")).toHaveTextContent("Gemma was not available");
-    expect(screen.getByRole("button", { name: "Confirm columns" })).toBeEnabled();
+    // Full banner on Columns step
+    const notice = await screen.findByRole("status");
+    expect(notice).toHaveTextContent("Gemma was not available");
+    expect(notice).toHaveTextContent("Import continues with heuristics only. Review the columns yourself and answer every question.");
+    expect(notice).toHaveTextContent("connection refused");
+
+    // Move to Questions step (later step)
+    await userEvent.click(screen.getByRole("button", { name: "Confirm columns" }));
+    await screen.findByRole("button", { name: "See the preview" });
+
+    // Compact one-line banner on Questions step
+    const compactNotice = screen.getByRole("status");
+    expect(compactNotice).toHaveTextContent("Gemma was not available");
+    expect(compactNotice).not.toHaveTextContent("Import continues with heuristics only");
+    expect(compactNotice).not.toHaveTextContent("connection refused");
   });
 
   it("keeps the upload form and says why when the file is refused", async () => {

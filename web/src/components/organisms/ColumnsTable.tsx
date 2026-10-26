@@ -356,7 +356,11 @@ export function ColumnsTable({ columns, issues, busy, sample, onConfirm }: Props
         <Button variant="primary" disabled={busy || unresolved.length > 0} loading={pending.isLoading("confirm")} onClick={() => { pending.mark("confirm"); onConfirm(edits); }}>
           {t("columns.confirm")}
         </Button>
-        {unresolved.length > 0 && <span className="hint">{t("columns.remaining", { count: unresolved.length })}</span>}
+        {unresolved.length > 0 && (
+          <span className="hint">
+            {t(unresolved.length === 1 ? "columns.remaining.one" : "columns.remaining.other", { count: unresolved.length })}
+          </span>
+        )}
       </div>
 
       {sample && sample.rows.length > 0 && (

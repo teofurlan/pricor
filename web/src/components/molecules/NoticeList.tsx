@@ -4,7 +4,7 @@ import { useI18n } from "../../i18n";
 import { localizeNotice } from "../../i18n/serverText";
 
 /** Session notices, calm but impossible to miss. */
-export function NoticeList({ notices }: { notices: Notice[] }) {
+export function NoticeList({ notices, compact = false }: { notices: Notice[]; compact?: boolean }) {
   const { t, language } = useI18n();
   const { hosted } = useServerConfig();
   if (notices.length === 0) return null;
@@ -12,6 +12,13 @@ export function NoticeList({ notices }: { notices: Notice[] }) {
     <div className="notices">
       {notices.map((notice) => {
         const modelNotice = notice.code === "model_unavailable";
+        if (compact && modelNotice) {
+          return (
+            <div key={`${notice.code}-${notice.stage}-${notice.message}`} role="status" className="notice">
+              <strong className="notice__title">{t(hosted ? "notice.modelUnavailable.title.hosted" : "notice.modelUnavailable.title")}</strong>
+            </div>
+          );
+        }
         const { text, detail } = localizeNotice(notice.message, language);
         return (
           <div key={`${notice.code}-${notice.stage}-${notice.message}`} role="status" className="notice">

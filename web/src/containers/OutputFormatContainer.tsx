@@ -24,7 +24,8 @@ export function OutputFormatContainer({ api, onChange }: Props) {
   const [format, setFormat] = useState<OutputFormat | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // The failure itself, not its text, so the message follows the interface language.
+  const [failure, setFailure] = useState<unknown>(null);
 
   function publish(next: OutputFormat | null) {
     setFormat(next);
@@ -39,7 +40,7 @@ export function OutputFormatContainer({ api, onChange }: Props) {
     let active = true;
     api.getOutputFormat()
       .then((stored) => { if (active) publish(stored); })
-      .catch((failure: unknown) => { if (active) setError(message(failure)); })
+      .catch((caught: unknown) => { if (active) setFailure(caught); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
     // The API instance is stable for the app lifetime; the format is loaded once per mount.
@@ -48,11 +49,11 @@ export function OutputFormatContainer({ api, onChange }: Props) {
 
   async function change(action: () => Promise<OutputFormat | null>) {
     setBusy(true);
-    setError(null);
+    setFailure(null);
     try {
       publish(await action());
-    } catch (failure) {
-      setError(message(failure));
+    } catch (caught) {
+      setFailure(caught);
     } finally {
       setBusy(false);
     }
@@ -63,7 +64,7 @@ export function OutputFormatContainer({ api, onChange }: Props) {
       format={format}
       loading={loading}
       busy={busy}
-      error={error}
+      error={failure === null ? null : message(failure)}
       fields={OUTPUT_FIELDS}
       onUpload={(file) => void change(() => api.uploadOutputFormat(file))}
       onSave={(columns) => void change(() => api.defineOutputFormat(columns))}

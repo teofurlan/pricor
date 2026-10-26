@@ -107,14 +107,14 @@ describe("UploadForm", () => {
     renderWithI18n(<UploadForm busy={false} onSubmit={vi.fn()} />, "es");
     const dropzone = document.querySelector(".dropzone");
     expect(dropzone).toBeInTheDocument();
-    expect(within(dropzone as HTMLElement).getByText("Arrastrá tu lista de precios acá")).toBeInTheDocument();
+    expect(within(dropzone as HTMLElement).getByText("Arrastre su lista de precios aquí")).toBeInTheDocument();
     expect(within(dropzone as HTMLElement).getByText("o")).toBeInTheDocument();
     expect(within(dropzone as HTMLElement).getByText("Seleccionar archivo")).toBeInTheDocument();
     expect(within(dropzone as HTMLElement).getByText("Excel (.xls, .xlsx) o CSV · hasta 20 MB")).toBeInTheDocument();
 
     const file = new File(["col1,col2"], "test.csv", { type: "text/csv" });
     fireEvent.dragOver(dropzone!, { dataTransfer: { files: [file] } });
-    expect(within(dropzone as HTMLElement).getByText("Soltala para leerla")).toBeInTheDocument();
+    expect(within(dropzone as HTMLElement).getByText("Suéltela para leerla")).toBeInTheDocument();
   });
 
   it("shows file name in mono with its size and the Change file key when a file is selected", async () => {
@@ -459,6 +459,23 @@ describe("ColumnsTable", () => {
     expect(onConfirm).toHaveBeenCalledWith({ 0: "barcode" });
   });
 
+  it("shows correct singular remaining count for columns in English and Spanish", () => {
+    const cols = [
+      column({ index: 0, header: "ColA", role: null, decided_by: null }),
+    ];
+    const { rerender } = renderWithI18n(
+      <ColumnsTable columns={cols} issues={[]} busy={false} onConfirm={vi.fn()} />,
+      "en",
+    );
+    expect(screen.getByText("1 still needs your choice.")).toBeInTheDocument();
+
+    rerender(
+      <ColumnsTable columns={cols} issues={[]} busy={false} onConfirm={vi.fn()} />,
+      "es",
+    );
+    expect(screen.getByText("Falta 1 por elegir.")).toBeInTheDocument();
+  });
+
   it("allows picking a role, shows chosen role with Back to suggestion, and Back to suggestion clears choice", async () => {
     renderWithI18n(<ColumnsTable columns={columns} issues={[]} busy={false} onConfirm={vi.fn()} />);
     const row = screen.getByRole("row", { name: /Misterio/ });
@@ -656,6 +673,20 @@ describe("QuestionsPanel", () => {
     renderWithI18n(<QuestionsPanel questions={[]} answers={{}} busy={false} onAnswer={vi.fn()} onContinue={vi.fn()} />);
     expect(screen.getByText("Every question is answered.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "See the preview" })).toBeEnabled();
+  });
+
+  it("shows correct singular remaining count in English and Spanish", () => {
+    const { rerender } = renderWithI18n(
+      <QuestionsPanel questions={[question()]} answers={{}} busy={false} onAnswer={vi.fn()} onContinue={vi.fn()} />,
+      "en",
+    );
+    expect(screen.getByText("1 still to answer.")).toBeInTheDocument();
+
+    rerender(
+      <QuestionsPanel questions={[question()]} answers={{}} busy={false} onAnswer={vi.fn()} onContinue={vi.fn()} />,
+      "es",
+    );
+    expect(screen.getByText("Falta 1 por responder.")).toBeInTheDocument();
   });
 
   it("renders live preview under questions panel with final cost column showing — until computed", () => {

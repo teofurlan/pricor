@@ -76,6 +76,12 @@ export function I18nProvider({
   const [language, setLanguage] = useState<Language>(() => initialLanguage ?? detectLanguage());
 
   useEffect(() => {
+    if (initialLanguage) {
+      setLanguage(initialLanguage);
+    }
+  }, [initialLanguage]);
+
+  useEffect(() => {
     document.documentElement.lang = language;
   }, [language]);
 

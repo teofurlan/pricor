@@ -178,6 +178,21 @@ describe("NoticeList", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Something to know");
   });
 
+  it("shows compact one-line version with title only when compact is true", () => {
+    renderWithI18n(
+      <NoticeList
+        compact
+        notices={[{ code: "model_unavailable", message: "stage 'gemma' could not classify columns (ModelUnavailableError): connection refused", stage: "gemma" }]}
+      />,
+      "es",
+    );
+    const notice = screen.getByRole("status");
+    expect(notice).toHaveTextContent("Gemma no estaba disponible");
+    expect(notice).not.toHaveTextContent("La etapa 'gemma' no pudo clasificar las columnas.");
+    expect(notice).not.toHaveTextContent("Detalle técnico");
+    expect(notice).not.toHaveTextContent("La importación sigue solo con heurísticas");
+  });
+
   it("shows hosted-aware title when hosted is true", () => {
     renderWithI18n(
       <ServerConfigProvider hosted={true}>
