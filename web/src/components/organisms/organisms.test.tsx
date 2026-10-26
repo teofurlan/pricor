@@ -429,6 +429,17 @@ describe("ColumnsTable", () => {
     expect(within(row2).getByRole("combobox", { name: /Change role/i })).toBeInTheDocument();
   });
 
+  it("names each role picker after its column, so a screen reader can tell them apart", () => {
+    const cols = [
+      column({ index: 0, header: "CODIGO", role: null, decided_by: null }),
+      column({ index: 1, header: "COD_PROV", role: null, decided_by: null }),
+    ];
+    renderWithI18n(<ColumnsTable columns={cols} issues={[]} busy={false} onConfirm={vi.fn()} />, "es");
+
+    expect(screen.getByRole("combobox", { name: "Cambiar rol de CODIGO" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Cambiar rol de COD_PROV" })).toBeInTheDocument();
+  });
+
   it("keeps Accept and Ignore next to the role picker, which never replaces them", async () => {
     const cols = [
       column({ index: 0, header: "ColA", role: null, decided_by: null, proposals: [{ stage: "laya", role: "code", score: 0.8, rationale: "" }] }),
