@@ -303,6 +303,9 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
 .field { display: grid; gap: 7px; min-width: 0; }
 .field__label { font-size: 0.875rem; font-weight: 600; }
 .field__hint { font-size: 0.8125rem; color: var(--muted); }
+.samples__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.samples__list li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.samples__list .field__hint { flex: 1 1 24ch; }
 .field--file { order: -1; }
 .feed-slot { display: flex; align-items: center; gap: 12px; padding: 12px 0 15px; border-bottom: 5px double var(--ink); order: -2; font-size: 1.125rem; font-weight: 600; }
 .feed-slot > span { font: 1.5rem var(--figures); }

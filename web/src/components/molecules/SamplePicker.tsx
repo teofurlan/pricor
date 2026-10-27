@@ -33,7 +33,7 @@ export function SamplePicker({ list, onChoose, disabled = false }: Props) {
             <button type="button" className="button button--key button--choose" disabled={disabled} onClick={() => onChoose(sample)}>
               {sample.title[language]}
             </button>
-            <span className="field__hint"> {sample.description[language]}</span>
+            <span className="field__hint">{sample.description[language]}</span>
           </li>
         ))}
       </ul>
