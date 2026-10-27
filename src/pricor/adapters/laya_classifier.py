@@ -7,6 +7,8 @@ imported when the model is first needed: importing this module, and therefore th
 never requires them. A missing extra or model surfaces as `ModelNotInstalledError`.
 """
 
+import logging
+import threading
 import time
 from collections.abc import Callable, Mapping
 from importlib.util import find_spec
@@ -19,6 +21,8 @@ from pricor.ports.column_classifier import ColumnClassification
 from pricor.ports.model_errors import ModelNotInstalledError, ModelSchemaError
 
 from .laya_state import QUESTION_ID, QUESTIONS, state_for_column
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL_PATH = Path("models/laya-pricor")
 DEVICES = ("auto", "cpu", "cuda")
@@ -73,6 +77,9 @@ class LayaColumnClassifier:
         self._model_path = model_path
         self._clock = clock
         self._agent: LayaAgent | None = None
+        # The startup warm-up runs in its own thread; an import arriving meanwhile must wait for
+        # that load instead of starting a second one (two copies would double the memory).
+        self._loading = threading.Lock()
 
     def classify_column(
         self, column: ColumnProfile, sheet: SheetProfile | None = None
@@ -95,16 +102,25 @@ class LayaColumnClassifier:
     def classify_sheet(self, sheet: SheetProfile) -> list[ColumnClassification]:
         return [self.classify_column(column, sheet) for column in sheet.columns]
 
+    def warm_up(self) -> None:
+        """Load the model now (once), so the first classification does not pay for it."""
+        self._agent_ready()
+
     def _agent_ready(self) -> LayaAgent:
-        if self._agent is None:
-            try:
-                self._agent = self._load()
-            except (ImportError, FileNotFoundError, OSError) as error:
-                raise ModelNotInstalledError(
-                    f"the Laya model could not be loaded ({type(error).__name__}: {error}); "
-                    f"{_INSTALL_HINT} and check {self._model_path}"
-                ) from error
-        return self._agent
+        if self._agent is not None:
+            return self._agent
+        with self._loading:
+            if self._agent is None:
+                started = self._clock()
+                try:
+                    self._agent = self._load()
+                except (ImportError, FileNotFoundError, OSError) as error:
+                    raise ModelNotInstalledError(
+                        f"the Laya model could not be loaded ({type(error).__name__}: {error}); "
+                        f"{_INSTALL_HINT} and check {self._model_path}"
+                    ) from error
+                logger.info("laya model loaded: %.2fs", self._clock() - started)
+            return self._agent
 
 
 def _read_answer(reply: Mapping[str, Any]) -> tuple[ColumnRole, float, dict[ColumnRole, float]]:

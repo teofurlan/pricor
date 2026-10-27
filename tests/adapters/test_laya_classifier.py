@@ -1,5 +1,6 @@
 import subprocess
 import sys
+import threading
 
 import pytest
 
@@ -118,6 +119,20 @@ def test_the_model_is_loaded_lazily_and_only_once():
     assert loads == [1]
 
 
+def test_warming_up_loads_the_model_once_and_logs_how_long_it_took(caplog):
+    import logging
+
+    loads = []
+    laya = LayaColumnClassifier(loader=lambda: loads.append(1) or FakeAgent([]), clock=iter([0.0, 2.5]).__next__)
+
+    with caplog.at_level(logging.INFO, logger="pricor"):
+        laya.warm_up()
+        laya.warm_up()
+
+    assert loads == [1]
+    assert [r.getMessage() for r in caplog.records] == ["laya model loaded: 2.50s"]
+
+
 @pytest.mark.parametrize("error", [ImportError("No module named 'laya'"), FileNotFoundError("no model")])
 def test_a_model_that_cannot_be_loaded_is_reported_as_not_installed(error):
     def loader():
@@ -187,3 +202,27 @@ def test_importing_the_adapter_does_not_import_laya_or_torch():
     done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
 
     assert done.returncode == 0, done.stderr
+
+
+def test_a_classification_during_the_warm_up_waits_for_it_instead_of_loading_again():
+    loading = threading.Event()
+    release = threading.Event()
+    loads = []
+
+    def slow_loader():
+        loads.append(1)
+        loading.set()
+        release.wait(5)
+        return FakeAgent([])
+
+    laya = LayaColumnClassifier(loader=slow_loader)
+    warm_up = threading.Thread(target=laya.warm_up)
+    warm_up.start()
+    loading.wait(5)
+    second = threading.Thread(target=laya.warm_up)
+    second.start()
+    release.set()
+    warm_up.join(5)
+    second.join(5)
+
+    assert loads == [1]

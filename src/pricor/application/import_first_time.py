@@ -12,6 +12,8 @@ as a suggestion. If a model is unavailable the session simply continues with
 the heuristic stage and asks the user more.
 """
 
+import logging
+import time
 import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
@@ -59,6 +61,8 @@ from pricor.ports.question_model import Suggestion
 from pricor.ports.spreadsheet import SpreadsheetReader
 
 __all__ = ["UNCALIBRATED_THRESHOLD", "ClassifierStage", "ImportFirstTime"]
+
+logger = logging.getLogger(__name__)
 
 _MAX_HEADER_CANDIDATES = 8
 _CELL_PREVIEW_CHARS = 40
@@ -468,6 +472,7 @@ class ImportFirstTime:
                         "memory",
                     )
                 )
+        started = time.perf_counter()
         try:
             proposal = self._advisor.propose(
                 session.profile,
@@ -488,6 +493,8 @@ class ImportFirstTime:
                     "advisor",
                 )
             )
+        finally:
+            logger.info("plan advisor: %.2fs", time.perf_counter() - started)
 
     # -- preview ---------------------------------------------------------------
 

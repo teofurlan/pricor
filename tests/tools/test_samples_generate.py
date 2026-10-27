@@ -61,9 +61,33 @@ def test_write_all_writes_the_catalog_files_and_repeats_byte_for_byte(tmp_path):
     assert first == second
 
 
+def cells_of(source):
+    """Sheet names and every cell value; compressed bytes depend on the zlib build, content does not."""
+    workbook = load_workbook(source, data_only=True)
+    return {sheet.title: [list(row) for row in sheet.iter_rows(values_only=True)] for sheet in workbook}
+
+
 def test_shipped_files_match_the_generator():
     for sample in SAMPLES:
-        assert (SAMPLES_DIR / sample.file_name).read_bytes() == render_week(sample.week)
+        shipped = cells_of(SAMPLES_DIR / sample.file_name)
+
+        assert shipped == cells_of(io.BytesIO(render_week(sample.week)))
+
+
+def test_a_changed_shipped_cell_or_sheet_name_is_detected(tmp_path):
+    sample = SAMPLES[0]
+    copy = tmp_path / sample.file_name
+    workbook = load_workbook(SAMPLES_DIR / sample.file_name)
+    sheet = workbook.active
+    sheet.cell(row=HEADER_ROW + 1, column=3).value = "tampered"
+    workbook.save(copy)
+    renamed = load_workbook(SAMPLES_DIR / sample.file_name)
+    renamed.active.title = "Otra"
+    renamed.save(tmp_path / "renamed.xlsx")
+
+    expected = cells_of(io.BytesIO(render_week(sample.week)))
+    assert cells_of(copy) != expected
+    assert cells_of(tmp_path / "renamed.xlsx") != expected
 
 
 def test_week_one_has_a_title_block_above_the_header():

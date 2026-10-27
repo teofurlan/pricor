@@ -11,6 +11,7 @@ Environment variables:
     PRICOR_GEMINI_EMBED_MODEL Gemini embedding model       (default gemini-embedding-001)
     PRICOR_GEMINI_TIMEOUT  seconds per Gemini model call   (default 60)
     PRICOR_DEMO            enable demo mode: 1/true/yes    (default false)
+    PRICOR_PRELOAD_MODELS  load Laya in the background at startup: 1/true/yes (default false)
     PRICOR_EMBED_MODEL     embedding model                 (default bge-m3)
     PRICOR_MEMORY_TOP_K    memories retrieved for Gemma    (default 3)
     PRICOR_DB              path of the SQLite file          (default: see `database_path_from_env`)
@@ -23,6 +24,7 @@ Environment variables:
 Run with: uv run uvicorn pricor.entrypoints.wiring:app_from_env --factory
 """
 
+import logging
 import os
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -148,6 +150,26 @@ def embedder_from_env(env: Mapping[str, str], chat_client: ChatClient) -> Embedd
 def demo_from_env(env: Mapping[str, str]) -> bool:
     val = env.get("PRICOR_DEMO", "").strip().lower()
     return val in ("1", "true", "yes")
+
+
+def preload_from_env(env: Mapping[str, str]) -> bool:
+    return env.get("PRICOR_PRELOAD_MODELS", "").strip().lower() in ("1", "true", "yes")
+
+
+def preload_warm_up(stages: list[Stage]) -> Callable[[], None] | None:
+    """Warm up the Laya classifier through the existing stage, or None when Laya cannot run."""
+    for stage in stages:
+        if stage.skipped_reason is not None:
+            continue
+        members = (
+            [stage.classifier]
+            if isinstance(stage, ClassifierStage)
+            else [stage.first.classifier, stage.second.classifier]
+        )
+        for classifier in members:
+            if isinstance(classifier, LayaColumnClassifier):
+                return classifier.warm_up
+    return None
 
 
 def laya_settings_from_env(env: Mapping[str, str]) -> tuple[Path, str]:
@@ -296,8 +318,20 @@ def dependencies_from_env(env: Mapping[str, str]) -> ApiDependencies:
         ),
         model_provider=provider,
         demo=demo_from_env(env),
+        warm_up=preload_warm_up(stages) if preload_from_env(env) else None,
     )
 
 
+def configure_logging() -> None:
+    """Send Pricor's INFO lines (stage timings, model loads) to stderr; uvicorn only sets up its own."""
+    logger = logging.getLogger("pricor")
+    if not logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(levelname)s:     %(name)s: %(message)s"))
+        logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+
+
 def app_from_env() -> FastAPI:
+    configure_logging()
     return create_app(dependencies_from_env(os.environ))

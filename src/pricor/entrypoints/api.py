@@ -98,9 +98,13 @@ question ids return 404, invalid bodies 422, and unavailable or invalid model
 replies 503 with code model_unavailable in the same error envelope.
 """
 
+import logging
 import re
 import shutil
 import tempfile
+import threading
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -161,6 +165,8 @@ from pricor.ports.spreadsheet import (
     UnsupportedFormatError,
 )
 
+logger = logging.getLogger(__name__)
+
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 ALLOWED_EXTENSIONS = frozenset({".csv", ".xlsx", ".xlsm", ".xls"})
 _CHUNK = 1024 * 1024
@@ -184,6 +190,7 @@ class ApiDependencies:
     output_format: ManageOutputFormat | None = None  # one persistent store-wide template
     model_provider: str = "ollama"
     demo: bool = False
+    warm_up: Callable[[], None] | None = None  # run once in the background at startup
 
 
 class OutputMappingBody(BaseModel):
@@ -665,8 +672,23 @@ def _store_upload(upload: UploadFile, directory: Path, limit: int) -> Path:
 # -- app --------------------------------------------------------------------------
 
 
+def _run_warm_up(warm_up: Callable[[], None]) -> None:
+    try:
+        warm_up()
+    except Exception as error:  # a failed warm-up only costs the first import its load time
+        logger.warning("model warm-up failed (%s: %s); models load on first use", type(error).__name__, error)
+
+
 def create_app(dependencies: ApiDependencies) -> FastAPI:
-    app = FastAPI(title="Pricor", version="0.1.0")
+    warm_up = dependencies.warm_up
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        if warm_up is not None:
+            threading.Thread(target=_run_warm_up, args=(warm_up,), name="model-warm-up", daemon=True).start()
+        yield
+
+    app = FastAPI(title="Pricor", version="0.1.0", lifespan=lifespan)
     use_case = dependencies.use_case
     reader = dependencies.reader or getattr(use_case, "_reader", None)
     question_help = AskAboutQuestion(use_case.get, dependencies.question_helper)

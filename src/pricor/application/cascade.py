@@ -6,6 +6,8 @@ classifiers and settles a column only when both choose the same role. Columns st
 unsettled after the last stage get no role: the user decides.
 """
 
+import logging
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
@@ -19,6 +21,8 @@ from pricor.ports.model_errors import (
     ModelTimeoutError,
     ModelUnavailableError,
 )
+
+logger = logging.getLogger(__name__)
 
 # PLACEHOLDER: not calibrated on held-out data. It is calibrated in T21 (Q24);
 # until then it only decides which columns are shown to the user for confirmation.
@@ -196,12 +200,15 @@ def run_cascade(
             continue
         subset = replace(profile, columns=tuple(remaining))
         evaluate = _agreement_outcomes if isinstance(stage, AgreementStage) else _classifier_outcomes
+        started = time.perf_counter()
         try:
             outcomes = evaluate(stage, subset)
         except ModelNotInstalledError as error:
+            logger.info("cascade stage %s: %.2fs", stage.name, time.perf_counter() - started)
             notices.append(_skipped_notice(stage, str(error)))
             continue
         except ModelError as error:
+            logger.info("cascade stage %s: %.2fs", stage.name, time.perf_counter() - started)
             notices.append(
                 Notice(
                     "model_unavailable",
@@ -212,6 +219,7 @@ def run_cascade(
             )
             unreachable = isinstance(error, ModelUnavailableError | ModelTimeoutError)
             break
+        logger.info("cascade stage %s: %.2fs", stage.name, time.perf_counter() - started)
         code_settled = any(decision.role is ColumnRole.CODE for decision in decisions.values())
         outcomes, contested_code = _one_code_suggestion(
             outcomes, {column.index: column for column in remaining}, code_settled, contested_code
