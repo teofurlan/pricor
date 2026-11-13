@@ -1,5 +1,6 @@
 import type { Suggestion } from "../../api/types";
 import { useI18n } from "../../i18n";
+import { confidenceLevel } from "../../lib/confidence";
 import { Badge } from "../atoms/Badge";
 
 /** A model hypothesis, labeled with its source and whether its confidence is calibrated. */
@@ -12,12 +13,12 @@ export function SuggestionBadge({ suggestion }: { suggestion: Suggestion }) {
   if (suggestion.suggested_by === "detected") {
     return <Badge tone="user">{t("suggestion.detected")}</Badge>;
   }
-  const who = ["gemma", "model"].includes(suggestion.suggested_by) ? "Gemma" : suggestion.suggested_by;
+  const level = t(`confidence.${confidenceLevel(suggestion.confidence)}`);
   const confidence = `${Math.round(suggestion.confidence * 100)}%`;
-  const explanation = t(suggestion.calibrated ? "suggestion.calibrated" : "suggestion.uncalibrated", { who, confidence });
+  const explanation = t(suggestion.calibrated ? "suggestion.calibrated" : "suggestion.uncalibrated", { level, confidence });
   return (
     <Badge tone="gemma">
-      <abbr title={explanation}>{who.toUpperCase()} {suggestion.calibrated ? "" : "~"}{confidence}</abbr>
+      <abbr title={explanation}>{t("format.confidence", { level })}</abbr>
     </Badge>
   );
 }

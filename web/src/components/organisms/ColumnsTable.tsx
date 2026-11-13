@@ -28,7 +28,7 @@ function getModelName(stage: string): string {
   const s = stage.toLowerCase();
   if (s.includes("laya")) return "Laya";
   if (s.includes("gemma")) return "Gemma";
-  if (s.includes("heuristics")) return "keyword rules";
+  if (s.includes("heuristics")) return "automatic detection";
   return stage.charAt(0).toUpperCase() + stage.slice(1);
 }
 
@@ -100,8 +100,7 @@ function ConfidenceMeter({
 }) {
   const { t } = useI18n();
   const percentage = Math.round(best.score * 100);
-  const uncalText = best.isUncalibrated ? " (uncalibrated)" : "";
-  const ariaLabel = `Model confidence ${percentage} %${uncalText}, proposed by ${best.modelName}`;
+  const ariaLabel = `Model confidence ${percentage} %, proposed by ${best.modelName}`;
 
   let tooltip = ariaLabel;
   if (allProposals.length > 1) {
@@ -109,7 +108,7 @@ function ConfidenceMeter({
       .filter((p) => p !== best)
       .map(
         (p) =>
-          `${p.modelName}: ${t(`role.${p.role}`)} (${Math.round(p.score * 100)}%${p.isUncalibrated ? " uncalibrated" : ""})`,
+          `${p.modelName}: ${t(`role.${p.role}`)} (${Math.round(p.score * 100)}%)`,
       )
       .join(", ");
     tooltip += ` · Other proposals: ${others}`;

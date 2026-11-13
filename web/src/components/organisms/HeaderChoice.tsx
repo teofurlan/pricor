@@ -38,7 +38,7 @@ export function HeaderChoice({ candidates, busy, onChoose }: Props) {
         <Button variant="primary" disabled={busy || chosen === null} loading={pending.isLoading("use")} onClick={() => { if (chosen === null) return; pending.mark("use"); onChoose(chosen); }}>
           {t("header.use")}
         </Button>
-        <Button disabled={busy} loading={pending.isLoading("none")} onClick={() => { pending.mark("none"); onChoose(null); }}>
+        <Button className="button--decline" disabled={busy} loading={pending.isLoading("none")} onClick={() => { pending.mark("none"); onChoose(null); }}>
           {t("header.none")}
         </Button>
       </div>

@@ -16,8 +16,8 @@ import type { Memory } from "../../api/types";
 
 describe("ProvenanceBadge", () => {
   it.each([
-    ["heuristics", "Heuristics"],
-    ["gemma", "Gemma"],
+    ["heuristics", "Automatic detection"],
+    ["gemma", "Automatic suggestion"],
     ["user", "YOU"],
     ["saved_plan", "Saved plan"],
   ])("names who decided: %s", (decidedBy, label) => {
@@ -39,14 +39,14 @@ describe("ProvenanceBadge", () => {
 describe("SuggestionBadge", () => {
   const suggestion = { suggested_by: "gemma", option: "yes", confidence: 0.6, calibrated: false, evidence: [] };
 
-  it("labels an uncalibrated model confidence as such", () => {
+  it("puts an automatic suggestion in plain words", () => {
     renderWithI18n(<SuggestionBadge suggestion={suggestion} />);
-    expect(screen.getByText("GEMMA ~60%")).toHaveAttribute("title", "Suggested by Gemma (uncalibrated: 60%)");
+    expect(screen.getByText("Automatic suggestion · medium confidence")).toHaveAttribute("title", "Suggested automatically, medium confidence (60%). Check it before accepting.");
   });
 
-  it("names Gemma when the server only says 'model', the only advisor behind it", () => {
+  it("treats the server label 'model', the only advisor behind it", () => {
     renderWithI18n(<SuggestionBadge suggestion={{ ...suggestion, suggested_by: "model", confidence: 0.4 }} />);
-    expect(screen.getByText("GEMMA ~40%")).toHaveAttribute("title", "Suggested by Gemma (uncalibrated: 40%)");
+    expect(screen.getByText("Automatic suggestion · low confidence")).toHaveAttribute("title", "Suggested automatically, low confidence (40%). Check it before accepting.");
   });
 
   it("labels a value read from the file as detected, with no model confidence", () => {
@@ -58,7 +58,7 @@ describe("SuggestionBadge", () => {
 
   it("drops the warning once the confidence is calibrated", () => {
     renderWithI18n(<SuggestionBadge suggestion={{ ...suggestion, calibrated: true }} />);
-    expect(screen.getByText("GEMMA 60%")).toHaveAttribute("title", "Suggested by Gemma (calibrated: 60%)");
+    expect(screen.getByText("Automatic suggestion · medium confidence")).toHaveAttribute("title", "Suggested automatically, medium confidence (60%).");
   });
 });
 
@@ -190,7 +190,7 @@ describe("NoticeList", () => {
     expect(notice).toHaveTextContent("Gemma no estaba disponible");
     expect(notice).not.toHaveTextContent("La etapa 'gemma' no pudo clasificar las columnas.");
     expect(notice).not.toHaveTextContent("Detalle técnico");
-    expect(notice).not.toHaveTextContent("La importación sigue solo con heurísticas");
+    expect(notice).not.toHaveTextContent("La importación sigue solo con detección automática");
   });
 
   it("shows hosted-aware title when hosted is true", () => {
@@ -253,15 +253,15 @@ describe("QuestionCard", () => {
     const radios = screen.getAllByRole("radio");
     expect(radios).toHaveLength(2);
     expect(radios.every((radio) => !(radio as HTMLInputElement).checked)).toBe(true);
-    expect(screen.getByText("GEMMA ~60%")).toHaveAttribute("title", "Suggested by Gemma (uncalibrated: 60%)");
+    expect(screen.getByText("Automatic suggestion · medium confidence")).toHaveAttribute("title", "Suggested automatically, medium confidence (60%). Check it before accepting.");
   });
 
   it("puts the suggestion badge on the suggested option only", () => {
     renderWithI18n(<QuestionCard question={question({ suggestion })} answer={undefined} onAnswer={vi.fn()} />);
     const usd = screen.getByRole("radio", { name: /US dollars/ }).closest("label")!;
     const ars = screen.getByRole("radio", { name: /Argentine pesos/ }).closest("label")!;
-    expect(within(usd).getByText("GEMMA ~60%")).toHaveAttribute("title", "Suggested by Gemma (uncalibrated: 60%)");
-    expect(within(ars).queryByText(/GEMMA/)).toBeNull();
+    expect(within(usd).getByText("Automatic suggestion · medium confidence")).toHaveAttribute("title", "Suggested automatically, medium confidence (60%). Check it before accepting.");
+    expect(within(ars).queryByText(/Automatic suggestion/)).toBeNull();
   });
 
   it("reports the token the user picks", async () => {
@@ -388,7 +388,7 @@ describe("QuestionCard with grouped options", () => {
 
     const select = screen.getByRole("combobox", { name: "Another rate…" });
     expect(select).toHaveValue("");
-    expect(screen.getByText("GEMMA ~70%")).toBeInTheDocument();
+    expect(screen.getByText("Automatic suggestion · medium confidence")).toBeInTheDocument();
   });
 
   it("labels the select in Spanish", () => {

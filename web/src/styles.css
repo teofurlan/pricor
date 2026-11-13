@@ -542,7 +542,7 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
 .download__format:active { transform: translateY(1px); box-shadow: 0 1px 0 var(--muted); }
 .output-sheet { margin-top: 8px; }
 /* Step 1: the price-list form on the left, the products file columns on the right. */
-.upload-step { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 440px); gap: 40px; align-items: start; min-width: 0; }
+.upload-step { display: grid; gap: 40px; min-width: 0; }
 .upload-step .upload { max-width: none; }
 .workspace { border-top: 1px solid var(--rule); padding: 14px 0; max-width: 78ch; display: grid; gap: 6px; }
 .workspace__title { margin: 0; font-size: 0.9rem; font-weight: 600; }
@@ -711,3 +711,46 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* S1: press feedback and touch targets. */
+.button, .icon-key, .row-key { transition: background-color 150ms ease-out, transform 90ms ease-out, box-shadow 90ms ease-out; }
+.button:active:not(:disabled), .lang__option:active, .icon-key:active:not(:disabled), .row-key:active { transform: translateY(1px) scale(0.97); }
+@media (prefers-reduced-motion: reduce) {
+  .button:active:not(:disabled), .lang__option:active, .icon-key:active:not(:disabled), .row-key:active { transform: none; }
+}
+/* Each colored key keeps its own ink while pressed instead of falling back to the grey shadow. */
+.button--accept:active:not(:disabled) { box-shadow: 0 1px 0 var(--ink-sage); }
+.button--accept-all:active:not(:disabled) { box-shadow: 0 1px 0 var(--ink); }
+.button--ignore:active:not(:disabled), .button--danger:active:not(:disabled), .icon-key--danger:active:not(:disabled) { box-shadow: 0 1px 0 var(--ink-brick); }
+.button--undo:active:not(:disabled) { box-shadow: none; }
+.button--remember:active:not(:disabled) { box-shadow: 0 1px 0 var(--ink-ochre); }
+.button--decline:active:not(:disabled) { box-shadow: 0 1px 0 var(--ink-brick); }
+/* Destructive actions wear the warning brick; declining a choice is the same ink without the fill. */
+.button--danger, .button--decline { color: var(--ink-brick); border-color: var(--ink-brick); box-shadow: 0 2px 0 var(--ink-brick); }
+.button--danger:hover:not(:disabled) { background: var(--ink-brick); border-color: var(--ink-brick); color: var(--paper); }
+.button--decline { border-style: dashed; }
+.button--decline:hover:not(:disabled) { background: var(--ground); border-color: var(--ink-brick); color: var(--ink-brick); }
+.button--link.button--danger { background: none; border-color: transparent; box-shadow: none; }
+.button--link.button--danger:hover:not(:disabled) { background: none; color: var(--ink-brick); text-decoration: underline; text-underline-offset: 3px; }
+.icon-key--danger { color: var(--ink-brick); border-color: var(--ink-brick); box-shadow: 0 2px 0 var(--ink-brick); }
+.icon-key--danger:hover:not(:disabled) { background: var(--ink-brick); border-color: var(--ink-brick); color: var(--paper); }
+.icon-key--danger:disabled { color: var(--rule); border-color: var(--rule); box-shadow: none; }
+@media (pointer: coarse) {
+  .button, .lang__option, .button--action, .icon-key, .row-key, .table--preview .row-key { min-height: 44px; min-width: 44px; }
+  .icon-key { width: 44px; height: 44px; }
+  .output-format__keys { gap: 6px; }
+}
+
+/* S5: sample lists read as the way in for someone with no file at hand. */
+.samples { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--ink-sage); border-radius: 3px; background: var(--paper); }
+.samples__title { font-size: 1rem; font-weight: 650; }
+.button--sample { color: var(--ink-sage); border-color: var(--ink-sage); box-shadow: 0 2px 0 var(--ink-sage); }
+.button--sample:hover:not(:disabled) { background: var(--ink-sage); border-color: var(--ink-sage); color: var(--paper); }
+.button--sample:active:not(:disabled) { box-shadow: 0 1px 0 var(--ink-sage); }
+
+/* The template picker reuses the price-list drop zone, shorter for the narrow column. */
+.output-format .dropzone { aspect-ratio: auto; min-height: 112px; }
+
+.format-step__summary { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding-block: 14px; border-block: 1px solid var(--rule); }
+.format-step__line { font-weight: 600; }
+.output-format { max-width: 640px; }

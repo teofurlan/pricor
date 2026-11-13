@@ -126,6 +126,9 @@ export interface Memory {
 /** A template column's source: `field:<name>`, `empty` or `constant:<text>`. */
 export type OutputSource = string;
 
+/** How a column's cell is written; mirrors the server's `OUTPUT_KINDS`. */
+export type OutputKind = "text" | "description" | "code" | "number" | "price";
+
 export interface OutputFormatColumn {
   index: number;
   name: string;
@@ -133,6 +136,16 @@ export interface OutputFormatColumn {
   proposal: { source: OutputSource; proposed_by: "gemma" | "heuristics" | "user"; confidence: number };
   /** The confirmed source; null while the format is only proposed. */
   source: OutputSource | null;
+  /** How the cell is written; null or absent for a format saved before types existed. */
+  kind?: OutputKind | null;
+}
+
+/** How well a template looks like a products file, decided by the proposed mappings. */
+export interface OutputFormatFit {
+  matched: number;
+  total: number;
+  unmatched: string[];
+  mismatch: boolean;
 }
 
 /**
@@ -144,6 +157,7 @@ export interface OutputFormat {
   state: "proposed" | "confirmed";
   fields: string[];
   columns: OutputFormatColumn[];
+  fit?: OutputFormatFit;
 }
 
 /** One column of a hand-edited output format; `template_index` links it to a template column. */
@@ -151,6 +165,7 @@ export interface OutputColumnDefinition {
   name: string;
   source: OutputSource;
   template_index: number | null;
+  kind: OutputKind;
 }
 
 /** One turn of the side conversation about a question. */

@@ -50,6 +50,6 @@ describe("ImportWizard samples", () => {
     renderWithI18n(<ServerConfigProvider api={client}><ImportWizard api={client} /></ServerConfigProvider>);
 
     expect(await screen.findByLabelText("Supplier name")).toBeInTheDocument();
-    expect(screen.queryByText("Try a sample list")).not.toBeInTheDocument();
+    expect(screen.queryByText("Don't have a list at hand? Try an example")).not.toBeInTheDocument();
   });
 });

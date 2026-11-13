@@ -30,7 +30,7 @@ describe("UploadForm sample picker", () => {
       "es",
     );
 
-    expect(await screen.findByText("Probar con una lista de ejemplo")).toBeInTheDocument();
+    expect(await screen.findByText("¿No tiene una lista a mano? Pruebe con un ejemplo")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Distribuidora Ejemplo, semana 1/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /semana 2 \(simulada\)/ })).toBeInTheDocument();
     expect(screen.getByText("Unos 300 productos.")).toBeInTheDocument();
@@ -75,7 +75,7 @@ describe("UploadForm sample picker", () => {
 
     await waitFor(() => expect(onListSamples).toHaveBeenCalled());
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(screen.queryByText("Try a sample list")).not.toBeInTheDocument();
+    expect(screen.queryByText("Don't have a list at hand? Try an example")).not.toBeInTheDocument();
   });
 
   it("is hidden when the request fails", async () => {
@@ -84,13 +84,13 @@ describe("UploadForm sample picker", () => {
 
     await waitFor(() => expect(onListSamples).toHaveBeenCalled());
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(screen.queryByText("Try a sample list")).not.toBeInTheDocument();
+    expect(screen.queryByText("Don't have a list at hand? Try an example")).not.toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("is absent when the form is not given a sample source", () => {
     renderWithI18n(<UploadForm busy={false} onSubmit={vi.fn()} />);
 
-    expect(screen.queryByText("Try a sample list")).not.toBeInTheDocument();
+    expect(screen.queryByText("Don't have a list at hand? Try an example")).not.toBeInTheDocument();
   });
 });

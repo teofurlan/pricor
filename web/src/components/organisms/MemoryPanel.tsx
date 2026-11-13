@@ -80,7 +80,7 @@ export function MemoryPanel({ memories, loading, busy, error = null, onAdd, onEd
                   <p className="memory-card__text">{memory.text}</p>
                   <div className="actions">
                     <Button variant="link" disabled={busy} onClick={() => { setEditing(memory.id); setEditText(memory.text); }}>{t("memory.edit")}</Button>
-                    <Button variant="link" disabled={busy} onClick={() => window.confirm(t("memory.delete.confirm")) && onDelete(memory.id)}>{t("memory.delete")}</Button>
+                    <Button variant="link" className="button--danger" disabled={busy} onClick={() => window.confirm(t("memory.delete.confirm")) && onDelete(memory.id)}>{t("memory.delete")}</Button>
                   </div>
                 </>
               )}

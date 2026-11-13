@@ -44,14 +44,13 @@ describe("OutputFormatContainer", () => {
     renderWithI18n(<OutputFormatContainer api={api} onChange={onChange} />);
     const file = new File(["Código,Costo\n"], "mi-sistema.csv");
     await userEvent.upload(await screen.findByLabelText("Template file"), file);
-    await userEvent.click(screen.getByRole("button", { name: "Read the template" }));
     expect(api.uploadOutputFormat).toHaveBeenCalledWith(file);
     expect(await screen.findByText("Not in use yet: save to use these columns.")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Use these columns" }));
     expect(api.defineOutputFormat).toHaveBeenCalledWith([
-      { name: "Código", source: "field:supplier_code", template_index: 0 },
-      { name: "Costo", source: "field:unit_cost_net", template_index: 1 },
+      { name: "Código", source: "field:supplier_code", template_index: 0, kind: "code" },
+      { name: "Costo", source: "field:unit_cost_net", template_index: 1, kind: "price" },
     ]);
     expect(await screen.findByText("In use: the products file has exactly these columns, in this order.")).toBeInTheDocument();
     expect(onChange).toHaveBeenLastCalledWith(confirmed);
@@ -66,7 +65,6 @@ describe("OutputFormatContainer", () => {
     const api = fakeApi({ uploadOutputFormat: vi.fn().mockRejectedValue(new ApiError(422, "invalid_template", "The template has no column names.")) });
     renderWithI18n(<OutputFormatContainer api={api} />);
     await userEvent.upload(await screen.findByLabelText("Template file"), new File([""], "vacio.csv"));
-    await userEvent.click(screen.getByRole("button", { name: "Read the template" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("The template has no column names.");
   });
 
@@ -76,7 +74,6 @@ describe("OutputFormatContainer", () => {
     });
     renderWithI18n(<OutputFormatContainer api={api} />, "es");
     await userEvent.upload(await screen.findByLabelText("Archivo de plantilla"), new File([""], "vacio.csv"));
-    await userEvent.click(screen.getByRole("button", { name: "Leer la plantilla" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Ocurrió un error inesperado (detalle: The server answered 502.).");
   });
 

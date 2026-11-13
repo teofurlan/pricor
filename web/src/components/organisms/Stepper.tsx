@@ -1,6 +1,6 @@
 import { useI18n, type TextKey } from "../../i18n";
 
-export type StepId = "upload" | "header" | "columns" | "questions" | "preview" | "approve";
+export type StepId = "upload" | "header" | "columns" | "questions" | "preview" | "format" | "approve";
 export interface StepItem {
   id: StepId;
   state: "done" | "current" | "upcoming";
@@ -14,6 +14,7 @@ const LABELS: Record<StepId, TextKey> = {
   columns: "step.columns",
   questions: "step.questions",
   preview: "step.preview",
+  format: "step.format",
   approve: "step.approve",
 };
 

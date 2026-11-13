@@ -25,12 +25,12 @@ export function SamplePicker({ list, onChoose, disabled = false }: Props) {
 
   if (samples.length === 0) return null;
   return (
-    <div className="field samples" role="group" aria-labelledby={labelId}>
-      <span id={labelId} className="field__label">{t("upload.samples")}</span>
+    <div className="samples" role="group" aria-labelledby={labelId}>
+      <span id={labelId} className="samples__title">{t("upload.samples")}</span>
       <ul className="samples__list">
         {samples.map((sample) => (
           <li key={sample.id}>
-            <button type="button" className="button button--key button--choose" disabled={disabled} onClick={() => onChoose(sample)}>
+            <button type="button" className="button button--sample" disabled={disabled} onClick={() => onChoose(sample)}>
               {sample.title[language]}
             </button>
             <span className="field__hint">{sample.description[language]}</span>

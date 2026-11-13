@@ -192,7 +192,7 @@ describe("ImportWizard", () => {
     await userEvent.click(screen.getByRole("button", { name: "Confirm columns" }));
 
     // The suggestion is visible and nothing is preselected.
-    expect(await screen.findByText("GEMMA ~60%")).toBeInTheDocument();
+    expect(await screen.findByText("Automatic suggestion · medium confidence")).toBeInTheDocument();
     for (const radio of screen.getAllByRole("radio")) expect(radio).not.toBeChecked();
     await userEvent.click(screen.getByRole("radio", { name: /Argentine pesos/ }));
     expect(api.answer).toHaveBeenCalledWith("s1", "currency", "ARS");
@@ -390,7 +390,7 @@ describe("ImportWizard", () => {
     // Full banner on Columns step
     const notice = await screen.findByRole("status");
     expect(notice).toHaveTextContent("Gemma was not available");
-    expect(notice).toHaveTextContent("Import continues with heuristics only. Review the columns yourself and answer every question.");
+    expect(notice).toHaveTextContent("Import continues with automatic detection only. Review the columns yourself and answer every question.");
     expect(notice).toHaveTextContent("connection refused");
 
     // Move to Questions step (later step)
@@ -400,7 +400,7 @@ describe("ImportWizard", () => {
     // Compact one-line banner on Questions step
     const compactNotice = screen.getByRole("status");
     expect(compactNotice).toHaveTextContent("Gemma was not available");
-    expect(compactNotice).not.toHaveTextContent("Import continues with heuristics only");
+    expect(compactNotice).not.toHaveTextContent("Import continues with automatic detection only");
     expect(compactNotice).not.toHaveTextContent("connection refused");
   });
 
@@ -528,28 +528,6 @@ describe("ImportWizard", () => {
     expect(summary).toHaveTextContent("unchanged312");
     expect(summary).toHaveTextContent("up85");
     expect(api.report).toHaveBeenCalledWith("s1", undefined);
-  });
-
-  it("shows the products file columns beside the upload form, without opening a panel", async () => {
-    const template = {
-      name: "mi-sistema.xlsx", state: "confirmed" as const, fields: ["supplier_code"],
-      columns: [{ index: 0, name: "Código", samples: [], proposal: { source: "field:supplier_code", proposed_by: "gemma" as const, confidence: 0.9 }, source: "field:supplier_code" }],
-    };
-    const formatApi = {
-      getOutputFormat: vi.fn().mockResolvedValue(template),
-      uploadOutputFormat: vi.fn(), confirmOutputFormat: vi.fn(), defineOutputFormat: vi.fn(), deleteOutputFormat: vi.fn(),
-    };
-    renderWithI18n(<ImportWizard api={{ ...fakeApi(), ...formatApi }} />);
-    expect(await screen.findByRole("region", { name: "Products file columns" })).toBeInTheDocument();
-    expect(await screen.findByText("In use: the products file has exactly these columns, in this order.")).toBeInTheDocument();
-    expect(screen.getByLabelText("Price list file")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Output format" })).toBeNull();
-  });
-
-  it("has no columns panel when the server offers no output format", async () => {
-    renderWithI18n(<ImportWizard api={fakeApi()} />);
-    expect(await screen.findByLabelText("Price list file")).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Products file columns" })).toBeNull();
   });
 
   it("previews both approved files, and only after the user signs", async () => {

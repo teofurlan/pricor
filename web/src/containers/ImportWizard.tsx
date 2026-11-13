@@ -23,11 +23,11 @@ import { UploadForm } from "../components/organisms/UploadForm";
 import { useI18n, type TextKey } from "../i18n";
 import { PriceChanges } from "./PriceChanges";
 import { MemoryPanelContainer } from "./MemoryPanelContainer";
-import { OutputFormatContainer } from "./OutputFormatContainer";
+import { OutputFormatStep } from "./OutputFormatStep";
 import { toApiError, usePreview } from "./usePreview";
 
 // Steps that change the plan; the server refuses them once the import is approved.
-const PLAN_STEPS: StepId[] = ["header", "columns", "questions"];
+const PLAN_STEPS: StepId[] = ["header", "columns", "questions", "format"];
 
 const TITLES: Record<StepId, { title: TextKey; lede: TextKey }> = {
   upload: { title: "title.upload", lede: "lede.upload" },
@@ -35,6 +35,7 @@ const TITLES: Record<StepId, { title: TextKey; lede: TextKey }> = {
   columns: { title: "title.columns", lede: "lede.columns" },
   questions: { title: "title.questions", lede: "lede.questions" },
   preview: { title: "title.preview", lede: "lede.preview" },
+  format: { title: "title.format", lede: "lede.format" },
   approve: { title: "title.approve", lede: "lede.approve" },
 };
 
@@ -181,7 +182,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
 
   const previewEnabled =
     session !== null &&
-    (step === "preview" || step === "approve" || (step === "questions" && session.status === "ready_for_preview"));
+    (step === "preview" || step === "format" || step === "approve" || (step === "questions" && session.status === "ready_for_preview"));
   // Everything the server uses to compute the preview; when it changes, the preview is stale.
   const planRevision = session
     ? JSON.stringify([session.header.row_index, session.columns.map((item) => item.role), session.answers, session.fx?.snapshot])
@@ -329,7 +330,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
     setStep(id);
   }
 
-  const order: StepId[] = ["upload", ...(headerNeeded ? (["header"] as const) : []), "columns", "questions", "preview", "approve"];
+  const order: StepId[] = ["upload", ...(headerNeeded ? (["header"] as const) : []), "columns", "questions", "preview", ...(formatApi ? (["format"] as const) : []), "approve"];
   const current = order.indexOf(step);
   const steps: StepItem[] = order.map((id, position) => ({
     id,
@@ -404,7 +405,6 @@ export function ImportWizard({ api }: { api: ApiClient }) {
                   onLoadSample: (sample) => sampleApi.downloadSample(sample),
                 })}
               />
-              {formatApi && dataReady && <OutputFormatContainer api={formatApi} />}
             </div>
           )}
           {step === "header" && session && (
@@ -474,7 +474,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
                   <RejectedList rows={preview.page.totals.rejected_rows} />
                 </section>
                 <div className="actions">
-                  <Button variant="primary" onClick={() => setStep("approve")}>
+                  <Button variant="primary" onClick={() => setStep(formatApi ? "format" : "approve")}>
                     {t("preview.continue")}
                   </Button>
                 </div>
@@ -482,6 +482,9 @@ export function ImportWizard({ api }: { api: ApiClient }) {
             ) : (
               loadingPreview
             ))}
+          {step === "format" && session && formatApi && (
+            <OutputFormatStep api={formatApi} onContinue={() => setStep("approve")} />
+          )}
           {step === "approve" &&
             session &&
             (preview.page ? (

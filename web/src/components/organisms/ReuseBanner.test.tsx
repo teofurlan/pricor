@@ -86,7 +86,7 @@ describe("ReuseBanner", () => {
 
     const item = screen.getByRole("listitem");
     expect(item).toHaveTextContent(
-      "Column “iva” (was column 4) is gone, and the plan used it (role: VAT rate). That rule needs your attention.",
+      "Column “iva” (was column 4) is gone, and the plan used it (role: VAT rate). That setting needs your attention.",
     );
     expect(item).toHaveClass("change--attention");
   });

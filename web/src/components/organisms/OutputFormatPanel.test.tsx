@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { OutputFormat } from "../../api/types";
@@ -43,6 +43,7 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof OutputFormat
 }
 
 const rows = () => screen.getAllByRole("listitem");
+const mismatching = (): OutputFormat => format({ fit: { matched: 1, total: 3, unmatched: ["Stock", "Moneda"], mismatch: true } });
 
 describe("OutputFormatPanel", () => {
   it("explains the standard format and uploads a template file", async () => {
@@ -50,8 +51,8 @@ describe("OutputFormatPanel", () => {
     expect(screen.getByText(/Pricor's standard columns/)).toBeInTheDocument();
     const file = new File(["Código,Stock\n"], "mi-sistema.csv");
     await userEvent.upload(screen.getByLabelText("Template file"), file);
-    await userEvent.click(screen.getByRole("button", { name: "Read the template" }));
     expect(props.onUpload).toHaveBeenCalledWith(file);
+    expect(screen.queryByRole("button", { name: "Read the template" })).toBeNull();
   });
 
   it("adds columns by hand and saves exactly those, in that order", async () => {
@@ -66,8 +67,8 @@ describe("OutputFormatPanel", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Use these columns" }));
     expect(props.onSave).toHaveBeenCalledWith([
-      { name: "SKU", source: "field:supplier_code", template_index: null },
-      { name: "Rubro", source: "constant:Ferretería", template_index: null },
+      { name: "SKU", source: "field:supplier_code", template_index: null, kind: "code" },
+      { name: "Rubro", source: "constant:Ferretería", template_index: null, kind: "text" },
     ]);
   });
 
@@ -76,8 +77,8 @@ describe("OutputFormatPanel", () => {
     expect(rows()).toHaveLength(3);
     expect(within(rows()[0]).getByRole("textbox", { name: "Name of column 1" })).toHaveValue("Código");
     expect(within(rows()[0]).getByText("A1, B2")).toBeInTheDocument();
-    expect(within(rows()[0]).getByText("Gemma 92%")).toBeInTheDocument();
-    expect(within(rows()[1]).getByText("Rule")).toBeInTheDocument();
+    expect(within(rows()[0]).getByText("Automatic suggestion · high confidence")).toBeInTheDocument();
+    expect(within(rows()[1]).getByText("Automatic detection")).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Source for Código" })).toHaveValue("field:supplier_code");
     expect(screen.getByRole("combobox", { name: "Source for Stock" })).toHaveValue("empty");
     expect(screen.getByRole("textbox", { name: "Fixed value for Moneda" })).toHaveValue("ARS");
@@ -86,9 +87,9 @@ describe("OutputFormatPanel", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Use these columns" }));
     expect(props.onSave).toHaveBeenCalledWith([
-      { name: "Código", source: "field:supplier_code", template_index: 0 },
-      { name: "Stock", source: "empty", template_index: 1 },
-      { name: "Moneda", source: "constant:ARS", template_index: 2 },
+      { name: "Código", source: "field:supplier_code", template_index: 0, kind: "code" },
+      { name: "Stock", source: "empty", template_index: 1, kind: "text" },
+      { name: "Moneda", source: "constant:ARS", template_index: 2, kind: "text" },
     ]);
   });
 
@@ -107,9 +108,9 @@ describe("OutputFormatPanel", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Use these columns" }));
     expect(props.onSave).toHaveBeenCalledWith([
-      { name: "Existencia", source: "empty", template_index: 1 },
-      { name: "Código", source: "field:supplier_code", template_index: 0 },
-      { name: "Costo", source: "field:unit_cost_net", template_index: null },
+      { name: "Existencia", source: "empty", template_index: 1, kind: "text" },
+      { name: "Código", source: "field:supplier_code", template_index: 0, kind: "code" },
+      { name: "Costo", source: "field:unit_cost_net", template_index: null, kind: "price" },
     ]);
   });
 
@@ -155,5 +156,103 @@ describe("OutputFormatPanel", () => {
   it("shows the animated loader while the format loads", () => {
     renderPanel({ loading: true });
     expect(screen.getByRole("status")).toHaveClass("tape-loader");
+  });
+
+  it("accepts PDF templates and says which file types it reads", () => {
+    renderPanel({ format: confirmed() });
+    expect(screen.getByLabelText("Template file")).toHaveAttribute("accept", expect.stringContaining(".pdf"));
+    expect(screen.getByText(/Excel \(\.xlsx, \.xls\), CSV or PDF/)).toBeInTheDocument();
+  });
+
+  it("reads a dropped file at once", () => {
+    const props = renderPanel();
+    const file = new File(["x"], "plantilla.pdf");
+    fireEvent.drop(screen.getByText("Drag the template here").closest(".dropzone")!, { dataTransfer: { files: [file] } });
+    expect(props.onUpload).toHaveBeenCalledWith(file);
+  });
+
+  describe("column types", () => {
+    const type = (name: string) => screen.getByRole("combobox", { name: `Type of ${name}` });
+    const source = (name: string) => screen.getByRole("combobox", { name: `Source for ${name}` });
+
+    it("offers the five types in store words", () => {
+      renderPanel({ format: confirmed() });
+      expect(within(type("Código")).getAllByRole("option").map((o) => o.textContent)).toEqual(["Text", "Description", "Code", "Number", "Price"]);
+    });
+
+    it("starts from the saved type, or the one the source implies", () => {
+      renderPanel({ format: { ...confirmed(), columns: confirmed().columns.map((c, i) => (i === 1 ? { ...c, kind: "number" as const } : c)) } });
+      expect(type("Código")).toHaveValue("code");
+      expect(type("Stock")).toHaveValue("number");
+      expect(type("Moneda")).toHaveValue("text");
+    });
+
+    it("suggests the source when the type changes from an empty source or another type's field", async () => {
+      renderPanel({ format: confirmed() });
+      await userEvent.selectOptions(type("Stock"), "price");
+      expect(source("Stock")).toHaveValue("field:unit_cost_net");
+      await userEvent.selectOptions(type("Código"), "description");
+      expect(source("Código")).toHaveValue("field:description");
+    });
+
+    it("keeps the source when it already fits the type or is a fixed value", async () => {
+      renderPanel({ format: confirmed() });
+      await userEvent.selectOptions(type("Código"), "code");
+      expect(source("Código")).toHaveValue("field:supplier_code");
+      await userEvent.selectOptions(type("Moneda"), "price");
+      expect(source("Moneda")).toHaveValue("constant");
+      await userEvent.selectOptions(type("Stock"), "text");
+      expect(source("Stock")).toHaveValue("empty");
+    });
+
+    it("sets the type from the chosen field", async () => {
+      renderPanel({ format: confirmed() });
+      await userEvent.selectOptions(source("Stock"), "field:unit_cost_net");
+      expect(type("Stock")).toHaveValue("price");
+      await userEvent.selectOptions(source("Stock"), "field:currency");
+      expect(type("Stock")).toHaveValue("text");
+    });
+
+    it("sends the chosen type in the saved definitions", async () => {
+      const props = renderPanel({ format: confirmed() });
+      await userEvent.selectOptions(type("Stock"), "price");
+      await userEvent.click(screen.getByRole("button", { name: "Use these columns" }));
+      expect(props.onSave).toHaveBeenCalledWith([
+        { name: "Código", source: "field:supplier_code", template_index: 0, kind: "code" },
+        { name: "Stock", source: "field:unit_cost_net", template_index: 1, kind: "price" },
+        { name: "Moneda", source: "constant:ARS", template_index: 2, kind: "text" },
+      ]);
+    });
+  });
+
+  describe("template mismatch", () => {
+    it("hides the rows behind an alert that says what was not recognised", () => {
+      renderPanel({ format: mismatching() });
+      expect(screen.getByRole("alert")).toHaveTextContent("This file does not look like a product list: we recognised 1 of 3 columns. We did not recognise: Stock, Moneda. Is this the right file?");
+      expect(screen.queryAllByRole("listitem")).toHaveLength(0);
+      expect(screen.queryByRole("button", { name: "Use these columns" })).toBeNull();
+    });
+
+    it("shows the rows after the user confirms the file", async () => {
+      renderPanel({ format: mismatching() });
+      await userEvent.click(screen.getByRole("button", { name: "Yes, use this file" }));
+      expect(rows()).toHaveLength(3);
+      expect(screen.queryByRole("button", { name: "Yes, use this file" })).toBeNull();
+    });
+
+    it("removes the format and clears the chosen file when the user picked the wrong one", async () => {
+      const props = renderPanel({ format: mismatching() });
+      await userEvent.upload(screen.getByLabelText("Template file"), new File(["x"], "otro.csv"));
+      await userEvent.click(screen.getByRole("button", { name: "I picked the wrong file" }));
+      expect(props.onRemove).toHaveBeenCalled();
+      expect(screen.getByLabelText("Template file")).toHaveValue("");
+      expect(screen.getByText("Drag the template here")).toBeInTheDocument();
+    });
+
+    it("does not warn when the fit is good or unknown", () => {
+      renderPanel({ format: format({ fit: { matched: 3, total: 3, unmatched: [], mismatch: false } }) });
+      expect(rows()).toHaveLength(3);
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
   });
 });
