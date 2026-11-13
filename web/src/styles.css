@@ -458,6 +458,17 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
 .table--columns .cell--role { padding-right: 4px; overflow-wrap: anywhere; }
 .role-decision__empty { color: var(--muted); }
 .button--action { min-height: 32px; padding: 4px 8px; font-size: 0.8125rem; }
+/* Decision keys each print in their own ink so accept, ignore, undo and remember read apart at a glance. Red stays reserved for totals and the sign key. */
+.button--accept, .button--accept-all { color: var(--ink-sage); border-color: var(--ink-sage); box-shadow: 0 2px 0 var(--ink-sage); }
+.button--accept:hover:not(:disabled), .button--accept-all:hover:not(:disabled) { background: var(--ink-sage); border-color: var(--ink-sage); color: var(--paper); }
+.button--accept-all { background: var(--ink-sage); color: var(--paper); box-shadow: 0 2px 0 var(--ink); }
+.button--accept-all:hover:not(:disabled) { background: #3a5749; }
+.button--ignore { color: var(--ink-brick); border-color: var(--ink-brick); box-shadow: 0 2px 0 var(--ink-brick); }
+.button--ignore:hover:not(:disabled) { background: var(--ink-brick); border-color: var(--ink-brick); color: var(--paper); }
+.button--undo { color: var(--muted); border-style: dashed; box-shadow: none; }
+.button--undo:hover:not(:disabled) { color: var(--ink); }
+.button--remember { color: var(--ink-ochre); border-color: var(--ink-ochre); box-shadow: 0 2px 0 var(--ink-ochre); }
+.button--remember:hover:not(:disabled) { background: var(--ink-ochre); border-color: var(--ink-ochre); color: var(--paper); }
 .proposal-marks { display: flex; flex-direction: column; gap: 4px; }
 .proposal-mark { display: inline-flex; align-items: baseline; gap: 8px; font-family: var(--ui); font-stretch: condensed; font-weight: 650; font-size: 0.75rem; letter-spacing: 0.05em; text-transform: uppercase; line-height: 1.4; white-space: nowrap; }
 .proposal-mark__stage { color: var(--ink); }

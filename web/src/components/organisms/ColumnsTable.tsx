@@ -252,7 +252,7 @@ export function ColumnsTable({ columns, issues, busy, sample, onConfirm }: Props
         <div className="table-actions-top">
           <Button
             variant="quiet"
-            className="button--key button--action"
+            className="button--key button--action button--accept-all"
             disabled={busy}
             onClick={handleAcceptAll}
           >
@@ -330,7 +330,7 @@ export function ColumnsTable({ columns, issues, busy, sample, onConfirm }: Props
                       {edited !== undefined && (
                         <button
                           type="button"
-                          className="button button--key button--action"
+                          className="button button--key button--action button--undo"
                           onClick={() =>
                             setEdits((current) => {
                               const next = { ...current };
@@ -345,7 +345,7 @@ export function ColumnsTable({ columns, issues, busy, sample, onConfirm }: Props
                       {needsUser && bestProposal && (
                         <button
                           type="button"
-                          className="button button--key button--action"
+                          className="button button--key button--action button--accept"
                           onClick={() => setEdits((cur) => ({ ...cur, [item.index]: bestProposal.role }))}
                         >
                           {t("columns.accept")}
@@ -354,7 +354,7 @@ export function ColumnsTable({ columns, issues, busy, sample, onConfirm }: Props
                       {needsUser && bestProposal?.role !== "ignore" && (
                         <button
                           type="button"
-                          className="button button--key button--action"
+                          className="button button--key button--action button--ignore"
                           onClick={() => setEdits((cur) => ({ ...cur, [item.index]: "ignore" }))}
                         >
                           {t("columns.ignore")}

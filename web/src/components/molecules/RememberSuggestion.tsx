@@ -37,7 +37,7 @@ export function RememberSuggestion({ questionId, disabled = false, onRemember }:
       {remembered ? (
         <span className="memory-saved" role="status">{t("memory.saved")}</span>
       ) : (
-        <Button disabled={disabled} loading={remembering} onClick={() => void remember()}>{t("memory.remember")}</Button>
+        <Button className="button--remember" disabled={disabled} loading={remembering} onClick={() => void remember()}>{t("memory.remember")}</Button>
       )}
       {error && <span role="alert">{error}</span>}
     </div>
