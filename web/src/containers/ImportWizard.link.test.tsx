@@ -1,7 +1,7 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, type ApiClient, type WorkspaceApiClient } from "../api/client";
+import { ApiError, type ApiClient, type MemoryApiClient, type WorkspaceApiClient } from "../api/client";
 import { ServerConfigProvider } from "../api/serverConfig";
 import type { ServerConfig } from "../api/types";
 import { renderWithI18n } from "../test/render";
@@ -20,7 +20,7 @@ function api(config: ServerConfig, overrides: Record<string, unknown> = {}) {
     currentWorkspace: vi.fn().mockResolvedValue(null),
     claimWorkspace: vi.fn().mockResolvedValue({ link: link(TOKEN) }),
     ...overrides,
-  } as unknown as ApiClient & WorkspaceApiClient;
+  } as unknown as ApiClient & WorkspaceApiClient & MemoryApiClient;
 }
 
 function mount(client: ApiClient, language: "en" | "es" = "en") {
