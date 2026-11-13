@@ -1,0 +1,304 @@
+"""Private workspaces for the hosted demo: one SQLite database per visitor.
+
+A visitor gets a random token, kept in an HttpOnly cookie and shown as a personal link
+(`/w/<token>`) to come back from another device. Requests to the data paths (imports,
+memories, output format, sheets) go to that visitor's own app over its own database; the
+configuration, the sample lists and the web shell are public. The models are built once and
+shared by every workspace (see `wiring.workspace_app_from_env`).
+
+The token is a bearer secret: files and backups are named by its SHA-256, and it is never
+logged. After every successful change the database is copied to the `WorkspaceBackup` before
+the answer completes, so a server that restarts with an empty disk restores it on return.
+"""
+
+import hashlib
+import logging
+import re
+import secrets
+import sqlite3
+import tempfile
+import threading
+from collections import OrderedDict
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass, field, replace
+from pathlib import Path
+from typing import Any
+
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, RedirectResponse, Response
+from starlette.concurrency import run_in_threadpool
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+from pricor.entrypoints.api import ApiDependencies, create_app
+from pricor.ports.workspace_backup import WorkspaceBackup
+
+logger = logging.getLogger(__name__)
+
+COOKIE_NAME = "pricor_workspace"
+COOKIE_MAX_AGE = 365 * 24 * 60 * 60
+DEFAULT_MAX_OPEN = 16
+# First path segments that hold a visitor's data; everything else is public.
+WORKSPACE_PREFIXES = frozenset({"imports", "memories", "output-format", "sheets"})
+_TOKEN = re.compile(r"^[A-Za-z0-9_-]{43}$")
+_READS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
+@dataclass(frozen=True)
+class OpenWorkspace:
+    app: ASGIApp
+    close: Callable[[], None]
+
+
+@dataclass
+class _Entry:
+    workspace: OpenWorkspace
+    users: int = 0
+    saving: threading.Lock = field(default_factory=threading.Lock)
+
+
+@dataclass(frozen=True)
+class Lease:
+    key: str
+    workspace: OpenWorkspace
+
+
+def is_valid_token(token: str | None) -> bool:
+    return token is not None and _TOKEN.fullmatch(token) is not None
+
+
+def workspace_key(token: str) -> str:
+    return hashlib.sha256(token.encode("ascii")).hexdigest()
+
+
+class WorkspaceRegistry:
+    """Opens workspaces on demand, keeps at most `max_open` idle ones, and backs them up."""
+
+    def __init__(
+        self,
+        directory: Path,
+        open_workspace: Callable[[Path], OpenWorkspace],
+        backup: WorkspaceBackup,
+        max_open: int = DEFAULT_MAX_OPEN,
+    ):
+        if max_open < 1:
+            raise ValueError("max_open must be at least 1")
+        self._directory = Path(directory)
+        self._open_workspace = open_workspace
+        self._backup = backup
+        self._max_open = max_open
+        self._lock = threading.Lock()
+        self._open: OrderedDict[str, _Entry] = OrderedDict()
+
+    def _path(self, key: str) -> Path:
+        return self._directory / f"{key}.sqlite"
+
+    def create(self) -> str:
+        """A new empty workspace, backed up at once so its link survives a restart."""
+        token = secrets.token_urlsafe(32)
+        lease = self._acquire(token, create=True)
+        assert lease is not None  # a new token always opens
+        try:
+            self.backup_quietly(lease)
+        finally:
+            self.release(lease)
+        return token
+
+    def exists(self, token: str | None) -> bool:
+        lease = self.acquire(token)
+        if lease is None:
+            return False
+        self.release(lease)
+        return True
+
+    @contextmanager
+    def lease(self, token: str | None) -> Iterator[OpenWorkspace | None]:
+        """The open workspace for `token` while the block runs (never closed meanwhile), or None."""
+        held = self.acquire(token)
+        try:
+            yield held.workspace if held is not None else None
+        finally:
+            if held is not None:
+                self.release(held)
+
+    def acquire(self, token: str | None) -> Lease | None:
+        """The open workspace for `token` (restored from the backup if needed), or None."""
+        if not is_valid_token(token):
+            return None
+        return self._acquire(token, create=False)
+
+    def _acquire(self, token: str, *, create: bool) -> Lease | None:
+        key = workspace_key(token)
+        with self._lock:
+            entry = self._open.get(key)
+            if entry is None:
+                path = self._path(key)
+                self._directory.mkdir(parents=True, exist_ok=True)
+                if not create and not path.is_file() and not self._restore(key, path):
+                    return None
+                entry = _Entry(self._open_workspace(path))
+                self._open[key] = entry
+            self._open.move_to_end(key)
+            entry.users += 1
+            self._evict_idle()
+            return Lease(key, entry.workspace)
+
+    def _restore(self, key: str, path: Path) -> bool:
+        try:
+            restored = self._backup.restore(key, path)
+        except Exception as error:
+            logger.warning("workspace restore failed (%s)", type(error).__name__)
+            restored = False
+        if not restored:
+            path.unlink(missing_ok=True)
+        return restored and path.is_file()
+
+    def release(self, lease: Lease) -> None:
+        with self._lock:
+            entry = self._open.get(lease.key)
+            if entry is not None:
+                entry.users -= 1
+            self._evict_idle()
+
+    def _evict_idle(self) -> None:
+        for key in list(self._open):
+            if len(self._open) <= self._max_open:
+                return
+            entry = self._open[key]
+            if entry.users == 0:
+                del self._open[key]
+                entry.workspace.close()
+
+    def save(self, lease: Lease) -> None:
+        """Copy the workspace database (SQLite backup API) and hand the copy to the backup."""
+        with self._lock:
+            entry = self._open.get(lease.key)
+        saving = entry.saving if entry is not None else threading.Lock()
+        with saving, tempfile.TemporaryDirectory(dir=self._directory) as scratch:
+            copy = Path(scratch) / "copy.sqlite"
+            source = sqlite3.connect(self._path(lease.key))
+            target = sqlite3.connect(copy)
+            try:
+                source.backup(target)
+            finally:
+                target.close()
+                source.close()
+            self._backup.save(lease.key, copy)
+
+    def backup_quietly(self, lease: Lease) -> None:
+        try:
+            self.save(lease)
+        except Exception as error:
+            logger.warning(
+                "workspace backup failed (%s); the change is kept on this server only",
+                type(error).__name__,
+            )
+
+    def close_all(self) -> None:
+        with self._lock:
+            entries = list(self._open.values())
+            self._open.clear()
+        for entry in entries:
+            entry.workspace.close()
+
+
+def _scheme(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower()
+    return forwarded or request.url.scheme
+
+
+def _with_cookie(response: Response, token: str, request: Request) -> Response:
+    response.set_cookie(
+        COOKIE_NAME,
+        token,
+        max_age=COOKIE_MAX_AGE,
+        path="/",
+        httponly=True,
+        samesite="lax",
+        secure=_scheme(request) == "https",
+    )
+    return response
+
+
+def _not_found() -> JSONResponse:
+    return JSONResponse(
+        {"error": {"code": "workspace_not_found", "message": "this workspace link does not exist"}},
+        status_code=404,
+    )
+
+
+def _workspace_required() -> JSONResponse:
+    return JSONResponse(
+        {
+            "error": {
+                "code": "workspace_required",
+                "message": "open the app first to get a private workspace",
+            }
+        },
+        status_code=401,
+    )
+
+
+def install_workspace_routes(app: FastAPI, registry: WorkspaceRegistry) -> None:
+    @app.get("/workspace")
+    def workspace(request: Request) -> Response:
+        token = request.cookies.get(COOKIE_NAME)
+        if not registry.exists(token):
+            token = registry.create()
+        host = request.headers.get("host") or request.url.netloc
+        link = f"{_scheme(request)}://{host}/w/{token}"
+        return _with_cookie(JSONResponse({"link": link}), token, request)
+
+    @app.get("/w/{token}")
+    def follow_link(token: str, request: Request) -> Response:
+        if not registry.exists(token):
+            return _not_found()
+        return _with_cookie(RedirectResponse("/", status_code=303), token, request)
+
+
+class WorkspaceDispatcher:
+    """Sends data paths to the visitor's workspace app and everything else to the public app."""
+
+    def __init__(self, public: ASGIApp, registry: WorkspaceRegistry):
+        self.public = public
+        self.registry = registry
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope["path"].lstrip("/").split("/", 1)[0] not in WORKSPACE_PREFIXES:
+            await self.public(scope, receive, send)
+            return
+        token = Request(scope).cookies.get(COOKIE_NAME)
+        lease = await run_in_threadpool(self.registry.acquire, token)
+        if lease is None:
+            await _workspace_required()(scope, receive, send)
+            return
+        changes = scope["method"] not in _READS
+        state: dict[str, Any] = {"status": 0, "saved": False}
+
+        async def relay(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                state["status"] = message["status"]
+            elif (
+                message["type"] == "http.response.body"
+                and not message.get("more_body", False)
+                and changes
+                and 200 <= state["status"] < 300
+                and not state["saved"]
+            ):
+                state["saved"] = True
+                await run_in_threadpool(self.registry.backup_quietly, lease)
+            await send(message)
+
+        try:
+            await lease.workspace.app(scope, receive, relay)
+        finally:
+            await run_in_threadpool(self.registry.release, lease)
+
+
+def create_workspace_app(public: ApiDependencies, registry: WorkspaceRegistry) -> ASGIApp:
+    """The public app (config, samples, web shell, workspace links) in front of the workspaces."""
+    app = create_app(
+        replace(public, workspaces=True),
+        extra_routes=lambda app: install_workspace_routes(app, registry),
+    )
+    return WorkspaceDispatcher(app, registry)

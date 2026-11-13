@@ -28,6 +28,7 @@ def test_get_config_returns_provider_and_demo_flag():
     assert response.json() == {
         "model_provider": "gemini",
         "demo": True,
+        "workspaces": False,
     }
 
 
@@ -39,6 +40,7 @@ def test_get_config_defaults():
     assert response.json() == {
         "model_provider": "ollama",
         "demo": False,
+        "workspaces": False,
     }
 
 
@@ -62,7 +64,7 @@ def test_demo_flag_parsing_in_wiring(demo_env, expected):
     assert demo_from_env({"PRICOR_DEMO": demo_env}) is expected
 
 
-def test_config_exposes_only_the_provider_and_the_demo_flag():
+def test_config_exposes_only_the_provider_the_demo_flag_and_workspaces():
     response = make_client(model_provider="gemini", demo=True).get("/config")
 
-    assert set(response.json()) == {"model_provider", "demo"}
+    assert set(response.json()) == {"model_provider", "demo", "workspaces"}

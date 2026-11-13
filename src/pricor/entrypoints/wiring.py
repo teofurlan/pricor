@@ -20,6 +20,10 @@ Environment variables:
     PRICOR_CALIBRATION     thresholds file (default: the calibrated one shipped in this package)
     PRICOR_FX_RATE_TYPE    rate type suggested for currency conversion (default oficial)
     PRICOR_FX_TIMEOUT      seconds per DolarAPI request      (default 10)
+    PRICOR_WORKSPACES_DIR  turn on private workspaces (hosted demo): folder of one SQLite file
+                           per visitor; PRICOR_DB is then unused       (default: off, one database)
+    PRICOR_WORKSPACES_MAX_OPEN workspaces kept open in memory, least recently used closed first
+                           (default 16)
 
 Run with: uv run uvicorn pricor.entrypoints.wiring:app_from_env --factory
 """
@@ -27,9 +31,10 @@ Run with: uv run uvicorn pricor.entrypoints.wiring:app_from_env --factory
 import logging
 import os
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 
-from fastapi import FastAPI
+from starlette.types import ASGIApp
 
 from pricor.adapters.dolarapi_provider import DEFAULT_TIMEOUT_SECONDS as FX_TIMEOUT
 from pricor.adapters.dolarapi_provider import DolarApiProvider
@@ -66,6 +71,7 @@ from pricor.adapters.report_csv_exporter import ReportCsvExporter
 from pricor.adapters.spreadsheet_reader import FileSpreadsheetReader
 from pricor.adapters.sqlite_memory_store import SqliteMemoryStore
 from pricor.adapters.sqlite_store import SqliteDatabase
+from pricor.adapters.memory_session_repository import InMemoryImportSessionRepository
 from pricor.application.cascade import (
     UNCALIBRATED_THRESHOLD,
     AgreementStage,
@@ -73,6 +79,7 @@ from pricor.application.cascade import (
     Member,
     Stage,
 )
+from pricor.application.import_first_time import ImportFirstTime
 from pricor.application.manage_memory import ManageMemory
 from pricor.application.manage_output_format import ManageOutputFormat
 from pricor.application.report_price_changes import ReportPriceChanges
@@ -81,8 +88,15 @@ from pricor.domain.fx import MARKET_RATE_TYPES
 from pricor.entrypoints.api import ApiDependencies, create_app
 from pricor.entrypoints.calibration_file import DEFAULT_CALIBRATION_PATH, load_calibration
 from pricor.entrypoints.web_app import DEFAULT_WEB_DIST
+from pricor.entrypoints.workspaces import (
+    DEFAULT_MAX_OPEN,
+    OpenWorkspace,
+    WorkspaceRegistry,
+    create_workspace_app,
+)
 from pricor.ports.chat_client import ChatClient
 from pricor.ports.embedder import Embedder
+from pricor.ports.workspace_backup import NoWorkspaceBackup, WorkspaceBackup
 
 
 def ollama_client_from_env(env: Mapping[str, str]) -> OllamaClient:
@@ -280,46 +294,137 @@ def memory_top_k_from_env(env: Mapping[str, str]) -> int:
     return value
 
 
-def dependencies_from_env(env: Mapping[str, str]) -> ApiDependencies:
-    provider = model_provider_from_env(env)
+@dataclass(frozen=True)
+class SharedServices:
+    """What every workspace shares: the model client, embedder, cascade and settings."""
+
+    provider: str
+    client: ChatClient
+    stages: list[Stage]
+    embedder: Embedder
+    rate_type: str
+    fx_timeout: float
+    memory_top_k: int
+    demo: bool
+    warm_up: Callable[[], None] | None
+
+
+def shared_services_from_env(env: Mapping[str, str]) -> SharedServices:
     client = chat_client_from_env(env)
     rate_type, fx_timeout = fx_settings_from_env(env)
-    memory_top_k = memory_top_k_from_env(env)
-    database = SqliteDatabase(database_path_from_env(env))
     stages = build_stages(env, client)
-    embedder = embedder_from_env(env, client)
+    return SharedServices(
+        provider=model_provider_from_env(env),
+        client=client,
+        stages=stages,
+        embedder=embedder_from_env(env, client),
+        rate_type=rate_type,
+        fx_timeout=fx_timeout,
+        memory_top_k=memory_top_k_from_env(env),
+        demo=demo_from_env(env),
+        warm_up=preload_warm_up(stages) if preload_from_env(env) else None,
+    )
+
+
+def database_dependencies(
+    database: SqliteDatabase,
+    shared: SharedServices,
+    *,
+    web_dist: Path | None = None,
+    warm_up: Callable[[], None] | None = None,
+) -> ApiDependencies:
+    """The API over one database (the local one, or one visitor's workspace)."""
+    client = shared.client
     memory = ManageMemory(
-        SqliteMemoryStore(database, embedder.model), embedder, database.sessions.get
+        SqliteMemoryStore(database, shared.embedder.model), shared.embedder, database.sessions.get
     )
     use_case = ReuseSupplierPlan(
         FileSpreadsheetReader(),
         database.sessions,
-        stages,
+        shared.stages,
         GemmaPlanAdvisor(client),
         plans=database.plans,
         approvals=database,
-        fx=DolarApiProvider(cache=database.fx_quotes, timeout=fx_timeout),
-        default_fx_rate_type=rate_type,
+        fx=DolarApiProvider(cache=database.fx_quotes, timeout=shared.fx_timeout),
+        default_fx_rate_type=shared.rate_type,
         memory=memory,
-        memory_top_k=memory_top_k,
+        memory_top_k=shared.memory_top_k,
         output_formats=database.output_format,
     )
     reports = ReportPriceChanges(use_case.get, database.history, ReportCsvExporter())
     return ApiDependencies(
         use_case,
-        web_dist=DEFAULT_WEB_DIST,
+        web_dist=web_dist,
         reports=reports,
         memory=memory,
-        memory_top_k=memory_top_k,
+        memory_top_k=shared.memory_top_k,
         question_helper=GemmaQuestionHelper(client),
         output_format=ManageOutputFormat(
             FileSpreadsheetReader(), database.output_format, HeuristicOutputFormat(),
             GemmaOutputFormat(client),
         ),
-        model_provider=provider,
-        demo=demo_from_env(env),
-        warm_up=preload_warm_up(stages) if preload_from_env(env) else None,
+        model_provider=shared.provider,
+        demo=shared.demo,
+        warm_up=warm_up,
     )
+
+
+def dependencies_from_env(env: Mapping[str, str]) -> ApiDependencies:
+    shared = shared_services_from_env(env)
+    return database_dependencies(
+        SqliteDatabase(database_path_from_env(env)), shared,
+        web_dist=DEFAULT_WEB_DIST, warm_up=shared.warm_up,
+    )
+
+
+def workspaces_dir_from_env(env: Mapping[str, str]) -> Path | None:
+    value = env.get("PRICOR_WORKSPACES_DIR", "").strip()
+    return Path(value) if value else None
+
+
+def workspaces_max_open_from_env(env: Mapping[str, str]) -> int:
+    raw = env.get("PRICOR_WORKSPACES_MAX_OPEN", "").strip()
+    if not raw:
+        return DEFAULT_MAX_OPEN
+    try:
+        value = int(raw)
+    except ValueError:
+        value = 0
+    if value < 1:
+        raise ValueError("PRICOR_WORKSPACES_MAX_OPEN must be a whole number of at least 1")
+    return value
+
+
+def workspace_backup_from_env(env: Mapping[str, str]) -> WorkspaceBackup:
+    return NoWorkspaceBackup()
+
+
+def workspace_app_from_env(env: Mapping[str, str], directory: Path) -> ASGIApp:
+    """Hosted demo: a private database per visitor, the models built once and shared."""
+    shared = shared_services_from_env(env)
+
+    def open_workspace(path: Path) -> OpenWorkspace:
+        database = SqliteDatabase(path)
+        return OpenWorkspace(create_app(database_dependencies(database, shared)), database.close)
+
+    registry = WorkspaceRegistry(
+        directory, open_workspace, workspace_backup_from_env(env), workspaces_max_open_from_env(env)
+    )
+    public = ApiDependencies(
+        ImportFirstTime(FileSpreadsheetReader(), InMemoryImportSessionRepository(), []),
+        web_dist=DEFAULT_WEB_DIST,
+        model_provider=shared.provider,
+        demo=shared.demo,
+        warm_up=shared.warm_up,
+    )
+    return create_workspace_app(public, registry)
+
+
+def app_for_env(env: Mapping[str, str]) -> ASGIApp:
+    directory = workspaces_dir_from_env(env)
+    if directory is not None:
+        return workspace_app_from_env(env, directory)
+    return create_app(dependencies_from_env(env))
 
 
 def configure_logging() -> None:
@@ -332,6 +437,6 @@ def configure_logging() -> None:
     logger.setLevel(logging.INFO)
 
 
-def app_from_env() -> FastAPI:
+def app_from_env() -> ASGIApp:
     configure_logging()
-    return create_app(dependencies_from_env(os.environ))
+    return app_for_env(os.environ)

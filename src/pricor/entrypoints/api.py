@@ -191,6 +191,7 @@ class ApiDependencies:
     model_provider: str = "ollama"
     demo: bool = False
     warm_up: Callable[[], None] | None = None  # run once in the background at startup
+    workspaces: bool = False  # private workspace per visitor (hosted demo); see workspaces.py
 
 
 class OutputMappingBody(BaseModel):
@@ -679,7 +680,9 @@ def _run_warm_up(warm_up: Callable[[], None]) -> None:
         logger.warning("model warm-up failed (%s: %s); models load on first use", type(error).__name__, error)
 
 
-def create_app(dependencies: ApiDependencies) -> FastAPI:
+def create_app(
+    dependencies: ApiDependencies, extra_routes: Callable[[FastAPI], None] | None = None
+) -> FastAPI:
     warm_up = dependencies.warm_up
 
     @asynccontextmanager
@@ -901,8 +904,11 @@ def create_app(dependencies: ApiDependencies) -> FastAPI:
         return {
             "model_provider": dependencies.model_provider,
             "demo": dependencies.demo,
+            "workspaces": dependencies.workspaces,
         }
 
+    if extra_routes is not None:
+        extra_routes(app)
     if dependencies.web_dist is not None:
         install_web_app(app, dependencies.web_dist)
     return app
