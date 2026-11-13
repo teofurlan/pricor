@@ -5,11 +5,14 @@ import type { ServerConfig } from "./types";
 export interface ServerConfigContextValue {
   config: ServerConfig | null;
   hosted: boolean;
+  /** False only while the server config is still being fetched. */
+  loaded: boolean;
 }
 
 const ServerConfigContext = createContext<ServerConfigContextValue>({
   config: null,
   hosted: false,
+  loaded: true,
 });
 
 export function isHosted(config: ServerConfig | null | undefined): boolean {
@@ -29,16 +32,21 @@ export function ServerConfigProvider({
   children: ReactNode;
 }) {
   const [config, setConfig] = useState<ServerConfig | null>(initialConfig);
+  const [settled, setSettled] = useState(false);
 
   useEffect(() => {
     if (!api || typeof api.config !== "function") return;
     let active = true;
     api.config()
       .then((cfg) => {
-        if (active) setConfig(cfg);
+        if (active) {
+          setConfig(cfg);
+          setSettled(true);
+        }
       })
       .catch(() => {
         // Fall back to local on failure
+        if (active) setSettled(true);
       });
     return () => {
       active = false;
@@ -46,7 +54,8 @@ export function ServerConfigProvider({
   }, [api]);
 
   const hosted = hostedProp !== undefined ? hostedProp : isHosted(config);
-  const value = useMemo(() => ({ config, hosted }), [config, hosted]);
+  const waiting = !!api && typeof api.config === "function" && !settled && initialConfig === null;
+  const value = useMemo(() => ({ config, hosted, loaded: !waiting }), [config, hosted, waiting]);
 
   return <ServerConfigContext.Provider value={value}>{children}</ServerConfigContext.Provider>;
 }

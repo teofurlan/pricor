@@ -71,6 +71,11 @@ export interface SampleApiClient {
   downloadSample(sample: SampleListing): Promise<File>;
 }
 
+/** The visitor's private workspace: its personal link, which also sets the workspace cookie. */
+export interface WorkspaceApiClient {
+  workspace(): Promise<{ link: string }>;
+}
+
 export interface MemoryApiClient {
   listMemories(): Promise<Memory[]>;
   createMemoryNote(text: string, supplierName?: string): Promise<Memory>;
@@ -107,7 +112,7 @@ async function fail(response: Response): Promise<never> {
   throw new ApiError(response.status, "unexpected_response", `The server answered ${response.status}.`);
 }
 
-export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), baseUrl = ""): ApiClient & MemoryApiClient & OutputFormatApiClient & SampleApiClient {
+export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), baseUrl = ""): ApiClient & MemoryApiClient & OutputFormatApiClient & SampleApiClient & WorkspaceApiClient {
   async function call<T>(path: string, init?: RequestInit): Promise<T> {
     let response: Response;
     try {
@@ -196,6 +201,7 @@ export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), 
     editMemory: (id, text) => call(`/memories/${encodeURIComponent(id)}`, json("PATCH", { text })),
     deleteMemory: (id) => call(`/memories/${encodeURIComponent(id)}`, { method: "DELETE" }),
     config: () => call<ServerConfig>("/config"),
+    workspace: () => call<{ link: string }>("/workspace"),
     listSamples: () => call<SampleListing[]>("/samples"),
     async downloadSample(sample) {
       let response: Response;

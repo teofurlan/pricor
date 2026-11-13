@@ -533,6 +533,12 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
 /* Step 1: the price-list form on the left, the products file columns on the right. */
 .upload-step { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 440px); gap: 40px; align-items: start; min-width: 0; }
 .upload-step .upload { max-width: none; }
+.workspace { border-top: 1px solid var(--rule); padding: 14px 0; max-width: 78ch; display: grid; gap: 6px; }
+.workspace__title { margin: 0; font-size: 0.9rem; font-weight: 600; }
+.workspace__body { margin: 0; color: var(--ink-soft, inherit); font-size: 0.875rem; }
+.workspace__row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.workspace__link { flex: 1 1 260px; min-width: 0; font: inherit; font-family: var(--mono, monospace); font-size: 0.8rem; padding: 6px 8px; border: 1px solid var(--rule); background: transparent; color: inherit; }
+.workspace__status { font-size: 0.8rem; }
 .upload-step .output-format { padding-left: 32px; border-left: 1px solid var(--rule); }
 .output-format__upload { display: grid; gap: 7px; }
 .output-format__upload .button { justify-self: start; }

@@ -433,7 +433,7 @@ describe("ImportWizard", () => {
         <ImportWizard api={api} />
       </ServerConfigProvider>,
     );
-    expect(screen.getByText("The list is processed on Pricor's server and Gemma runs on Google's API. Every row is accounted for.")).toBeInTheDocument();
+    expect(screen.getByText("This is a trial version on the web. The list is processed on Pricor's server, with Gemma on Google's API. Pricor can also be installed on the store's own computer, where the data does not leave it.")).toBeInTheDocument();
   });
 
   it("shows hosted upload lede text in Spanish in hosted mode", () => {
@@ -444,7 +444,7 @@ describe("ImportWizard", () => {
       </ServerConfigProvider>,
       "es",
     );
-    expect(screen.getByText("La lista se procesa en el servidor de Pricor y Gemma corre en la API de Google. Cada fila queda contabilizada.")).toBeInTheDocument();
+    expect(screen.getByText("Esta es una versión de prueba en la web. La lista se procesa en el servidor de Pricor, con Gemma en la API de Google. Pricor también puede instalarse en la computadora del comercio, y allí los datos no salen de ella.")).toBeInTheDocument();
   });
 
   it("says the local models are working while a slow call is pending", async () => {

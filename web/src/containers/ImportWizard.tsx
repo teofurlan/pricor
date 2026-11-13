@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ApiClient, ApiError, ExportFile, ExportSheet, MemoryApiClient, OutputFormatApiClient, SampleApiClient } from "../api/client";
+import type { ApiClient, ApiError, ExportFile, ExportSheet, MemoryApiClient, OutputFormatApiClient, SampleApiClient, WorkspaceApiClient } from "../api/client";
 import { useServerConfig } from "../api/serverConfig";
 import type { ColumnRole, CreateImportInput, Memory, Question, SessionState } from "../api/types";
 import { Button } from "../components/atoms/Button";
@@ -18,6 +18,7 @@ import { QuestionsPanel } from "../components/organisms/QuestionsPanel";
 import { ReuseBanner } from "../components/organisms/ReuseBanner";
 import { RejectedList } from "../components/organisms/RejectedList";
 import { Stepper, type StepId, type StepItem } from "../components/organisms/Stepper";
+import { WorkspacePanel } from "../components/organisms/WorkspacePanel";
 import { UploadForm } from "../components/organisms/UploadForm";
 import { useI18n, type TextKey } from "../i18n";
 import { PriceChanges } from "./PriceChanges";
@@ -45,7 +46,26 @@ function stepAfterColumns(session: SessionState): StepId {
 /** Owns the import session and the calls to the API; the steps themselves are presentational. */
 export function ImportWizard({ api }: { api: ApiClient }) {
   const { t } = useI18n();
-  const { hosted } = useServerConfig();
+  const { hosted, config, loaded } = useServerConfig();
+  // In workspace mode the cookie from GET /workspace must exist before any other data call.
+  const workspaceApi = typeof (api as Partial<WorkspaceApiClient>).workspace === "function" ? (api as ApiClient & WorkspaceApiClient) : null;
+  const workspaceOn = config?.workspaces === true;
+  const [workspaceLink, setWorkspaceLink] = useState<string | null>(null);
+  const [workspaceSettled, setWorkspaceSettled] = useState(false);
+  const workspaceRequested = useRef(false);
+  useEffect(() => {
+    if (!workspaceOn || workspaceRequested.current) return;
+    workspaceRequested.current = true;
+    if (!workspaceApi) {
+      setWorkspaceSettled(true);
+      return;
+    }
+    workspaceApi.workspace()
+      .then((result) => setWorkspaceLink(result.link))
+      .catch(() => {})
+      .finally(() => setWorkspaceSettled(true));
+  }, [workspaceOn, workspaceApi]);
+  const dataReady = loaded && (!workspaceOn || workspaceSettled);
   const [session, setSession] = useState<SessionState | null>(null);
   const [step, setStep] = useState<StepId>("upload");
   const [headerNeeded, setHeaderNeeded] = useState(false);
@@ -295,7 +315,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
           <LanguageToggle />
         </div>
       </header>
-      {memoryApi && (
+      {memoryApi && dataReady && (
         <MemoryPanelContainer
           api={memoryApi}
           open={memoryOpen}
@@ -322,6 +342,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
           <ErrorBanner error={error ?? preview.error} />
           {busy && <div className="working"><TapeLoader size="small" text={t(hosted ? "common.working.hosted" : "common.working")} /></div>}
 
+          {step === "upload" && workspaceLink && <WorkspacePanel link={workspaceLink} />}
           {step === "upload" && (
             <div className="upload-step">
               <UploadForm
@@ -333,7 +354,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
                   onLoadSample: (sample) => sampleApi.downloadSample(sample),
                 })}
               />
-              {formatApi && <OutputFormatContainer api={formatApi} />}
+              {formatApi && dataReady && <OutputFormatContainer api={formatApi} />}
             </div>
           )}
           {step === "header" && session && (

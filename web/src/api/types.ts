@@ -15,6 +15,8 @@ export interface SampleListing {
 export interface ServerConfig {
   model_provider: "ollama" | "gemini";
   demo: boolean;
+  /** True when each visitor gets a private workspace (`GET /workspace`). */
+  workspaces?: boolean;
 }
 
 export type SessionStatus =
