@@ -292,7 +292,9 @@ class WorkspaceDispatcher:
         try:
             await lease.workspace.app(scope, receive, relay)
         finally:
-            await run_in_threadpool(self.registry.release, lease)
+            # Synchronous on purpose: an awaited release would be skipped when the request is
+            # cancelled, pinning the workspace open forever. It only takes a short lock.
+            self.registry.release(lease)
 
 
 def create_workspace_app(public: ApiDependencies, registry: WorkspaceRegistry) -> ASGIApp:
