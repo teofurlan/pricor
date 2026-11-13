@@ -109,6 +109,7 @@ The import flow and every endpoint are documented in the docstring of [src/prico
 ### Exports
 
 Once a session is approved, `GET /imports/{id}/export?format=csv|xlsx` returns the products and `GET /imports/{id}/rejected?format=csv|xlsx` the rejected-rows report (409 before approval).
+- `POST /imports/combined-export` with `{"session_ids": ["<id>", ...], "format": "csv|xlsx", "kind": "products|rejected"}` (`kind` defaults to `products`): one file with the rows of 1–50 distinct approved imports in the given order and a `supplier` column first. Unknown id 404, not approved or approved with different output formats 409, empty or duplicate ids 422. Downloads as `pricor-combined-<n>-files-products|rejected.<ext>`.
 
 - Standard columns, in this order: `supplier_code, description, unit_cost_net, currency, vat_rate, units_per_pack, barcode, suggested_retail_price`, then `source_row` (the row number in the supplier's file). The rejected report is `source_row, reasons`, then the original cells under the file's own headers.
 - CSV: UTF-8 with BOM, `,` delimiter, CRLF, RFC 4180 quoting, `.` as decimal separator, values written as exact text (`855.00`). Excel with a `;` list separator (es-AR) splits `;` CSVs by default; use `CsvExporter(delimiter=";")` if that is your setup. Excel drops the leading zeros of codes in CSV files it opens directly: use the XLSX export for that.

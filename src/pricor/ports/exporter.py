@@ -6,9 +6,13 @@ the rejected-rows report (`export_rejected`). Both are built from the same
 """
 
 from dataclasses import dataclass
-from typing import Protocol
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Protocol
 
 from pricor.ports.price_history import ImportedRecord
+
+if TYPE_CHECKING:
+    from pricor.ports.output_format import OutputFormat
 
 # Fixed order of the exported product columns: the target contract fields in
 # declaration order, then traceability.
@@ -29,6 +33,9 @@ PRODUCT_COLUMNS = CONTRACT_COLUMNS + TRACEABILITY_COLUMNS
 
 # Fixed leading columns of the rejected-rows report; the original cells follow.
 REJECTED_COLUMNS = ("source_row", "reasons")
+
+# First column of a combined export: the supplier each row came from.
+SUPPLIER_COLUMN = "supplier"
 
 
 @dataclass(frozen=True)
@@ -57,4 +64,12 @@ class Exporter(Protocol):
 
     def export_rejected(self, data: ImportExport) -> bytes:
         """The rejected-rows report."""
+        ...
+
+    def export_combined(self, parts: Sequence[ImportExport], output_format: "OutputFormat | None") -> bytes:
+        """The accepted rows of several imports in one file, a `supplier` column first."""
+        ...
+
+    def export_rejected_combined(self, parts: Sequence[ImportExport]) -> bytes:
+        """The rejected rows of several imports in one report, a `supplier` column first."""
         ...

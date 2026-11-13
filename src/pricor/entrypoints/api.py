@@ -45,6 +45,10 @@ Endpoints:
     POST /imports/{id}/approve    freezes the plan and the result
     GET  /imports/{id}/export     ?format=csv|xlsx (default csv)  -> the products file
     GET  /imports/{id}/rejected   ?format=csv|xlsx (default csv)  -> the rejected-rows report
+    POST /imports/combined-export {"session_ids": ["<id>", ...], "format": "csv"|"xlsx",
+                                  "kind": "products"|"rejected"}  -> one file, 1 to 50 approved
+                                  imports in the given order, a `supplier` column first (409 when
+                                  the files were approved with different output formats)
     GET  /imports/{id}/report     ?threshold=0.30  -> what changed since the previous import
     GET  /imports/{id}/report/export  ?threshold=0.30&format=csv  -> the same, as a file
 
@@ -219,6 +223,14 @@ class OutputColumnsBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     columns: list[OutputColumnBody]
+
+
+class CombinedExportBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    session_ids: list[Annotated[str, StringConstraints(strict=True)]]
+    format: Annotated[str, StringConstraints(strict=True)]
+    kind: Annotated[str, StringConstraints(strict=True)] = "products"
 
 
 class HeaderBody(BaseModel):
@@ -871,6 +883,10 @@ def create_app(
     @app.get("/imports/{session_id}/export")
     def export_products(session_id: str, format: str = "csv") -> Response:
         return _download(exports.products(session_id, format))
+
+    @app.post("/imports/combined-export")
+    def export_combined(body: CombinedExportBody) -> Response:
+        return _download(exports.combined(body.session_ids, body.format, body.kind))
 
     @app.get("/imports/{session_id}/rejected")
     def export_rejected(session_id: str, format: str = "csv") -> Response:

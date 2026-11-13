@@ -10,6 +10,7 @@ being rounded silently.
 """
 
 import io
+from collections.abc import Sequence
 from decimal import Decimal
 
 from openpyxl import Workbook
@@ -17,6 +18,8 @@ from openpyxl.styles import Font
 from openpyxl.worksheet.worksheet import Worksheet
 
 from pricor.adapters.export_common import (
+    combined_products,
+    combined_rejected,
     formatted_product_values,
     has_conversion,
     product_columns,
@@ -86,6 +89,19 @@ def _rejected(sheet: Worksheet, data: ImportExport) -> None:
                 _set_text(sheet, row, 3 + offset, entry.cells[offset])
 
 
+def _table(sheet: Worksheet, header: list[str], rows: list[list[object]]) -> None:
+    """Header and rows: strings as text cells, numbers as numeric cells."""
+    _header(sheet, header)
+    for row, values in enumerate(rows, start=2):
+        for column, value in enumerate(values, start=1):
+            if value is None or value == "":
+                continue
+            if isinstance(value, str):
+                _set_text(sheet, row, column, value)
+            else:
+                _set_number(sheet, row, column, value)
+
+
 def _save(book: Workbook) -> bytes:
     buffer = io.BytesIO()
     book.save(buffer)
@@ -120,4 +136,20 @@ class XlsxExporter:
         report = book.active
         report.title = REJECTED_SHEET
         _rejected(report, data)
+        return _save(book)
+
+    def export_combined(self, parts: Sequence[ImportExport], output_format: OutputFormat | None) -> bytes:
+        header, rows = combined_products(parts, output_format)
+        book = Workbook()
+        products = book.active
+        products.title = PRODUCTS_SHEET
+        _table(products, header, rows)
+        return _save(book)
+
+    def export_rejected_combined(self, parts: Sequence[ImportExport]) -> bytes:
+        header, rows = combined_rejected(parts)
+        book = Workbook()
+        report = book.active
+        report.title = REJECTED_SHEET
+        _table(report, header, rows)
         return _save(book)

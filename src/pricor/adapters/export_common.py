@@ -2,7 +2,7 @@
 
 import csv
 import io
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from pricor.domain.contract import ContractRecord
@@ -10,6 +10,7 @@ from pricor.ports.exporter import (
     CONTRACT_COLUMNS,
     CONVERTED_COLUMNS,
     REJECTED_COLUMNS,
+    SUPPLIER_COLUMN,
     TRACEABILITY_COLUMNS,
     ImportExport,
 )
@@ -145,6 +146,46 @@ def formatted_product_values(
             raise ValueError("output format has an invalid source")
         values[-1] = apply_kind(values[-1], column.kind)
     return values
+
+
+def combined_products(
+    parts: Sequence[ImportExport], output_format: OutputFormat | None
+) -> tuple[list[str], list[list[object]]]:
+    """Header and rows of several imports in one table, the supplier name first on every row.
+
+    Without a layout the converted columns appear when any import was converted.
+    """
+    if output_format is not None:
+        header = [column.name for column in output_format.columns]
+    else:
+        converted = any(has_conversion(part) for part in parts)
+        extra = CONVERTED_COLUMNS if converted else ()
+        header = [*CONTRACT_COLUMNS, *extra, *TRACEABILITY_COLUMNS]
+    rows: list[list[object]] = []
+    for part in parts:
+        for item in part.accepted:
+            values = (
+                formatted_product_values(item.row_number, item.record, output_format)
+                if output_format is not None
+                else product_values(item.row_number, item.record, "unit_cost_net_converted" in header)
+            )
+            rows.append([part.supplier_name, *values])
+    return [SUPPLIER_COLUMN, *header], rows
+
+
+def combined_rejected(parts: Sequence[ImportExport]) -> tuple[list[str], list[list[object]]]:
+    """The rejected report of several imports, padded with empty cells to the widest layout."""
+    widest = max((rejected_header(part) for part in parts), key=len, default=list(REJECTED_COLUMNS))
+    cells_width = len(widest) - len(REJECTED_COLUMNS)
+    rows: list[list[object]] = [
+        [
+            part.supplier_name, entry.row_number, "; ".join(entry.reasons),
+            *entry.cells, *[""] * (cells_width - len(entry.cells)),
+        ]
+        for part in parts
+        for entry in part.rejected
+    ]
+    return [SUPPLIER_COLUMN, *widest], rows
 
 
 def csv_cell(value: object) -> str:

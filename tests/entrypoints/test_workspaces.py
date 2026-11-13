@@ -512,3 +512,19 @@ def test_concurrent_first_requests_open_a_workspace_once(tmp_path):
 
     assert results == [True] * 4
     assert len(opened) == 1
+
+
+def test_combined_export_is_routed_through_the_workspace_and_isolated(tmp_path):
+    app, _, _ = make_host(tmp_path)
+    alice, bob, visitor = client_for(app), client_for(app), client_for(app)
+    new_workspace(alice)
+    new_workspace(bob)
+    created = upload(alice).json()["id"]
+    body = {"session_ids": [created], "format": "csv"}
+
+    assert bob.post("/imports/combined-export", json=body).status_code == 404
+    # the owner reaches her own workspace (the session exists, it is just not approved yet)
+    assert alice.post("/imports/combined-export", json=body).status_code == 409
+    unauthenticated = visitor.post("/imports/combined-export", json=body)
+    assert unauthenticated.status_code == 401
+    assert unauthenticated.json()["error"]["code"] == "workspace_required"

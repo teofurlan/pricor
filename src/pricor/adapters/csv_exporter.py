@@ -11,7 +11,11 @@ needs `CsvExporter(delimiter=";")`.
 Text that a spreadsheet would run as a formula is neutralized (see `neutralize`).
 """
 
+from collections.abc import Sequence
+
 from pricor.adapters.export_common import (
+    combined_products,
+    combined_rejected,
     csv_bytes,
     formatted_product_values,
     has_conversion,
@@ -50,3 +54,11 @@ class CsvExporter:
             for entry in data.rejected
         )
         return csv_bytes(rejected_header(data), rows, self.delimiter)
+
+    def export_combined(self, parts: Sequence[ImportExport], output_format: OutputFormat | None) -> bytes:
+        header, rows = combined_products(parts, output_format)
+        return csv_bytes(header, rows, self.delimiter)
+
+    def export_rejected_combined(self, parts: Sequence[ImportExport]) -> bytes:
+        header, rows = combined_rejected(parts)
+        return csv_bytes(header, rows, self.delimiter)
