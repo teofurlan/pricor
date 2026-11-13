@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ApiClient, ApiError, ExportFile, ExportSheet, MemoryApiClient, OutputFormatApiClient, SampleApiClient, WorkspaceApiClient } from "../api/client";
 import { useServerConfig } from "../api/serverConfig";
 import type { ColumnRole, CreateImportInput, Memory, Question, SessionState } from "../api/types";
@@ -43,6 +43,19 @@ function stepAfterColumns(session: SessionState): StepId {
   return session.status === "questions_pending" || session.status === "fx_rate_required" ? "questions" : "preview";
 }
 
+// React renders a mounting component twice in development; the second pass must still see the token.
+let pendingLinkToken: string | null = null;
+
+function takeLinkToken(): string | null {
+  if (typeof window === "undefined") return null;
+  const match = /^#w=([A-Za-z0-9_-]{43})$/.exec(window.location.hash);
+  if (match) {
+    pendingLinkToken = match[1];
+    window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search);
+  }
+  return pendingLinkToken;
+}
+
 /** Owns the import session and the calls to the API; the steps themselves are presentational. */
 export function ImportWizard({ api }: { api: ApiClient }) {
   const { t } = useI18n();
@@ -53,9 +66,11 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   const [workspaceLink, setWorkspaceLink] = useState<string | null>(null);
   const [workspaceSettled, setWorkspaceSettled] = useState(false);
   const workspaceRequested = useRef(false);
-  useEffect(() => {
-    if (!workspaceOn || workspaceRequested.current) return;
-    workspaceRequested.current = true;
+  // The token of a personal link (`/#w=<token>`), read once and removed from the URL at once.
+  const [linkToken] = useState(takeLinkToken);
+  useEffect(() => { pendingLinkToken = null; }, []);
+  const [switchPrompt, setSwitchPrompt] = useState(false);
+  const continueWithWorkspace = useCallback(() => {
     if (!workspaceApi) {
       setWorkspaceSettled(true);
       return;
@@ -64,7 +79,33 @@ export function ImportWizard({ api }: { api: ApiClient }) {
       .then((result) => setWorkspaceLink(result.link))
       .catch(() => {})
       .finally(() => setWorkspaceSettled(true));
-  }, [workspaceOn, workspaceApi]);
+  }, [workspaceApi]);
+  const claimThenContinue = useCallback(async () => {
+    const token = linkToken;
+    if (token && workspaceApi) {
+      try {
+        await workspaceApi.claimWorkspace(token);
+      } catch {
+        // A refused link leaves the cookie untouched; the normal flow below still gives a workspace.
+      }
+    }
+    continueWithWorkspace();
+  }, [workspaceApi, continueWithWorkspace, linkToken]);
+  useEffect(() => {
+    if (!workspaceOn || workspaceRequested.current) return;
+    workspaceRequested.current = true;
+    const token = linkToken;
+    if (!token || !workspaceApi) {
+      continueWithWorkspace();
+      return;
+    }
+    workspaceApi.currentWorkspace()
+      .then((current) => {
+        if (current === null || current.link.endsWith(`#w=${token}`)) return claimThenContinue();
+        setSwitchPrompt(true);
+      })
+      .catch(() => claimThenContinue());
+  }, [workspaceOn, workspaceApi, linkToken, continueWithWorkspace, claimThenContinue]);
   const dataReady = loaded && (!workspaceOn || workspaceSettled);
   const [session, setSession] = useState<SessionState | null>(null);
   const [step, setStep] = useState<StepId>("upload");
@@ -342,6 +383,15 @@ export function ImportWizard({ api }: { api: ApiClient }) {
           <ErrorBanner error={error ?? preview.error} />
           {busy && <div className="working"><TapeLoader size="small" text={t(hosted ? "common.working.hosted" : "common.working")} /></div>}
 
+          {switchPrompt && (
+            <div className="workspace-switch" role="alertdialog" aria-labelledby="workspace-switch-body">
+              <p id="workspace-switch-body">{t("workspace.switch.body")}</p>
+              <div className="workspace-switch__actions">
+                <Button variant="primary" onClick={() => { setSwitchPrompt(false); void claimThenContinue(); }}>{t("workspace.switch.confirm")}</Button>
+                <Button variant="quiet" onClick={() => { setSwitchPrompt(false); continueWithWorkspace(); }}>{t("workspace.switch.keep")}</Button>
+              </div>
+            </div>
+          )}
           {step === "upload" && workspaceLink && <WorkspacePanel link={workspaceLink} />}
           {step === "upload" && (
             <div className="upload-step">

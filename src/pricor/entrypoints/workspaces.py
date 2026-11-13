@@ -1,7 +1,7 @@
 """Private workspaces for the hosted demo: one SQLite database per visitor.
 
 A visitor gets a random token, kept in an HttpOnly cookie and shown as a personal link
-(`/w/<token>`) to come back from another device. Requests to the data paths (imports,
+(`/#w=<token>`, the token in the URL fragment so it never reaches a server log) to come back from another device. Requests to the data paths (imports,
 memories, output format, sheets) go to that visitor's own app over its own database; the
 configuration, the sample lists and the web shell are public. The models are built once and
 shared by every workspace (see `wiring.workspace_app_from_env`).
@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, RedirectResponse, Response
+from fastapi.responses import JSONResponse, Response
 from starlette.concurrency import run_in_threadpool
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -239,21 +239,64 @@ def _workspace_required() -> JSONResponse:
     )
 
 
+def _unsupported_media_type() -> JSONResponse:
+    return JSONResponse(
+        {
+            "error": {
+                "code": "unsupported_media_type",
+                "message": "send the token as a JSON body (Content-Type: application/json)",
+            }
+        },
+        status_code=415,
+    )
+
+
+def _no_store(response: Response) -> Response:
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+def _link(request: Request, token: str) -> str:
+    host = request.headers.get("host") or request.url.netloc
+    return f"{_scheme(request)}://{host}/#w={token}"
+
+
+def _is_json(request: Request) -> bool:
+    media_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    return media_type == "application/json"
+
+
 def install_workspace_routes(app: FastAPI, registry: WorkspaceRegistry) -> None:
     @app.get("/workspace")
     def workspace(request: Request) -> Response:
         token = request.cookies.get(COOKIE_NAME)
         if not registry.exists(token):
             token = registry.create()
-        host = request.headers.get("host") or request.url.netloc
-        link = f"{_scheme(request)}://{host}/w/{token}"
-        return _with_cookie(JSONResponse({"link": link}), token, request)
+        response = JSONResponse({"link": _link(request, token)})
+        return _no_store(_with_cookie(response, token, request))
 
-    @app.get("/w/{token}")
-    def follow_link(token: str, request: Request) -> Response:
-        if not registry.exists(token):
-            return _not_found()
-        return _with_cookie(RedirectResponse("/", status_code=303), token, request)
+    @app.get("/workspace/current")
+    def current(request: Request) -> Response:
+        token = request.cookies.get(COOKIE_NAME)
+        if token is None or not registry.exists(token):
+            return _no_store(_not_found())
+        return _no_store(JSONResponse({"link": _link(request, token)}))
+
+    @app.post("/workspace/claim")
+    async def claim(request: Request) -> Response:
+        # JSON only: a cross-site form or text/plain POST is refused here, and a cross-site
+        # application/json POST needs a CORS preflight that this app never grants.
+        if not _is_json(request):
+            return _no_store(_unsupported_media_type())
+        try:
+            body = await request.json()
+        except ValueError:
+            body = None
+        token = body.get("token") if isinstance(body, dict) else None
+        if not isinstance(token, str) or not await run_in_threadpool(registry.exists, token):
+            return _no_store(_not_found())
+        response = JSONResponse({"link": _link(request, token)})
+        return _no_store(_with_cookie(response, token, request))
 
 
 class WorkspaceDispatcher:

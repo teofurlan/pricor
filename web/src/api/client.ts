@@ -74,6 +74,10 @@ export interface SampleApiClient {
 /** The visitor's private workspace: its personal link, which also sets the workspace cookie. */
 export interface WorkspaceApiClient {
   workspace(): Promise<{ link: string }>;
+  /** The workspace the cookie points at, or null when there is none; never creates one. */
+  currentWorkspace(): Promise<{ link: string } | null>;
+  /** Switch this browser to the workspace of a personal link's token (sets the cookie). */
+  claimWorkspace(token: string): Promise<{ link: string }>;
 }
 
 export interface MemoryApiClient {
@@ -202,6 +206,15 @@ export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), 
     deleteMemory: (id) => call(`/memories/${encodeURIComponent(id)}`, { method: "DELETE" }),
     config: () => call<ServerConfig>("/config"),
     workspace: () => call<{ link: string }>("/workspace"),
+    async currentWorkspace() {
+      try {
+        return await call<{ link: string }>("/workspace/current");
+      } catch (failure) {
+        if (failure instanceof ApiError && failure.status === 404 && failure.code === "workspace_not_found") return null;
+        throw failure;
+      }
+    },
+    claimWorkspace: (token) => call<{ link: string }>("/workspace/claim", json("POST", { token })),
     listSamples: () => call<SampleListing[]>("/samples"),
     async downloadSample(sample) {
       let response: Response;

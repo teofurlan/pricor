@@ -7,7 +7,7 @@ import type { ServerConfig } from "../api/types";
 import { renderWithI18n } from "../test/render";
 import { ImportWizard } from "./ImportWizard";
 
-const LINK = "https://pricor.test/w/AbCdEf";
+const LINK = "https://pricor.test/#w=AbCdEf";
 
 function api(config: ServerConfig, overrides: Record<string, unknown> = {}) {
   return {

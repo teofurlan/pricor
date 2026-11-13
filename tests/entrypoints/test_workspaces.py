@@ -26,7 +26,7 @@ from pricor.entrypoints.workspaces import (
 from ..application.fakes import FakeClassifier
 from .test_api import ROLES, upload
 
-TOKEN = re.compile(r"/w/([A-Za-z0-9_-]{43})$")
+TOKEN = re.compile(r"/#w=([A-Za-z0-9_-]{43})$")
 
 
 class RecordingBackup:
@@ -105,7 +105,7 @@ def test_get_workspace_creates_one_and_returns_a_personal_link(tmp_path):
     assert response.status_code == 200
     assert set(response.json()) == {"link"}
     token = TOKEN.search(response.json()["link"]).group(1)
-    assert response.json()["link"] == f"http://testserver/w/{token}"
+    assert response.json()["link"] == f"http://testserver/#w={token}"
     assert client.cookies.get(COOKIE_NAME) == token
 
 
@@ -128,7 +128,7 @@ def test_the_cookie_is_secure_and_the_link_https_behind_an_https_proxy(tmp_path)
     response = client_for(app).get("/workspace", headers={"X-Forwarded-Proto": "https"})
 
     assert "Secure" in response.headers["set-cookie"]
-    assert response.json()["link"].startswith("https://testserver/w/")
+    assert response.json()["link"].startswith("https://testserver/#w=")
 
 
 def test_the_cookie_is_secure_over_https(tmp_path):
@@ -146,8 +146,12 @@ def test_get_workspace_keeps_the_existing_workspace(tmp_path):
 
     again = client.get("/workspace")
 
-    assert again.json()["link"].endswith(f"/w/{token}")
+    assert again.json()["link"].endswith(f"/#w={token}")
     assert len(list((tmp_path / "workspaces").glob("*.sqlite"))) == 1
+
+
+def claim(client, token, **kwargs):
+    return client.post("/workspace/claim", json={"token": token}, **kwargs)
 
 
 def test_the_personal_link_opens_the_same_workspace_from_another_device(tmp_path):
@@ -157,25 +161,171 @@ def test_the_personal_link_opens_the_same_workspace_from_another_device(tmp_path
     created = upload(phone)
     assert created.status_code == 201
 
-    response = laptop.get(f"/w/{token}", follow_redirects=False)
+    response = claim(laptop, token)
 
-    assert response.status_code == 303
-    assert response.headers["location"] == "/"
+    assert response.status_code == 200
+    assert response.json() == {"link": f"http://testserver/#w={token}"}
     assert laptop.cookies.get(COOKIE_NAME) == token
+    assert COOKIE_NAME in response.headers["set-cookie"]
+    assert "HttpOnly" in response.headers["set-cookie"]
     assert laptop.get(f"/imports/{created.json()['id']}").status_code == 200
 
 
-@pytest.mark.parametrize("token", ["A" * 43, "short", "A" * 44, "A" * 42 + "!"])
-def test_an_unknown_or_malformed_link_is_a_404(tmp_path, token):
+def test_the_path_link_no_longer_exists(tmp_path):
     app, _, _ = make_host(tmp_path)
     client = client_for(app)
+    token = new_workspace(client)
 
-    response = client.get(f"/w/{token}", follow_redirects=False)
+    other = client_for(app)
+    response = other.get(f"/w/{token}", follow_redirects=False)
+
+    assert response.status_code != 303
+    assert COOKIE_NAME not in other.cookies
+
+
+@pytest.mark.parametrize("token", ["A" * 43, "short", "A" * 44, "A" * 42 + "!", ""])
+def test_claiming_an_unknown_or_malformed_token_is_a_404_and_keeps_the_cookie(tmp_path, token):
+    app, _, _ = make_host(tmp_path)
+    client = client_for(app)
+    mine = new_workspace(client)
+
+    response = claim(client, token)
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "workspace_not_found"
+    assert "set-cookie" not in response.headers
+    assert client.cookies.get(COOKIE_NAME) == mine
+
+
+def test_claiming_an_unknown_token_with_no_cookie_sets_none_and_creates_nothing(tmp_path):
+    app, _, _ = make_host(tmp_path)
+    client = client_for(app)
+
+    response = claim(client, "A" * 43)
+
+    assert response.status_code == 404
     assert COOKIE_NAME not in client.cookies
     assert not (tmp_path / "workspaces").exists() or not list((tmp_path / "workspaces").iterdir())
+
+
+@pytest.mark.parametrize("body", [{"token": 5}, {}, [], "x"])
+def test_claiming_with_a_json_body_of_the_wrong_shape_is_a_404(tmp_path, body):
+    app, _, _ = make_host(tmp_path)
+    client = client_for(app)
+    new_workspace(client)
+
+    response = client.post("/workspace/claim", json=body)
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "workspace_not_found"
+
+
+def test_claiming_with_invalid_json_is_a_404(tmp_path):
+    app, _, _ = make_host(tmp_path)
+    client = client_for(app)
+
+    response = client.post(
+        "/workspace/claim", content=b"{not json", headers={"Content-Type": "application/json"}
+    )
+
+    assert response.status_code == 404
+    assert COOKIE_NAME not in client.cookies
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        lambda token: {"data": {"token": token}},
+        lambda token: {"content": f'{{"token": "{token}"}}', "headers": {"Content-Type": "text/plain"}},
+        lambda token: {"content": f'{{"token": "{token}"}}'},
+    ],
+    ids=["form-encoded", "text-plain", "no-content-type"],
+)
+def test_claiming_with_anything_but_json_is_a_415_and_changes_nothing(tmp_path, kwargs):
+    app, _, _ = make_host(tmp_path)
+    owner, visitor = client_for(app), client_for(app)
+    token = new_workspace(owner)
+    mine = new_workspace(visitor)
+
+    response = visitor.post("/workspace/claim", **kwargs(token))
+
+    assert response.status_code == 415
+    assert response.json()["error"]["code"] == "unsupported_media_type"
+    assert "set-cookie" not in response.headers
+    assert visitor.cookies.get(COOKIE_NAME) == mine
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_json_with_a_charset_parameter_is_accepted(tmp_path):
+    app, _, _ = make_host(tmp_path)
+    owner, visitor = client_for(app), client_for(app)
+    token = new_workspace(owner)
+
+    response = visitor.post(
+        "/workspace/claim",
+        content=f'{{"token": "{token}"}}',
+        headers={"Content-Type": "application/json; charset=utf-8"},
+    )
+
+    assert response.status_code == 200
+    assert visitor.cookies.get(COOKIE_NAME) == token
+
+
+def test_a_claim_over_https_sets_a_secure_cookie_and_an_https_link(tmp_path):
+    app, _, _ = make_host(tmp_path)
+    token = new_workspace(client_for(app))
+
+    response = claim(client_for(app), token, headers={"X-Forwarded-Proto": "https"})
+
+    assert "Secure" in response.headers["set-cookie"]
+    assert response.json()["link"] == f"https://testserver/#w={token}"
+
+
+def test_current_returns_the_link_for_a_valid_cookie_without_changing_the_cookie(tmp_path):
+    app, _, _ = make_host(tmp_path)
+    client = client_for(app)
+    token = new_workspace(client)
+
+    response = client.get("/workspace/current")
+
+    assert response.status_code == 200
+    assert response.json() == {"link": f"http://testserver/#w={token}"}
+    assert len(list((tmp_path / "workspaces").glob("*.sqlite"))) == 1
+
+
+def test_current_without_a_cookie_is_a_404_and_creates_no_file(tmp_path):
+    app, _, _ = make_host(tmp_path)
+    client = client_for(app)
+
+    response = client.get("/workspace/current")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "workspace_not_found"
+    assert response.headers["cache-control"] == "no-store"
+    assert "set-cookie" not in response.headers
+    assert not (tmp_path / "workspaces").exists() or not list((tmp_path / "workspaces").iterdir())
+
+
+@pytest.mark.parametrize("cookie", ["A" * 43, "junk"])
+def test_current_with_a_forged_cookie_is_a_404_and_creates_nothing(tmp_path, cookie):
+    app, _, _ = make_host(tmp_path)
+    client = client_for(app)
+    client.cookies.set(COOKIE_NAME, cookie)
+
+    assert client.get("/workspace/current").status_code == 404
+    assert not (tmp_path / "workspaces").exists() or not list((tmp_path / "workspaces").iterdir())
+
+
+def test_the_three_workspace_endpoints_are_never_cached(tmp_path):
+    app, _, _ = make_host(tmp_path)
+    client = client_for(app)
+    token = new_workspace(client)
+
+    assert client.get("/workspace").headers["cache-control"] == "no-store"
+    assert client.get("/workspace/current").headers["cache-control"] == "no-store"
+    assert claim(client, token).headers["cache-control"] == "no-store"
+    assert claim(client, "A" * 43).headers["cache-control"] == "no-store"
+    assert client_for(app).get("/workspace/current").headers["cache-control"] == "no-store"
 
 
 # -- isolation and access ---------------------------------------------------------
@@ -304,7 +454,7 @@ def test_a_workspace_missing_locally_is_restored_from_the_backup(tmp_path):
     # A new instance with an empty disk, as after Cloud Run scales to zero.
     second, _, _ = make_host(tmp_path / "after", backup=backup)
     visitor = client_for(second)
-    assert visitor.get(f"/w/{token}", follow_redirects=False).status_code == 303
+    assert claim(visitor, token).status_code == 200
 
     assert key_of(token) in backup.restores
     assert visitor.get(f"/imports/{created.json()['id']}").status_code == 200

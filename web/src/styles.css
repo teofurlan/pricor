@@ -539,6 +539,9 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
 .workspace__row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .workspace__link { flex: 1 1 260px; min-width: 0; font: inherit; font-family: var(--mono, monospace); font-size: 0.8rem; padding: 6px 8px; border: 1px solid var(--rule); background: transparent; color: inherit; }
 .workspace__status { font-size: 0.8rem; }
+.workspace-switch { border: 1px solid var(--rule); padding: 14px 16px; margin: 0 0 16px; max-width: 78ch; display: grid; gap: 10px; }
+.workspace-switch p { margin: 0; }
+.workspace-switch__actions { display: flex; gap: 12px; flex-wrap: wrap; }
 .upload-step .output-format { padding-left: 32px; border-left: 1px solid var(--rule); }
 .output-format__upload { display: grid; gap: 7px; }
 .output-format__upload .button { justify-self: start; }
