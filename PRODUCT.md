@@ -46,7 +46,6 @@ Open-weight models run locally and only interpret the file: they propose column 
 
 - Real public supplier lists from six distributors (gitignored under `data/raw/`). An explicitly labeled SIMULATED week-2 list exists for Distribución Masiva.
 - Benchmark of column classifiers on 29 held-out columns: `docs/benchmark.md`.
-- Verified browser rehearsal and its evidence under `docs/private/submission/`.
 - No paying customer, user interview, measured time savings or testimonial exists. Do not fabricate any.
 
 ## Product Principles
