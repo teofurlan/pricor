@@ -14,14 +14,19 @@ always returned in the same shape (`id`, `status`, `header`, `columns`,
 
 Endpoints:
 
-    POST /output-format           multipart: file, [sheet] -> 201 proposed format
+    POST /output-format           multipart: file (.csv/.xlsx/.xlsm/.xls/.pdf; a PDF yields the
+                                  headers of its first table), [sheet] -> 201 proposed format
     GET  /output-format           saved proposed or confirmed format (404 when absent)
     PUT  /output-format/mapping   {"sources": ["field:supplier_code", "empty", "constant:..."]}
                                   -> confirmed format (422 for wrong count or invalid source)
     PUT  /output-format           {"columns": [{"name": "SKU", "source": "field:supplier_code",
-                                  "template_index": 0 | null}]} -> confirmed format with exactly
-                                  these columns, in this order (422 for a blank, long or repeated
-                                  name, an invalid source or an unknown template column)
+                                  "template_index": 0 | null, "kind": "code" | null}]} -> confirmed
+                                  format with exactly these columns, in this order (422 for a blank,
+                                  long or repeated name, an invalid source, an unknown template
+                                  column, an unknown kind or a non-numeric number/price constant).
+                                  kind is text|description|code|number|price; absent/null takes the
+                                  kind the source suggests. Every format body also carries
+                                  "fit": {"matched", "total", "unmatched": [names], "mismatch"}
     DELETE /output-format         remove the store-wide format -> 204
     POST /sheets                  multipart: file -> {"sheets": ["..."]}
     POST /imports                 multipart: file, supplier_name, [sheet], [language],
@@ -146,7 +151,7 @@ from pricor.ports.import_session_repository import SessionNotFoundError
 from pricor.ports.memory import Memory, MemoryNotFoundError
 from pricor.ports.price_history import ImportSummary
 from pricor.ports.question_model import Option
-from pricor.ports.output_format import OUTPUT_FIELDS, OutputFormat, OutputFormatNotFoundError
+from pricor.ports.output_format import OUTPUT_FIELDS, OutputFormat, OutputFormatNotFoundError, check_fit
 from pricor.ports.model_errors import ModelError
 from pricor.ports.question_helper import (
     MAX_HISTORY_TURNS,
@@ -169,6 +174,7 @@ logger = logging.getLogger(__name__)
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 ALLOWED_EXTENSIONS = frozenset({".csv", ".xlsx", ".xlsm", ".xls"})
+TEMPLATE_EXTENSIONS = frozenset(ALLOWED_EXTENSIONS | {".pdf"})  # only the output-format template accepts a PDF
 _CHUNK = 1024 * 1024
 # Letters in any script, digits, spaces, dots and dashes survive; separators and the
 # characters Windows forbids in file names do not.
@@ -206,6 +212,7 @@ class OutputColumnBody(BaseModel):
     name: Annotated[str, StringConstraints(strict=True)]
     source: Annotated[str, StringConstraints(strict=True)]
     template_index: int | None = None
+    kind: Annotated[str, StringConstraints(strict=True)] | None = None
 
 
 class OutputColumnsBody(BaseModel):
@@ -320,7 +327,15 @@ def _change(change: PlanChange) -> dict[str, Any]:
 
 
 def output_format_body(output_format: OutputFormat) -> dict[str, Any]:
-    return {**asdict(output_format), "fields": list(OUTPUT_FIELDS)}
+    fit = check_fit(output_format)
+    return {
+        **asdict(output_format),
+        "fields": list(OUTPUT_FIELDS),
+        "fit": {
+            "matched": fit.matched, "total": fit.total,
+            "unmatched": list(fit.unmatched), "mismatch": fit.mismatch,
+        },
+    }
 
 
 def memory_body(memory: Memory) -> dict[str, Any]:
@@ -653,11 +668,13 @@ def _safe_name(filename: str | None) -> str:
     return name[:100]
 
 
-def _store_upload(upload: UploadFile, directory: Path, limit: int) -> Path:
+def _store_upload(
+    upload: UploadFile, directory: Path, limit: int, allowed: frozenset[str] = ALLOWED_EXTENSIONS
+) -> Path:
     name = _safe_name(upload.filename)
-    if Path(name).suffix.lower() not in ALLOWED_EXTENSIONS:
+    if Path(name).suffix.lower() not in allowed:
         raise UnsupportedFormatError(
-            f"unsupported file type; use one of: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
+            f"unsupported file type; use one of: {', '.join(sorted(allowed))}"
         )
     target = directory / name
     written = 0
@@ -714,7 +731,7 @@ def create_app(
         parent = None if dependencies.upload_dir is None else str(dependencies.upload_dir)
         directory = Path(tempfile.mkdtemp(prefix="pricor-template-", dir=parent))
         try:
-            path = _store_upload(file, directory, dependencies.max_upload_bytes)
+            path = _store_upload(file, directory, dependencies.max_upload_bytes, TEMPLATE_EXTENSIONS)
             result = manager.upload(path, sheet or None, name=file.filename or path.name)
         finally:
             shutil.rmtree(directory, ignore_errors=True)
@@ -730,7 +747,9 @@ def create_app(
 
     @app.put("/output-format")
     def define_output_format(body: OutputColumnsBody) -> dict[str, Any]:
-        columns = [(column.name, column.source, column.template_index) for column in body.columns]
+        columns = [
+            (column.name, column.source, column.template_index, column.kind) for column in body.columns
+        ]
         return output_format_body(output_formats().define(columns))
 
     @app.delete("/output-format", status_code=204)

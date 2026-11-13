@@ -53,6 +53,7 @@ from pricor.adapters.gemma_output_format import GemmaOutputFormat
 from pricor.adapters.gemma_question_helper import GemmaQuestionHelper
 from pricor.adapters.heuristic_classifier import HeuristicColumnClassifier
 from pricor.adapters.heuristic_output_format import HeuristicOutputFormat
+from pricor.adapters.pdf_table_reader import PdfTableReader
 from pricor.adapters.laya_classifier import (
     DEFAULT_MODEL_PATH,
     DEVICES,
@@ -361,7 +362,7 @@ def database_dependencies(
         question_helper=GemmaQuestionHelper(client),
         output_format=ManageOutputFormat(
             FileSpreadsheetReader(), database.output_format, HeuristicOutputFormat(),
-            GemmaOutputFormat(client),
+            GemmaOutputFormat(client), pdf_reader=PdfTableReader(),
         ),
         model_provider=shared.provider,
         demo=shared.demo,

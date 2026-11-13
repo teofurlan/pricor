@@ -38,9 +38,9 @@ def test_wire_contract_upload_get_confirm_delete_and_export(api):
     response = upload(client)
     assert response.status_code == 201
     expected = {"name": "template.csv", "state": "proposed", "fields": list(OUTPUT_FIELDS), "columns": [
-        {"index": 0, "name": "SKU", "samples": ["001"], "proposal": {"source": "field:supplier_code", "proposed_by": "heuristics", "confidence": 0.9}, "source": None},
-        {"index": 1, "name": "Note", "samples": ["example"], "proposal": {"source": "empty", "proposed_by": "heuristics", "confidence": 0.0}, "source": None},
-    ]}
+        {"index": 0, "name": "SKU", "samples": ["001"], "proposal": {"source": "field:supplier_code", "proposed_by": "heuristics", "confidence": 0.9}, "source": None, "kind": "code"},
+        {"index": 1, "name": "Note", "samples": ["example"], "proposal": {"source": "empty", "proposed_by": "heuristics", "confidence": 0.0}, "source": None, "kind": "text"},
+    ], "fit": {"matched": 1, "total": 2, "unmatched": ["Note"], "mismatch": True}}
     assert response.json() == expected
     assert client.get("/output-format").json() == expected
     session = flow.approved()
@@ -48,6 +48,7 @@ def test_wire_contract_upload_get_confirm_delete_and_export(api):
     response = client.put("/output-format/mapping", json={"sources": ["field:supplier_code", "constant:001"]})
     assert response.status_code == 200
     expected["state"] = "confirmed"
+    expected["fit"]["mismatch"] = False
     expected["columns"][0]["source"] = "field:supplier_code"
     expected["columns"][1]["source"] = "constant:001"
     assert response.json() == expected == client.get("/output-format").json()

@@ -253,7 +253,7 @@ class SqliteOutputFormatStore:
         return OutputFormat(data["name"], data["state"], tuple(
             OutputColumn(
                 column["index"], column["name"], tuple(column["samples"]),
-                OutputProposal(**column["proposal"]), column["source"],
+                OutputProposal(**column["proposal"]), column["source"], column.get("kind"),
             )
             for column in data["columns"]
         ))

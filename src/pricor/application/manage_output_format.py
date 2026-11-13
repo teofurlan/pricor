@@ -15,9 +15,12 @@ from pricor.ports.output_format import (
     OutputFormatStore,
     OutputProposal,
     TemplateColumn,
+    default_kind,
+    parse_decimal_text,
+    validate_kind,
     validate_source,
 )
-from pricor.ports.spreadsheet import SpreadsheetError, SpreadsheetReader
+from pricor.ports.spreadsheet import SpreadsheetError, SpreadsheetReader, UnsupportedFormatError
 
 MAX_COLUMNS = 200
 MAX_NAME_LENGTH = 100
@@ -30,8 +33,10 @@ class ManageOutputFormat:
         store: OutputFormatStore,
         fallback: OutputFormatProposer,
         proposer: OutputFormatProposer | None = None,
+        pdf_reader: SpreadsheetReader | None = None,
     ):
         self._reader = reader
+        self._pdf_reader = pdf_reader
         self.store = store
         self._fallback = fallback
         self._proposer = proposer
@@ -43,7 +48,12 @@ class ManageOutputFormat:
         return result
 
     def upload(self, path: Path, sheet: str | None = None, *, name: str | None = None) -> OutputFormat:
-        rows = self._reader.read_sheet(path, sheet).rows
+        if path.suffix.lower() == ".pdf":
+            if self._pdf_reader is None:
+                raise UnsupportedFormatError("PDF templates are not supported here")
+            rows = self._pdf_reader.read_sheet(path, None).rows
+        else:
+            rows = self._reader.read_sheet(path, sheet).rows
         header_index = next((i for i, row in enumerate(rows) if any(not is_blank(c) for c in row)), None)
         if header_index is None:
             raise SpreadsheetError("the template has no non-empty row")
@@ -68,7 +78,7 @@ class ManageOutputFormat:
         result = OutputFormat(
             name if name is not None else path.name,
             "proposed",
-            tuple(OutputColumn(c.index, c.name, c.samples, p) for c, p in zip(columns, proposals, strict=True)),
+            tuple(OutputColumn(c.index, c.name, c.samples, p, kind=default_kind(p.source)) for c, p in zip(columns, proposals, strict=True)),
         )
         self.store.save(result)
         return result
@@ -84,16 +94,20 @@ class ManageOutputFormat:
         confirmed = replace(
             proposed,
             state="confirmed",
-            columns=tuple(replace(column, source=source) for column, source in zip(proposed.columns, validated, strict=True)),
+            columns=tuple(
+                replace(column, source=source, kind=default_kind(source))
+                for column, source in zip(proposed.columns, validated, strict=True)
+            ),
         )
         self.store.save(confirmed)
         return confirmed
 
-    def define(self, columns: Sequence[tuple[str, str, int | None]]) -> OutputFormat:
+    def define(self, columns: Sequence[tuple]) -> OutputFormat:
         """Save the user's own column list, confirmed: exactly these columns, in this order.
 
-        Each column is `(name, source, template_index)`. A template index links the
-        column to a column of the stored template, keeping its samples and proposal.
+        Each column is `(name, source, template_index[, kind])`. A template index links the
+        column to a column of the stored template, keeping its samples and proposal. A
+        missing kind defaults to the one the source suggests.
         """
         if not 1 <= len(columns) <= MAX_COLUMNS:
             raise InvalidInputError(f"provide at least one column and at most {MAX_COLUMNS}")
@@ -101,7 +115,7 @@ class ManageOutputFormat:
         template = {column.index: column for column in stored.columns} if stored else {}
         seen: set[str] = set()
         result: list[OutputColumn] = []
-        for position, (raw_name, source, template_index) in enumerate(columns):
+        for position, (raw_name, source, template_index, *rest) in enumerate(columns):
             name = raw_name.strip() if isinstance(raw_name, str) else ""
             if not 1 <= len(name) <= MAX_NAME_LENGTH:
                 raise InvalidInputError(f"every column needs a name of 1 to {MAX_NAME_LENGTH} characters")
@@ -112,14 +126,25 @@ class ManageOutputFormat:
                 validated = validate_source(source)
             except ValueError as error:
                 raise InvalidInputError(str(error)) from error
+            raw_kind = rest[0] if rest else None
+            try:
+                kind = default_kind(validated) if raw_kind is None else validate_kind(raw_kind)
+            except ValueError as error:
+                raise InvalidInputError(str(error)) from error
+            if (
+                kind in ("number", "price")
+                and validated.startswith("constant:")
+                and parse_decimal_text(validated.removeprefix("constant:")) is None
+            ):
+                raise InvalidInputError(f"column {name!r}: a {kind} constant must be a number such as 12,50")
             if template_index is None:
-                result.append(OutputColumn(position, name, (), OutputProposal(validated, "user", 1.0), validated))
+                result.append(OutputColumn(position, name, (), OutputProposal(validated, "user", 1.0), validated, kind))
                 continue
             linked = template.get(template_index)
             if linked is None:
                 raise InvalidInputError(f"there is no template column {template_index}")
-            result.append(OutputColumn(position, name, linked.samples, linked.proposal, validated))
-        linked_template = any(index is not None for _, _, index in columns)
+            result.append(OutputColumn(position, name, linked.samples, linked.proposal, validated, kind))
+        linked_template = any(column[2] is not None for column in columns)
         defined = OutputFormat(stored.name if stored and linked_template else "", "confirmed", tuple(result))
         self.store.save(defined)
         return defined

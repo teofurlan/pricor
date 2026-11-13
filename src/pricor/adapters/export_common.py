@@ -3,7 +3,7 @@
 import csv
 import io
 from collections.abc import Iterable
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from pricor.domain.contract import ContractRecord
 from pricor.ports.exporter import (
@@ -14,7 +14,7 @@ from pricor.ports.exporter import (
     ImportExport,
 )
 
-from pricor.ports.output_format import OUTPUT_FIELDS, OutputFormat
+from pricor.ports.output_format import OUTPUT_FIELDS, OutputFormat, parse_decimal_text
 
 _BOM = b"\xef\xbb\xbf"
 _CRLF = "\r\n"
@@ -93,6 +93,38 @@ def product_values(
 
 
 
+_CENTS = Decimal("0.01")
+
+
+def _as_decimal(value: object) -> Decimal | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, Decimal):
+        return value if value.is_finite() else None
+    if isinstance(value, int):
+        return Decimal(value)
+    if isinstance(value, str):
+        return parse_decimal_text(value)
+    return None
+
+
+def apply_kind(value: object, kind: str | None) -> object:
+    """Shape one value by its column type; `None` (legacy) and missing values stay as they are."""
+    if kind is None or value is None:
+        return value
+    if kind in ("text", "description", "code"):
+        return decimal_text(value) if isinstance(value, Decimal) else str(value)
+    number = _as_decimal(value)
+    if number is None:
+        return value
+    if kind != "price":
+        return number
+    try:
+        return number.quantize(_CENTS, rounding=ROUND_HALF_UP)
+    except InvalidOperation:  # too many digits for the context: keep the value as written
+        return value
+
+
 def formatted_product_values(
     row_number: int, record: ContractRecord, output_format: OutputFormat
 ) -> list[object]:
@@ -111,6 +143,7 @@ def formatted_product_values(
             values.append(source.removeprefix("constant:"))
         else:
             raise ValueError("output format has an invalid source")
+        values[-1] = apply_kind(values[-1], column.kind)
     return values
 
 
