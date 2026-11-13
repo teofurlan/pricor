@@ -43,6 +43,6 @@ def test_the_workspaces_directory_turns_on_private_workspaces(tmp_path):
 
     assert client.get("/config").json()["workspaces"] is True
     assert client.get("/imports/nope").json()["error"]["code"] == "workspace_required"
-    assert "/w/" in client.get("/workspace").json()["link"]
+    assert "/#w=" in client.get("/workspace").json()["link"]
     assert client.get("/imports/nope").status_code == 404
     assert not (tmp_path / "local.db").exists()

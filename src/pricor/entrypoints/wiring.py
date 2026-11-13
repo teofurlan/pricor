@@ -396,6 +396,10 @@ def workspaces_max_open_from_env(env: Mapping[str, str]) -> int:
 
 
 def workspace_backup_from_env(env: Mapping[str, str]) -> WorkspaceBackup:
+    bucket = env.get("PRICOR_WORKSPACES_BUCKET", "").strip()
+    if bucket:
+        from pricor.adapters.gcs_workspace_backup import GcsWorkspaceBackup
+        return GcsWorkspaceBackup(bucket)
     return NoWorkspaceBackup()
 
 
