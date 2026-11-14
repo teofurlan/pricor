@@ -100,6 +100,12 @@ export interface OutputFormatApiClient {
   deleteOutputFormat(): Promise<void>;
 }
 
+/** One file made from several approved imports (`POST /imports/combined-export`). */
+export interface CombinedExportApiClient {
+  /** The unified products or rejected-rows file of these approved sessions, in this order. */
+  downloadCombined(sessionIds: string[], format: ExportFormat, kind: ExportFile): Promise<{ blob: Blob; fileName: string }>;
+}
+
 type Fetch = typeof fetch;
 
 async function fail(response: Response): Promise<never> {
@@ -116,7 +122,7 @@ async function fail(response: Response): Promise<never> {
   throw new ApiError(response.status, "unexpected_response", `The server answered ${response.status}.`);
 }
 
-export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), baseUrl = ""): ApiClient & MemoryApiClient & OutputFormatApiClient & SampleApiClient & WorkspaceApiClient {
+export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), baseUrl = ""): ApiClient & MemoryApiClient & OutputFormatApiClient & SampleApiClient & WorkspaceApiClient & CombinedExportApiClient {
   async function call<T>(path: string, init?: RequestInit): Promise<T> {
     let response: Response;
     try {
@@ -215,6 +221,17 @@ export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), 
       }
     },
     claimWorkspace: (token) => call<{ link: string }>("/workspace/claim", json("POST", { token })),
+    async downloadCombined(sessionIds, format, kind) {
+      let response: Response;
+      try {
+        response = await fetchImpl(`${baseUrl}/imports/combined-export`, json("POST", { session_ids: sessionIds, format, kind }));
+      } catch {
+        throw new ApiError(0, "network_error", "The Pricor server cannot be reached.");
+      }
+      if (!response.ok) await fail(response);
+      const named = /filename="?([^";]+)"?/.exec(response.headers.get("Content-Disposition") ?? "");
+      return { blob: await response.blob(), fileName: named?.[1] ?? `pricor-combined-${kind}.${format}` };
+    },
     listSamples: () => call<SampleListing[]>("/samples"),
     async downloadSample(sample) {
       let response: Response;

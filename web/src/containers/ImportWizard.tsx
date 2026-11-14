@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ApiClient, ApiError, ExportFile, ExportSheet, MemoryApiClient, OutputFormatApiClient, SampleApiClient, WorkspaceApiClient } from "../api/client";
+import type { ApiClient, ApiError, CombinedExportApiClient, ExportFile, ExportSheet, MemoryApiClient, OutputFormatApiClient, SampleApiClient, WorkspaceApiClient } from "../api/client";
 import { useServerConfig } from "../api/serverConfig";
 import type { ColumnRole, CreateImportInput, Memory, Question, SessionState } from "../api/types";
 import { Button } from "../components/atoms/Button";
@@ -20,6 +20,9 @@ import { RejectedList } from "../components/organisms/RejectedList";
 import { Stepper, type StepId, type StepItem } from "../components/organisms/Stepper";
 import { WorkspacePanel } from "../components/organisms/WorkspacePanel";
 import { UploadForm } from "../components/organisms/UploadForm";
+import type { QueueDraft } from "../components/organisms/UploadQueue";
+import { UploadQueueTray, QueueSummary, type QueueItem } from "../components/organisms/UploadQueueTray";
+import { describeError } from "../i18n/serverText";
 import { useI18n, type TextKey } from "../i18n";
 import { PriceChanges } from "./PriceChanges";
 import { MemoryPanelContainer } from "./MemoryPanelContainer";
@@ -59,7 +62,7 @@ function takeLinkToken(): string | null {
 
 /** Owns the import session and the calls to the API; the steps themselves are presentational. */
 export function ImportWizard({ api }: { api: ApiClient }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { hosted, config, loaded } = useServerConfig();
   // In workspace mode the cookie from GET /workspace must exist before any other data call.
   const workspaceApi = typeof (api as Partial<WorkspaceApiClient>).workspace === "function" ? (api as ApiClient & WorkspaceApiClient) : null;
@@ -223,16 +226,83 @@ export function ImportWizard({ api }: { api: ApiClient }) {
     forgetLocalAnswers();
   }
 
+  /** Take a freshly created import as the one under review. */
+  const open = (created: SessionState) => {
+    setAskedQuestions([]);
+    remember(created);
+    const needsHeader = created.status === "header_choice_required";
+    setHeaderNeeded(needsHeader);
+    setStep(needsHeader ? "header" : "columns");
+  };
+
   const upload = (input: CreateImportInput) =>
     run(async () => {
       resetAnswerQueue();
-      const created = await api.createImport(input);
-      setAskedQuestions([]);
-      remember(created);
-      const needsHeader = created.status === "header_choice_required";
-      setHeaderNeeded(needsHeader);
-      setStep(needsHeader ? "header" : "columns");
+      open(await api.createImport(input));
     });
+
+  // Several files: each one stays its own import; the queue only lives here in the client.
+  const combinedApi = typeof (api as Partial<CombinedExportApiClient>).downloadCombined === "function" ? (api as ApiClient & CombinedExportApiClient) : null;
+  const [queue, setQueue] = useState<QueueItem[] | null>(null);
+  const [queueIndex, setQueueIndex] = useState(0);
+  const [queueDone, setQueueDone] = useState(false);
+
+  /** Import the first pending file from `from` on; a file that cannot be read is marked failed and the next one is tried. */
+  const importFrom = (items: QueueItem[], from: number) =>
+    run(async () => {
+      let list = items;
+      for (let index = from; index < list.length; index += 1) {
+        if (list[index].status !== "pending") continue;
+        list = list.map((item, position) => (position === index ? { ...item, status: "reviewing" } : item));
+        setQueue(list);
+        setQueueIndex(index);
+        resetAnswerQueue();
+        try {
+          open(await api.createImport({ file: list[index].file, supplierName: list[index].supplierName, sheet: list[index].sheet, language }));
+          return;
+        } catch (failure) {
+          const reason = failure && typeof (failure as ApiError).code === "string" ? describeError(failure as ApiError, language) : failure instanceof Error ? failure.message : String(failure);
+          list = list.map((item, position) => (position === index ? { ...item, status: "failed", error: reason } : item));
+        }
+      }
+      setQueue(list);
+      sessionRef.current = null;
+      setSession(null);
+      setHeaderNeeded(false);
+      setSample(null);
+      setQueueDone(true);
+    });
+
+  const startQueue = (drafts: QueueDraft[]) =>
+    void importFrom(drafts.map((draft) => ({ ...draft, sessionId: null, accepted: 0, status: "pending", error: null })), 0);
+
+  const markCurrent = (change: Partial<QueueItem>) =>
+    setQueue((items) => items && items.map((item, position) => (position === queueIndex ? { ...item, ...change } : item)));
+  const skipCurrent = () => {
+    if (!queue) return;
+    void importFrom(queue.map((item, position) => (position === queueIndex ? { ...item, status: "skipped" } : item)), queueIndex + 1);
+  };
+
+  const downloadCombined = (format: "csv" | "xlsx", kind: ExportFile) =>
+    run(async () => {
+      if (!combinedApi || !queue) return;
+      const ids = queue.filter((item) => item.status === "approved" && item.sessionId).map((item) => item.sessionId as string);
+      const { blob, fileName } = await combinedApi.downloadCombined(ids, format, kind);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    });
+
+  function resetQueue() {
+    setQueue(null);
+    setQueueIndex(0);
+    setQueueDone(false);
+  }
 
   const chooseHeader = (rowIndex: number | null) =>
     run(async () => {
@@ -305,6 +375,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
       const approved = await api.approve(session.id);
       sessionRef.current = approved;
       setSession(approved);
+      markCurrent({ status: "approved", sessionId: approved.id, accepted: preview.page?.totals.accepted ?? 0 });
     });
 
   async function rememberSuggestion(questionId: string): Promise<string | null> {
@@ -321,6 +392,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   function select(id: StepId) {
     setError(null);
     if (id === "upload") {
+      resetQueue();
       setSession(null);
       sessionRef.current = null;
       setHeaderNeeded(false);
@@ -367,6 +439,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
       )}
       <div className="layout">
         <aside className="rail">
+          {queue && <UploadQueueTray items={queue} />}
           <Stepper steps={steps} onSelect={select} />
           {session && (
             <dl className="rail__session">
@@ -378,10 +451,13 @@ export function ImportWizard({ api }: { api: ApiClient }) {
           )}
         </aside>
         <main className="stage">
-          <h1 className="stage__title">{t(TITLES[step].title)}</h1>
-          <p className="stage__lede">{t(step === "upload" && hosted ? "lede.upload.hosted" : TITLES[step].lede)}</p>
+          <h1 className="stage__title">{queueDone ? t("queue.title.done") : t(TITLES[step].title)}</h1>
+          <p className="stage__lede">{queueDone ? t("queue.lede.done") : t(step === "upload" && hosted ? "lede.upload.hosted" : TITLES[step].lede)}</p>
           {session && <NoticeList notices={session.notices} compact={step !== "columns"} />}
           <ErrorBanner error={error ?? preview.error} />
+          {queue && !queueDone && session && !session.approved && (
+            <div className="actions"><Button variant="quiet" disabled={busy} onClick={skipCurrent}>{t("queue.skip")}</Button></div>
+          )}
           {busy && <div className="working"><TapeLoader size="small" text={t(hosted ? "common.working.hosted" : "common.working")} /></div>}
 
           {switchPrompt && (
@@ -394,11 +470,20 @@ export function ImportWizard({ api }: { api: ApiClient }) {
             </div>
           )}
           {step === "upload" && workspaceLink && <WorkspacePanel link={workspaceLink} />}
-          {step === "upload" && (
+          {queueDone && queue && (
+            <QueueSummary
+              items={queue}
+              busy={busy}
+              onDownload={combinedApi ? downloadCombined : undefined}
+              onRestart={() => select("upload")}
+            />
+          )}
+          {step === "upload" && !queueDone && (
             <div className="upload-step">
               <UploadForm
                 busy={busy}
                 onSubmit={upload}
+                {...(combinedApi && { onSubmitMany: startQueue })}
                 onInspectSheets={(file) => api.listSheets(file)}
                 {...(sampleApi && {
                   onListSamples: () => sampleApi.listSamples(),
@@ -499,6 +584,17 @@ export function ImportWizard({ api }: { api: ApiClient }) {
                   sheets={sheets}
                   onApprove={approve}
                 />
+                {session.approved && queue && (
+                  <div className="actions">
+                    {queue.some((item) => item.status === "pending") ? (
+                      <Button variant="primary" disabled={busy} onClick={() => void importFrom(queue, queueIndex + 1)}>
+                        {t("queue.next", { next: queue.findIndex((item, position) => position > queueIndex && item.status === "pending") + 1, total: queue.length })}
+                      </Button>
+                    ) : (
+                      <Button variant="primary" onClick={() => importFrom(queue, queue.length)}>{t("queue.summaryButton")}</Button>
+                    )}
+                  </div>
+                )}
                 {session.approved && (
                   <PriceChanges api={api} sessionId={session.id} supplierName={session.supplier_name} />
                 )}

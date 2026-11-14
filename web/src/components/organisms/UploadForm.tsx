@@ -6,11 +6,14 @@ import { describeError } from "../../i18n/serverText";
 import { Button } from "../atoms/Button";
 import { TapeLoader } from "../atoms/TapeLoader";
 import { SamplePicker } from "../molecules/SamplePicker";
+import { UploadQueue, type QueueDraft } from "./UploadQueue";
 
 interface Props {
   busy: boolean;
   onSubmit(input: CreateImportInput): void;
   onInspectSheets?(file: File): Promise<string[]>;
+  /** Several files at once: when given, picking more than one file opens the queue list instead of the single form. */
+  onSubmitMany?(items: QueueDraft[]): void;
   /** Sample lists to try; the picker shows only when both are given and the list is not empty. */
   onListSamples?(): Promise<SampleListing[]>;
   onLoadSample?(sample: SampleListing): Promise<File>;
@@ -22,7 +25,7 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function UploadForm({ busy, onSubmit, onInspectSheets, onListSamples, onLoadSample }: Props) {
+export function UploadForm({ busy, onSubmit, onSubmitMany, onInspectSheets, onListSamples, onLoadSample }: Props) {
   const { t, language: interfaceLanguage } = useI18n();
   const [inspectError, setInspectError] = useState<string | null>(null);
   // Only the file picked last may fill the sheet list.
@@ -36,6 +39,7 @@ export function UploadForm({ busy, onSubmit, onInspectSheets, onListSamples, onL
   const [manualLanguage, setManualLanguage] = useState<Language | null>(null);
   const language = manualLanguage ?? interfaceLanguage;
   const [fresh, setFresh] = useState(false);
+  const [queued, setQueued] = useState<File[] | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileId = useId();
   const hintId = useId();
@@ -66,6 +70,12 @@ export function UploadForm({ busy, onSubmit, onInspectSheets, onListSamples, onL
     }
   }
 
+  function handleFiles(list: FileList | File[] | null | undefined) {
+    const chosen = Array.from(list ?? []);
+    if (chosen.length > 1 && onSubmitMany) setQueued(chosen);
+    else handleFile(chosen[0] ?? null);
+  }
+
   async function chooseSample(sample: SampleListing) {
     try {
       const sampleFile = await onLoadSample!(sample);
@@ -81,6 +91,10 @@ export function UploadForm({ busy, onSubmit, onInspectSheets, onListSamples, onL
     event.preventDefault();
     if (!file || !ready) return;
     onSubmit({ file, supplierName: supplierName.trim(), sheet, language, ...(fresh && { forceFirstImport: true }) });
+  }
+
+  if (queued) {
+    return <UploadQueue files={queued} busy={busy} onInspectSheets={onInspectSheets} onStart={onSubmitMany!} onCancel={() => setQueued(null)} />;
   }
 
   return (
@@ -109,8 +123,7 @@ export function UploadForm({ busy, onSubmit, onInspectSheets, onListSamples, onL
           onDrop={(event) => {
             event.preventDefault();
             setDragOver(false);
-            const dropped = event.dataTransfer.files?.[0];
-            if (dropped) handleFile(dropped);
+            handleFiles(event.dataTransfer.files);
           }}
         >
           <input
@@ -119,8 +132,9 @@ export function UploadForm({ busy, onSubmit, onInspectSheets, onListSamples, onL
             type="file"
             className="sr-only"
             accept=".csv,.xlsx,.xlsm,.xls"
+            multiple={onSubmitMany !== undefined}
             aria-describedby={hintId}
-            onChange={(event) => handleFile(event.target.files?.[0] ?? null)}
+            onChange={(event) => handleFiles(event.target.files)}
           />
           {dragOver ? (
             <p className="dropzone__main dropzone__main--active">{t("upload.dropActive")}</p>
