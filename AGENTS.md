@@ -1,6 +1,6 @@
 # Pricor: agent instructions
 
-Product context lives in `PRODUCT.md`; the committed visual world of the web app lives in `.impeccable/surfaces/web-src.md`.
+Product context lives in `PRODUCT.md`. The visual world of the web app is described in the Impeccable surface brief `.impeccable/surfaces/web-src.md`, which is kept locally and not tracked in git; when it is missing (for example in a fresh clone), treat the existing `web/src/styles.css` tokens and components as the reference.
 
 ## Web UI changes go through Impeccable
 

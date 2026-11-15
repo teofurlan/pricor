@@ -8,7 +8,7 @@ export function fileKind(name: string): FileKind {
 
 /**
  * A printed slip that tells the kind of file at a glance: a cell grid for the Excel kinds, comma-separated
- * rows for CSV, a gear for macro workbooks, and the kind in figures underneath.
+ * rows for CSV, a circled plus over the grid for macro workbooks, and the kind in figures underneath.
  */
 export function FileMark({ name }: { name: string }) {
   const kind = fileKind(name);
