@@ -106,6 +106,22 @@ The import flow and every endpoint are documented in the docstring of [src/prico
 - `GET /imports/{id}/sample?limit=5`: returns `{"header": [...], "rows": [[...], ...]}` with the first data rows of the sheet under their original headers, skipping preamble, empty, section and total rows as classified by the profiler. `limit` is validated between 1 and 20 (default 5); returns 404 for an unknown session.
 - `POST /imports/{id}/questions/{question_id}/ask`: optional, read-only Gemma help for an open or answered question. Send `{"message": "Does this mean VAT is included?", "history": [{"role": "user", "text": "What is VAT?"}, {"role": "model", "text": "A tax on the price."}]}`. The message is trimmed and must have 1–500 characters; the optional history holds at most 6 earlier turns of the same question (`user` or `model`), each at most 1,200 characters. Returns `{"reply": "...", "suggested_option": "yes"}` (or `null` for no suggestion) in the import's question language. Replies are non-empty and at most 1,200 characters, and suggestions must match an existing option token. Unknown sessions or unasked questions return 404; invalid bodies 422; unavailable models or invalid model replies 503 with code `model_unavailable`. The conversation is untrusted context, never executed or saved as memory; only `POST /imports/{id}/answers` confirms an answer and changes the plan.
 
+### Which group tried the demo (`POST /events`)
+
+Each tester group gets its own link, `/?g=<group id>`. The web app keeps the id for the browser session, removes it from the address bar and reports how far the group got with `POST /events`, body `{"event": "visit" | "import_started" | "approved" | "downloaded", "group": "<id>" | null}`. The answer is `204` with no body; an unknown event is `422` (`invalid_input`). A `group` that does not match `^[a-z0-9_-]{1,40}$` is recorded as `-`. The endpoint is public: it needs no workspace cookie and never creates a workspace.
+
+Every accepted event writes one INFO line through the `pricor.events` logger and nothing else (no IP, user agent, workspace token or hash, file or supplier names):
+
+```text
+pricor_event event=approved group=grupo-1
+```
+
+It says which group arrived and how far it got, not which person. To read the lines from Cloud Run logs:
+
+```text
+gcloud logging read 'textPayload:"pricor_event"' --project pricor --limit 200
+```
+
 ### Exports
 
 Once a session is approved, `GET /imports/{id}/export?format=csv|xlsx` returns the products and `GET /imports/{id}/rejected?format=csv|xlsx` the rejected-rows report (409 before approval).

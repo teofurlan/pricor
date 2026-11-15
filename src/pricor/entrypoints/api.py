@@ -49,6 +49,9 @@ Endpoints:
                                   "kind": "products"|"rejected"}  -> one file, 1 to 50 approved
                                   imports in the given order, a `supplier` column first (409 when
                                   the files were approved with different output formats)
+    POST /events                  {"event": "visit"|"import_started"|"approved"|"downloaded",
+                                  "group": "<id>"|null} -> 204; logs one `pricor_event` line, no
+                                  workspace needed (422 invalid_input for an unknown event)
     GET  /imports/{id}/report     ?threshold=0.30  -> what changed since the previous import
     GET  /imports/{id}/report/export  ?threshold=0.30&format=csv  -> the same, as a file
 
@@ -119,7 +122,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi import Body, FastAPI, File, Form, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
@@ -175,6 +178,9 @@ from pricor.ports.spreadsheet import (
 )
 
 logger = logging.getLogger(__name__)
+events_logger = logging.getLogger("pricor.events")
+EVENT_NAMES = frozenset({"visit", "import_started", "approved", "downloaded"})
+_GROUP = re.compile(r"[a-z0-9_-]{1,40}")
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 ALLOWED_EXTENSIONS = frozenset({".csv", ".xlsx", ".xlsm", ".xls"})
@@ -933,6 +939,16 @@ def create_app(
             media_type=XLSX_CONTENT_TYPE,
             headers={"Content-Disposition": f'attachment; filename="{sample.file_name}"'},
         )
+
+    @app.post("/events", status_code=204)
+    def record_event(body: Annotated[dict[str, Any], Body()]) -> Response:
+        event = body.get("event")
+        if not isinstance(event, str) or event not in EVENT_NAMES:
+            raise InvalidInputError(f"unknown event; use one of: {', '.join(sorted(EVENT_NAMES))}")
+        group = body.get("group")
+        kept = group if isinstance(group, str) and _GROUP.fullmatch(group) else "-"
+        events_logger.info("pricor_event event=%s group=%s", event, kept)
+        return Response(status_code=204)
 
     @app.get("/config")
     def get_config() -> dict[str, Any]:

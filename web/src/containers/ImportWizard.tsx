@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ApiClient, ApiError, CombinedExportApiClient, ExportFile, ExportSheet, MemoryApiClient, OutputFormatApiClient, SampleApiClient, WorkspaceApiClient } from "../api/client";
+import type { ApiClient, ApiError, CombinedExportApiClient, EventsApiClient, ExportFile, ExportSheet, MemoryApiClient, OutputFormatApiClient, SampleApiClient, WorkspaceApiClient } from "../api/client";
 import { useServerConfig } from "../api/serverConfig";
-import type { ColumnRole, CreateImportInput, Memory, Question, SessionState } from "../api/types";
+import type { ColumnRole, CreateImportInput, FunnelEvent, Memory, Question, SessionState } from "../api/types";
 import { Button } from "../components/atoms/Button";
 import { TapeLoader } from "../components/atoms/TapeLoader";
 import { CountsSummary } from "../components/molecules/CountsSummary";
@@ -22,6 +22,7 @@ import { WorkspacePanel } from "../components/organisms/WorkspacePanel";
 import { UploadForm } from "../components/organisms/UploadForm";
 import type { QueueDraft } from "../components/organisms/UploadQueue";
 import { UploadQueueTray, QueueSummary, type QueueItem } from "../components/organisms/UploadQueueTray";
+import { captureGroup, storedGroup } from "../lib/group";
 import { describeError } from "../i18n/serverText";
 import { useI18n, type TextKey } from "../i18n";
 import { PriceChanges } from "./PriceChanges";
@@ -60,10 +61,29 @@ function takeLinkToken(): string | null {
   return pendingLinkToken;
 }
 
+const PRODUCTS_DOWNLOAD = /\/imports\/[^/?#]+\/export(?:[?#]|$)/;
+
 /** Owns the import session and the calls to the API; the steps themselves are presentational. */
 export function ImportWizard({ api }: { api: ApiClient }) {
   const { t, language } = useI18n();
   const { hosted, config, loaded } = useServerConfig();
+  // The group a tester's link names; events are fire-and-forget and never reach the user.
+  const [group] = useState(captureGroup);
+  const eventsApi = typeof (api as Partial<EventsApiClient>).recordEvent === "function" ? (api as ApiClient & EventsApiClient) : null;
+  const track = useCallback((event: FunnelEvent) => {
+    if (!eventsApi) return;
+    try {
+      eventsApi.recordEvent(event, group ?? storedGroup()).catch(() => undefined);
+    } catch {
+      // Never let the record get in the way of the flow.
+    }
+  }, [eventsApi, group]);
+  const visitSent = useRef(false);
+  useEffect(() => {
+    if (visitSent.current) return;
+    visitSent.current = true;
+    track("visit");
+  }, [track]);
   // In workspace mode the cookie from GET /workspace must exist before any other data call.
   const workspaceApi = typeof (api as Partial<WorkspaceApiClient>).workspace === "function" ? (api as ApiClient & WorkspaceApiClient) : null;
   const workspaceOn = config?.workspaces === true;
@@ -230,6 +250,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   const open = (created: SessionState) => {
     setAskedQuestions([]);
     remember(created);
+    track("import_started");
     const needsHeader = created.status === "header_choice_required";
     setHeaderNeeded(needsHeader);
     setStep(needsHeader ? "header" : "columns");
@@ -288,6 +309,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
       if (!combinedApi || !queue) return;
       const ids = queue.filter((item) => item.status === "approved" && item.sessionId).map((item) => item.sessionId as string);
       const { blob, fileName } = await combinedApi.downloadCombined(ids, format, kind);
+      if (kind === "products") track("downloaded");
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -373,6 +395,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
     run(async () => {
       if (!session) return;
       const approved = await api.approve(session.id);
+      track("approved");
       sessionRef.current = approved;
       setSession(approved);
       markCurrent({ status: "approved", sessionId: approved.id, accepted: preview.page?.totals.accepted ?? 0 });
@@ -418,7 +441,11 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   const loadingPreview = <div className="stack"><TapeLoader text={t("common.loading")} /><div className="loading-rules" aria-hidden="true"><span /><span /><span /></div></div>;
 
   return (
-    <div className="shell">
+    // A click on a products download link (single file) counts as a download; the link itself is untouched.
+    <div className="shell" onClick={(event) => {
+      const link = (event.target as HTMLElement).closest?.("a[href]");
+      if (link && PRODUCTS_DOWNLOAD.test(link.getAttribute("href") ?? "")) track("downloaded");
+    }}>
       <header className="masthead">
         <div className="masthead__brand">
           <span className="masthead__name">{t("app.name")}</span>

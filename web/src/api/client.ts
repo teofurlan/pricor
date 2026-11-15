@@ -14,6 +14,7 @@ import type {
   Memory,
   ServerConfig,
   SampleListing,
+  FunnelEvent,
 } from "./types";
 
 /** A failed API call, normalized from the server's `{"error": {code, message}}` envelope. */
@@ -106,6 +107,11 @@ export interface CombinedExportApiClient {
   downloadCombined(sessionIds: string[], format: ExportFormat, kind: ExportFile): Promise<{ blob: Blob; fileName: string }>;
 }
 
+/** The anonymous funnel record: which group of testers got how far (`POST /events`). */
+export interface EventsApiClient {
+  recordEvent(event: FunnelEvent, group: string | null): Promise<void>;
+}
+
 type Fetch = typeof fetch;
 
 async function fail(response: Response): Promise<never> {
@@ -122,7 +128,7 @@ async function fail(response: Response): Promise<never> {
   throw new ApiError(response.status, "unexpected_response", `The server answered ${response.status}.`);
 }
 
-export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), baseUrl = ""): ApiClient & MemoryApiClient & OutputFormatApiClient & SampleApiClient & WorkspaceApiClient & CombinedExportApiClient {
+export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), baseUrl = ""): ApiClient & MemoryApiClient & OutputFormatApiClient & SampleApiClient & WorkspaceApiClient & CombinedExportApiClient & EventsApiClient {
   async function call<T>(path: string, init?: RequestInit): Promise<T> {
     let response: Response;
     try {
@@ -232,6 +238,7 @@ export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), 
       const named = /filename="?([^";]+)"?/.exec(response.headers.get("Content-Disposition") ?? "");
       return { blob: await response.blob(), fileName: named?.[1] ?? `pricor-combined-${kind}.${format}` };
     },
+    recordEvent: (event, group) => call<void>("/events", json("POST", { event, group })),
     listSamples: () => call<SampleListing[]>("/samples"),
     async downloadSample(sample) {
       let response: Response;

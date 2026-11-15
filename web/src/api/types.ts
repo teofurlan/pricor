@@ -12,6 +12,9 @@ export interface SampleListing {
   description: Record<Language, string>;
 }
 
+/** What `POST /events` records about a tester's group: it arrived, loaded a list, approved, downloaded. */
+export type FunnelEvent = "visit" | "import_started" | "approved" | "downloaded";
+
 export interface ServerConfig {
   model_provider: "ollama" | "gemini";
   demo: boolean;
