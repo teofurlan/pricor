@@ -764,4 +764,4 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
 .queue-tray__file { font-weight: 560; overflow-wrap: anywhere; }
 .queue-tray__status { color: var(--muted); }
 .queue-tray__item--reviewing .queue-tray__status { color: var(--ink); font-weight: 650; }
-.queue-tray__item--failed .queue-tray__status, .queue-tray__error { color: var(--brick, #9b2c1f); }
+.queue-tray__item--failed .queue-tray__status, .queue-tray__error { color: var(--ink-brick); }

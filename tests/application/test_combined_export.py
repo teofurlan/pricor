@@ -115,7 +115,10 @@ def test_rejected_report_is_not_blocked_by_differing_formats(world):
     b = approved("Beta")
     out = rows_of(exports.combined([a.id, b.id], "csv", "rejected"))
     single = rows_of(exports.rejected(a.id, "csv"))
-    assert out[0] == ["supplier", *single[0]]
+    # Original cells go under neutral headings: each supplier's file names its columns differently.
+    cells = len(single[0]) - 2
+    assert out[0] == ["supplier", "source_row", "reasons", *(f"cell_{n}" for n in range(1, cells + 1))]
+    assert single[0][:2] == ["source_row", "reasons"]
     assert {row[0] for row in out[1:]} == {"Alfa", "Beta"}
 
 

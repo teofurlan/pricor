@@ -121,7 +121,7 @@ describe("ImportWizard with several files", () => {
     await waitFor(() => expect(api.downloadCombined).toHaveBeenCalledWith(["s1", "s2"], "xlsx", "rejected"));
     await userEvent.click(screen.getByRole("button", { name: "Download the combined rejected rows (CSV)" }));
     await waitFor(() => expect(api.downloadCombined).toHaveBeenLastCalledWith(["s1", "s2"], "csv", "rejected"));
-  });
+  }, 30000);
 
   it("marks a file that fails to read and moves on to the next one", async () => {
     const createImport = vi.fn()

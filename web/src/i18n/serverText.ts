@@ -115,6 +115,9 @@ const SPANISH_ERRORS: Record<string, string> = {
 /** A failed call for an error banner: the server's message in English, a Spanish sentence in Spanish. */
 export function describeError(error: { code: string; message: string }, language: Language): string {
   if (language !== "es") return error.message;
+  if (error.message.startsWith("these files were approved with different output formats")) {
+    return "Estos archivos se aprobaron con formatos de salida distintos. Descárguelos por separado o vuelva a aprobarlos con el mismo formato.";
+  }
   return SPANISH_ERRORS[error.code] ?? `Ocurrió un error inesperado (detalle: ${error.message}).`;
 }
 

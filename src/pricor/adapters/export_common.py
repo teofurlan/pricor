@@ -174,9 +174,13 @@ def combined_products(
 
 
 def combined_rejected(parts: Sequence[ImportExport]) -> tuple[list[str], list[list[object]]]:
-    """The rejected report of several imports, padded with empty cells to the widest layout."""
-    widest = max((rejected_header(part) for part in parts), key=len, default=list(REJECTED_COLUMNS))
-    cells_width = len(widest) - len(REJECTED_COLUMNS)
+    """The rejected report of several imports, padded with empty cells to the widest layout.
+
+    Each supplier's file names its columns differently, so the original cells go under
+    neutral `cell_1..cell_N` headings instead of one file's names.
+    """
+    cells_width = max((len(rejected_header(part)) - len(REJECTED_COLUMNS) for part in parts), default=0)
+    widest = [*REJECTED_COLUMNS, *(f"cell_{n}" for n in range(1, cells_width + 1))]
     rows: list[list[object]] = [
         [
             part.supplier_name, entry.row_number, "; ".join(entry.reasons),

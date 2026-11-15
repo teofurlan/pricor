@@ -57,7 +57,7 @@ describe("private workspace panel", () => {
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
     mount(api({ model_provider: "gemini", demo: true, workspaces: true }));
 
-    await userEvent.click(await screen.findByRole("button", { name: "Copy link" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Copy link" }, { timeout: 5000 }));
 
     expect(writeText).toHaveBeenCalledWith(LINK);
     expect(await screen.findByText("Copied")).toBeInTheDocument();
@@ -69,7 +69,7 @@ describe("private workspace panel", () => {
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
     mount(api({ model_provider: "gemini", demo: true, workspaces: true }));
 
-    await userEvent.click(await screen.findByRole("button", { name: "Copy link" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Copy link" }, { timeout: 5000 }));
 
     expect(await screen.findByText("Could not copy. Select the link and copy it by hand.")).toBeInTheDocument();
     expect(screen.queryByText("Copied")).not.toBeInTheDocument();

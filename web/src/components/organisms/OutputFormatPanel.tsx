@@ -230,7 +230,9 @@ export function OutputFormatPanel({ format, loading, busy, error, fields, onUplo
 
       {blocked && format?.fit && (
         <div className="output-format__mismatch" role="alert">
-          <p>{t("format.mismatch", { matched: format.fit.matched, total: format.fit.total, list: format.fit.unmatched.join(", ") })}</p>
+          <p>{format.fit.unmatched.length > 0
+            ? t("format.mismatch", { matched: format.fit.matched, total: format.fit.total, list: format.fit.unmatched.join(", ") })
+            : t("format.mismatchNoList", { matched: format.fit.matched, total: format.fit.total })}</p>
           <div className="actions">
             <Button variant="primary" disabled={busy} onClick={() => setVouched(true)}>{t("format.mismatch.yes")}</Button>
             <Button className="button--decline" disabled={busy} loading={pending.isLoading("remove")} onClick={wrongFile}>{t("format.mismatch.no")}</Button>

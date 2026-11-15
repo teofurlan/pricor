@@ -80,3 +80,13 @@ describe("localizeNotice", () => {
     expect(localizeNotice("something new happened", "es")).toEqual({ text: "something new happened", detail: null });
   });
 });
+
+describe("combined export with different output formats", () => {
+  it("explains it in Spanish instead of the generic step message", () => {
+    const text = describeError({
+      code: "invalid_operation",
+      message: "these files were approved with different output formats; export them separately or approve them again with the same format",
+    }, "es");
+    expect(text).toBe("Estos archivos se aprobaron con formatos de salida distintos. Descárguelos por separado o vuelva a aprobarlos con el mismo formato.");
+  });
+});

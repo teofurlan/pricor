@@ -1,3 +1,4 @@
+import { confidenceLevel } from "../../lib/confidence";
 import { useState } from "react";
 import { COLUMN_ROLES, type ColumnRole, type ColumnState } from "../../api/types";
 import { localizeServerText } from "../../i18n/serverText";
@@ -100,7 +101,7 @@ function ConfidenceMeter({
 }) {
   const { t } = useI18n();
   const percentage = Math.round(best.score * 100);
-  const ariaLabel = `Model confidence ${percentage} %, proposed by ${best.modelName}`;
+  const ariaLabel = t("columns.confidenceLabel", { level: t(`confidence.${confidenceLevel(best.score)}`), confidence: `${percentage} %` });
 
   let tooltip = ariaLabel;
   if (allProposals.length > 1) {
@@ -108,10 +109,10 @@ function ConfidenceMeter({
       .filter((p) => p !== best)
       .map(
         (p) =>
-          `${p.modelName}: ${t(`role.${p.role}`)} (${Math.round(p.score * 100)}%)`,
+          `${t(`role.${p.role}`)} (${t(`confidence.${confidenceLevel(p.score)}`)})`,
       )
       .join(", ");
-    tooltip += ` · Other proposals: ${others}`;
+    tooltip += ` · ${t("columns.otherProposals", { list: others })}`;
   }
 
   // 5 segments: filled = round(score * 5), with at least 1 filled segment when score > 0

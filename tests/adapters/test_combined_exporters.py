@@ -22,7 +22,7 @@ WIDE = part("Beta", ["a", "b", "c", "d"], [(5, ("x", "y", "z", "w"), ("worse", "
 def test_csv_rejected_layouts_are_padded_to_the_widest():
     out = list(csv.reader(io.StringIO(CsvExporter().export_rejected_combined([NARROW, WIDE]).decode("utf-8-sig"))))
     assert out == [
-        ["supplier", "source_row", "reasons", "a", "b", "c", "d"],
+        ["supplier", "source_row", "reasons", "cell_1", "cell_2", "cell_3", "cell_4"],
         ["Alfa", "2", "bad", "1", "2", "", ""],
         ["Beta", "5", "worse; much", "x", "y", "z", "w"],
     ]
@@ -30,14 +30,14 @@ def test_csv_rejected_layouts_are_padded_to_the_widest():
 
 def test_csv_rejected_order_does_not_change_the_widest_header():
     out = list(csv.reader(io.StringIO(CsvExporter().export_rejected_combined([WIDE, NARROW]).decode("utf-8-sig"))))
-    assert out[0] == ["supplier", "source_row", "reasons", "a", "b", "c", "d"]
+    assert out[0] == ["supplier", "source_row", "reasons", "cell_1", "cell_2", "cell_3", "cell_4"]
     assert out[2] == ["Alfa", "2", "bad", "1", "2", "", ""]
 
 
 def test_xlsx_rejected_pads_and_keeps_text_text():
     evil = part("=Sum", ["a"], [(3, ("=1+1",), ("r",))])
     sheet = load_workbook(io.BytesIO(XlsxExporter().export_rejected_combined([evil, WIDE])))["Rejected rows"]
-    assert [c.value for c in sheet[1]] == ["supplier", "source_row", "reasons", "a", "b", "c", "d"]
+    assert [c.value for c in sheet[1]] == ["supplier", "source_row", "reasons", "cell_1", "cell_2", "cell_3", "cell_4"]
     assert sheet["A2"].value == "=Sum" and sheet["A2"].data_type == "s"
     assert sheet["D2"].value == "=1+1" and sheet["D2"].data_type == "s"
     assert sheet["B2"].value == 3 and sheet["E2"].value is None
