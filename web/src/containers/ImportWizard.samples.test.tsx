@@ -36,7 +36,7 @@ describe("ImportWizard samples", () => {
     renderWithI18n(<ServerConfigProvider api={client}><ImportWizard api={client} /></ServerConfigProvider>);
 
     await userEvent.click(await screen.findByRole("button", { name: /Example distributor, week 1/ }));
-    await waitFor(() => expect(screen.getByLabelText("Supplier name")).toHaveValue("Distribuidora Ejemplo"));
+    await waitFor(() => expect(screen.getByLabelText(/^Supplier for /)).toHaveValue("Distribuidora Ejemplo"));
     await userEvent.click(await screen.findByRole("button", { name: "Start import" }));
 
     await waitFor(() => expect(client.createImport).toHaveBeenCalled());
@@ -49,7 +49,7 @@ describe("ImportWizard samples", () => {
     const client = api({ listSamples: undefined, downloadSample: undefined });
     renderWithI18n(<ServerConfigProvider api={client}><ImportWizard api={client} /></ServerConfigProvider>);
 
-    expect(await screen.findByLabelText("Supplier name")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Price list file")).toBeInTheDocument();
     expect(screen.queryByText("Don't have a list at hand? Try an example")).not.toBeInTheDocument();
   });
 });

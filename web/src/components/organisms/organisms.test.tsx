@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../api/client";
@@ -17,16 +17,19 @@ import { Stepper, type StepItem } from "./Stepper";
 import { UploadForm } from "./UploadForm";
 
 describe("UploadForm", () => {
-  it("cannot start until there is a supplier name and a file", async () => {
+  const supplierOf = (name: string) => screen.getByLabelText(`Supplier for ${name}`);
+
+  it("cannot start until there is a file with a supplier name", async () => {
     renderWithI18n(<UploadForm busy={false} onSubmit={vi.fn()} />);
     const start = screen.getByRole("button", { name: "Start import" });
     expect(start).toBeDisabled();
 
-    await userEvent.type(screen.getByLabelText("Supplier name"), "Ferreteria Ejemplo");
-    expect(start).toBeDisabled();
-
-    await userEvent.upload(screen.getByLabelText("Price list file"), new File(["a"], "lista.csv"));
+    await userEvent.upload(screen.getByLabelText("Price list file"), new File(["a"], "Ferreteria_lista.csv"));
+    expect(supplierOf("Ferreteria_lista.csv")).toHaveValue("Ferreteria");
     expect(start).toBeEnabled();
+
+    await userEvent.clear(supplierOf("Ferreteria_lista.csv"));
+    expect(start).toBeDisabled();
   });
 
   it("submits the supplier, file, optional sheet and language for a multi-sheet file", async () => {
@@ -34,12 +37,11 @@ describe("UploadForm", () => {
     const onInspectSheets = vi.fn().mockResolvedValue(["Hoja 1", "Hoja 2"]);
     renderWithI18n(<UploadForm busy={false} onSubmit={onSubmit} onInspectSheets={onInspectSheets} />);
     const file = new File(["a"], "catalogo.xlsx");
-    await userEvent.type(screen.getByLabelText("Supplier name"), "Acme");
     await userEvent.upload(screen.getByLabelText("Price list file"), file);
+    await userEvent.clear(supplierOf("catalogo.xlsx"));
+    await userEvent.type(supplierOf("catalogo.xlsx"), "Acme");
 
-    // Sheet select should appear once multi-sheet file is inspected
-    const sheetSelect = await screen.findByLabelText("Sheet");
-    expect(sheetSelect).toBeInTheDocument();
+    const sheetSelect = await screen.findByLabelText("Sheet for catalogo.xlsx");
     expect(sheetSelect).toHaveValue("");
     expect(within(sheetSelect).getByRole("option", { name: "First sheet with data" })).toHaveValue("");
 
@@ -50,17 +52,18 @@ describe("UploadForm", () => {
     expect(onSubmit).toHaveBeenCalledWith({ file, supplierName: "Acme", sheet: "Hoja 2", language: "es" });
   });
 
-  it("offers the sheets of the file picked last, even when an earlier file answers later", async () => {
+  it("replaces the file when only one is accepted, and ignores the sheets of the file it replaced", async () => {
     const answers: Record<string, (names: string[]) => void> = {};
     const onInspectSheets = vi.fn((file: File) => new Promise<string[]>((resolve) => { answers[file.name] = resolve; }));
     renderWithI18n(<UploadForm busy={false} onSubmit={vi.fn()} onInspectSheets={onInspectSheets} />);
     await userEvent.upload(screen.getByLabelText("Price list file"), new File(["a"], "primero.xlsx"));
     await userEvent.upload(screen.getByLabelText("Price list file"), new File(["b"], "segundo.xlsx"));
     answers["segundo.xlsx"](["Nueva 1", "Nueva 2"]);
-    const sheet = await screen.findByLabelText("Sheet");
+    const sheet = await screen.findByLabelText("Sheet for segundo.xlsx");
     answers["primero.xlsx"](["Vieja 1", "Vieja 2"]);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(within(sheet).queryByRole("option", { name: "Vieja 1" })).toBeNull();
+    expect(screen.queryByLabelText("Sheet for primero.xlsx")).toBeNull();
+    expect(screen.queryByLabelText("Supplier for primero.xlsx")).toBeNull();
     expect(within(sheet).getByRole("option", { name: "Nueva 1" })).toBeInTheDocument();
   });
 
@@ -76,14 +79,14 @@ describe("UploadForm", () => {
     const onInspectSheets = vi.fn().mockResolvedValue(["lista_octubre"]);
     renderWithI18n(<UploadForm busy={false} onSubmit={onSubmit} onInspectSheets={onInspectSheets} />);
     const file = new File(["a"], "lista.csv");
-    await userEvent.type(screen.getByLabelText("Supplier name"), "Acme");
     await userEvent.upload(screen.getByLabelText("Price list file"), file);
+    await waitFor(() => expect(onInspectSheets).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
-    // Give microtasks time to run
-    expect(screen.queryByLabelText(/Sheet/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Sheet for/)).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Start import" }));
-    expect(onSubmit).toHaveBeenCalledWith({ file, supplierName: "Acme", sheet: "", language: "en" });
+    expect(onSubmit).toHaveBeenCalledWith({ file, supplierName: "lista", sheet: "", language: "en" });
   });
 
   it("renders drop zone copy and changes text on dragover", () => {
@@ -117,57 +120,129 @@ describe("UploadForm", () => {
     expect(within(dropzone as HTMLElement).getByText("Suéltela para leerla")).toBeInTheDocument();
   });
 
-  it("shows file name in mono with its size and the Change file key when a file is selected", async () => {
+  it("shows a chosen file as a tile with its type mark, name, extension and size, then the key to change it", async () => {
     renderWithI18n(<UploadForm busy={false} onSubmit={vi.fn()} />);
     const file = new File(["a".repeat(1536)], "precios-semana-42.csv", { type: "text/csv" });
-    const input = screen.getByLabelText("Price list file");
-    await userEvent.upload(input, file);
+    await userEvent.upload(screen.getByLabelText("Price list file"), file);
 
-    const dropzone = document.querySelector(".dropzone") as HTMLElement;
-    expect(within(dropzone).getByText(/precios-semana-42\.csv/)).toBeInTheDocument();
-    expect(within(dropzone).getByText(/1\.5 KB/)).toBeInTheDocument();
-    expect(within(dropzone).getByRole("button", { name: "Change file" })).toBeInTheDocument();
-    expect(dropzone.querySelector(".feed-slit")).not.toBeInTheDocument();
+    expect(document.querySelector(".dropzone")).toBeNull();
+    const tiles = within(screen.getByRole("list", { name: "Chosen files" })).getAllByRole("listitem");
+    expect(tiles).toHaveLength(2);
+    expect(within(tiles[0]).getByText("CSV")).toBeInTheDocument();
+    expect(within(tiles[0]).getByText("precios-semana-42")).toBeInTheDocument();
+    expect(within(tiles[0]).getByText(".csv")).toBeInTheDocument();
+    expect(within(tiles[0]).getByText("1.5 KB")).toBeInTheDocument();
+    expect(within(tiles[0]).getByRole("button", { name: "Remove precios-semana-42.csv" })).toBeInTheDocument();
+    expect(within(tiles[1]).getByRole("button", { name: "Change file" })).toBeInTheDocument();
   });
 
-  it("handles drag and drop with dragover state and accepts only one file", async () => {
-    const onSubmit = vi.fn();
-    renderWithI18n(<UploadForm busy={false} onSubmit={onSubmit} />);
+  it("marks each kind of price list with its own type", async () => {
+    renderWithI18n(<UploadForm busy={false} onSubmit={vi.fn()} onSubmitMany={vi.fn()} />);
+    await userEvent.upload(screen.getByLabelText("Price list file"), [
+      new File(["a"], "a.xlsx"), new File(["b"], "b.XLS"), new File(["c"], "c.xlsm"), new File(["d"], "d.csv"),
+    ]);
+    const tiles = within(screen.getByRole("list", { name: "Chosen files" })).getAllByRole("listitem");
+    expect(tiles.slice(0, 4).map((tile) => tile.querySelector(".file-mark")?.getAttribute("data-kind"))).toEqual(["xlsx", "xls", "xlsm", "csv"]);
+    expect(within(tiles[1]).getByText("XLS")).toBeInTheDocument();
+    expect(within(tiles[1]).getByText(".XLS")).toBeInTheDocument();
+  });
+
+  it("accepts only one dropped file when the form takes one file", async () => {
+    renderWithI18n(<UploadForm busy={false} onSubmit={vi.fn()} />);
     const dropzone = document.querySelector(".dropzone");
-    expect(dropzone).toBeInTheDocument();
     expect(dropzone).not.toHaveClass("dropzone--active");
 
     const file1 = new File(["1"], "primero.csv", { type: "text/csv" });
     const file2 = new File(["2"], "segundo.csv", { type: "text/csv" });
-
-    // Drag over
     fireEvent.dragOver(dropzone!, { dataTransfer: { files: [file1] } });
     expect(dropzone).toHaveClass("dropzone--active");
-
-    // Drag leave
     fireEvent.dragLeave(dropzone!);
     expect(dropzone).not.toHaveClass("dropzone--active");
 
-    // Drag over and drop multiple files
-    fireEvent.dragOver(dropzone!, { dataTransfer: { files: [file1, file2] } });
     fireEvent.drop(dropzone!, { dataTransfer: { files: [file1, file2] } });
 
-    expect(dropzone).not.toHaveClass("dropzone--active");
-    // Only file1 is accepted
-    expect(screen.getByText(/primero\.csv/)).toBeInTheDocument();
-    expect(screen.queryByText(/segundo\.csv/)).not.toBeInTheDocument();
+    expect(screen.getByText("primero")).toBeInTheDocument();
+    expect(screen.queryByText("segundo")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Change file" })).toBeInTheDocument();
-
-    // Native input remains accessible
     expect(screen.getByLabelText("Price list file")).toBeInTheDocument();
+  });
+
+  it("adds files sideways with the add key always last, and lists one supplier per file below", async () => {
+    const onSubmit = vi.fn();
+    const onSubmitMany = vi.fn();
+    renderWithI18n(<UploadForm busy={false} onSubmit={onSubmit} onSubmitMany={onSubmitMany} />);
+    const first = new File(["a"], "Ferreteria_lista.csv");
+    const second = new File(["b"], "acme-semana-3.xlsx");
+    const third = new File(["c"], "Dipel.xlsx");
+    await userEvent.upload(screen.getByLabelText("Price list file"), first);
+    await userEvent.upload(screen.getByLabelText("Price list file"), [second, third]);
+
+    const tray = screen.getByRole("list", { name: "Chosen files" });
+    const tiles = within(tray).getAllByRole("listitem");
+    expect(tiles).toHaveLength(4);
+    expect(tiles.slice(0, 3).map((tile) => tile.querySelector(".file-tile__name")?.textContent)).toEqual(["Ferreteria_lista", "acme-semana-3", "Dipel"]);
+    expect(within(tiles[3]).getByRole("button", { name: "Add files" })).toBeInTheDocument();
+    expect(supplierOf("Ferreteria_lista.csv")).toHaveValue("Ferreteria");
+    expect(supplierOf("acme-semana-3.xlsx")).toHaveValue("acme");
+    expect(supplierOf("Dipel.xlsx")).toHaveValue("Dipel");
+
+    await userEvent.click(within(tiles[1]).getByRole("button", { name: "Remove acme-semana-3.xlsx" }));
+    expect(within(tray).getAllByRole("listitem")).toHaveLength(3);
+    expect(screen.queryByLabelText("Supplier for acme-semana-3.xlsx")).toBeNull();
+
+    await userEvent.type(supplierOf("Dipel.xlsx"), " SA");
+    await userEvent.click(screen.getByRole("button", { name: "Start import" }));
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(onSubmitMany).toHaveBeenCalledWith([
+      { file: first, supplierName: "Ferreteria", sheet: "" },
+      { file: third, supplierName: "Dipel SA", sheet: "" },
+    ]);
+  });
+
+  it("does not add the same file twice", async () => {
+    renderWithI18n(<UploadForm busy={false} onSubmit={vi.fn()} onSubmitMany={vi.fn()} />);
+    const file = new File(["a"], "lista.csv", { lastModified: 1 });
+    await userEvent.upload(screen.getByLabelText("Price list file"), file);
+    await userEvent.upload(screen.getByLabelText("Price list file"), file);
+    expect(within(screen.getByRole("list", { name: "Chosen files" })).getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("returns to the drop zone when the last file is removed", async () => {
+    renderWithI18n(<UploadForm busy={false} onSubmit={vi.fn()} onSubmitMany={vi.fn()} />);
+    await userEvent.upload(screen.getByLabelText("Price list file"), new File(["a"], "lista.csv"));
+    await userEvent.click(screen.getByRole("button", { name: "Remove lista.csv" }));
+    expect(document.querySelector(".dropzone")).toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Chosen files" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Start import" })).toBeDisabled();
+  });
+
+  it("starts a one-file import as before when only one file was added to a form that takes several", async () => {
+    const onSubmit = vi.fn();
+    const onSubmitMany = vi.fn();
+    renderWithI18n(<UploadForm busy={false} onSubmit={onSubmit} onSubmitMany={onSubmitMany} />);
+    const file = new File(["a"], "lista.csv");
+    await userEvent.upload(screen.getByLabelText("Price list file"), file);
+    await userEvent.click(screen.getByRole("button", { name: "Start import" }));
+    expect(onSubmitMany).not.toHaveBeenCalled();
+    expect(onSubmit).toHaveBeenCalledWith({ file, supplierName: "lista", sheet: "", language: "en" });
+  });
+
+  it("names the tiles and suppliers in Spanish", async () => {
+    renderWithI18n(<UploadForm busy={false} onSubmit={vi.fn()} onSubmitMany={vi.fn()} />, "es");
+    await userEvent.upload(screen.getByLabelText("Archivo de la lista de precios"), new File(["a"], "lista.csv"));
+    expect(screen.getByRole("list", { name: "Archivos elegidos" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Quitar lista.csv" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Agregar archivos" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Proveedor de lista.csv")).toHaveValue("lista");
   });
 
   it("can ask to ignore the saved plan and start from scratch", async () => {
     const onSubmit = vi.fn();
     renderWithI18n(<UploadForm busy={false} onSubmit={onSubmit} />);
     const fresh = "Start from scratch instead of reusing the saved plan";
-    await userEvent.type(screen.getByLabelText("Supplier name"), "Acme");
     await userEvent.upload(screen.getByLabelText("Price list file"), new File(["a"], "lista.csv"));
+    await userEvent.clear(supplierOf("lista.csv"));
+    await userEvent.type(supplierOf("lista.csv"), "Acme");
     expect(screen.getByLabelText(fresh)).not.toBeChecked();
     await userEvent.click(screen.getByLabelText(fresh));
     await userEvent.click(screen.getByRole("button", { name: "Start import" }));
@@ -211,7 +286,7 @@ describe("UploadForm", () => {
     expect(smallLoader).toHaveTextContent("Reading the file…");
 
     resolveSheets(["Hoja 1", "Hoja 2"]);
-    await screen.findByLabelText("Sheet");
+    await screen.findByLabelText("Sheet for catalogo.xlsx");
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
@@ -345,7 +420,7 @@ describe("ColumnsTable", () => {
 
     // 5-segment meter with sage level class
     const meter = within(row).getByRole("meter");
-    expect(meter).toHaveAttribute("aria-label", "Model confidence 98 %, proposed by Laya");
+    expect(meter).toHaveAttribute("aria-label", "Automatic suggestion, high confidence (98 %)");
     const segments = meter.querySelectorAll(".meter__seg");
     expect(segments).toHaveLength(5);
     const filled = meter.querySelectorAll(".meter__seg--filled");
@@ -382,7 +457,7 @@ describe("ColumnsTable", () => {
     // Row 0: 0.98 -> 5 segments filled, sage level
     const row0 = screen.getByRole("row", { name: /col_high/ });
     const meter0 = within(row0).getByRole("meter");
-    expect(meter0).toHaveAttribute("aria-label", "Model confidence 98 %, proposed by Laya");
+    expect(meter0).toHaveAttribute("aria-label", "Automatic suggestion, high confidence (98 %)");
     expect(meter0.querySelectorAll(".meter__seg")).toHaveLength(5);
     expect(meter0.querySelectorAll(".meter__seg--filled")).toHaveLength(5);
     expect(meter0).toHaveClass("meter--sage");

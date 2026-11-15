@@ -43,8 +43,6 @@ const sent = (api: Api) => (api.recordEvent as ReturnType<typeof vi.fn>).mock.ca
 // One file today asks for the supplier by hand; the form may fill it in. Either way "Start…" begins.
 async function startWith(files: File[]) {
   await userEvent.upload(screen.getByLabelText("Price list file"), files);
-  const supplier = screen.queryByLabelText("Supplier name");
-  if (supplier) await userEvent.type(supplier, "Ferreteria");
   await userEvent.click(screen.getByRole("button", { name: /^Start/ }));
 }
 const pickAndStart = () => startWith([new File(["a"], "Ferreteria_lista.csv")]);

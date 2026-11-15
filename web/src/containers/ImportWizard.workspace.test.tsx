@@ -46,7 +46,7 @@ describe("private workspace panel", () => {
     const client = api({ model_provider: "gemini", demo: true, ...(workspaces === undefined ? {} : { workspaces }) });
     mount(client);
 
-    await screen.findByLabelText("Supplier name");
+    await screen.findByLabelText("Price list file");
     await waitFor(() => expect(client.config).toHaveBeenCalled());
     expect(screen.queryByText("Your private space")).not.toBeInTheDocument();
     expect(client.workspace).not.toHaveBeenCalled();
@@ -98,11 +98,10 @@ describe("private workspace panel", () => {
       listSheets: vi.fn().mockRejectedValue(new ApiError(401, "workspace_required", "open a workspace")),
     });
     mount(client);
-    expect(await screen.findByLabelText("Supplier name")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Price list file")).toBeInTheDocument();
     // Drive the error through createImport, which the wizard surfaces in the banner.
     (client as unknown as { createImport: unknown }).createImport = vi.fn().mockRejectedValue(new ApiError(401, "workspace_required", "x"));
     const file = new File(["x"], "a.csv", { type: "text/csv" });
-    await userEvent.type(screen.getByLabelText("Supplier name"), "Acme");
     await userEvent.upload(document.querySelector("input[type=file]") as HTMLInputElement, file);
     await userEvent.click(await screen.findByRole("button", { name: "Start import" }));
 

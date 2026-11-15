@@ -756,9 +756,39 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
 .output-format { max-width: 640px; }
 
 /* Several files: the draft list before starting and the tray of states. */
-.queue-draft { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
-.queue-draft__row { display: grid; gap: 6px; padding-bottom: 14px; border-bottom: 1px solid var(--rule); }
-.queue-draft__file { font-size: 0.8125rem; color: var(--muted); overflow-wrap: anywhere; }
+/* Chosen files: torn slips of paper side by side, the feed key always last. */
+.file-tiles { list-style: none; margin: 0; padding: 4px 2px 10px; display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x proximity; overscroll-behavior-x: contain; }
+.file-tiles--active .file-tile--add .file-tile__add { border-style: solid; border-color: var(--ink); background: #eaece4; }
+.file-tile { position: relative; flex: 0 0 148px; height: 148px; scroll-snap-align: start; display: grid; grid-template-rows: auto 1fr; justify-items: start; gap: 10px; padding: 14px 12px 18px; background: var(--paper); mask-image: linear-gradient(#000 0 0), conic-gradient(from 135deg at 50% 0, #000 90deg, transparent 0); mask-size: 100% calc(100% - 7px), 12px 8px; mask-position: top, bottom; mask-repeat: no-repeat, repeat-x; mask-composite: add; }
+.file-mark { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); }
+.file-mark svg { flex-shrink: 0; }
+.file-mark__label { font: 600 0.75rem/1 var(--figures); letter-spacing: 0.04em; padding: 3px 5px; border: 1px solid var(--ink); }
+.file-tile__text { display: grid; align-content: end; gap: 4px; min-width: 0; width: 100%; }
+.file-tile__name { font-weight: 600; font-size: 0.875rem; line-height: 1.25; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.file-tile__meta { display: flex; flex-wrap: wrap; justify-content: space-between; column-gap: 8px; row-gap: 0; font: 0.75rem/1.2 var(--figures); font-variant-numeric: tabular-nums; color: var(--muted); }
+.file-tile__extension { color: var(--ink); }
+.file-tile__extension, .file-tile__size { white-space: nowrap; }
+.file-tile__remove { position: absolute; top: 6px; right: 6px; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; border-radius: 2px; }
+.file-tile__remove:hover { color: var(--ink-brick); background: var(--ground); }
+.file-tile__remove:active { transform: translateY(1px); }
+.file-tile--add { padding: 0; background: none; mask: none; }
+.file-tile__add { width: 100%; height: 100%; display: grid; place-content: center; justify-items: center; gap: 8px; padding: 12px; border: 2px dashed var(--muted); border-radius: 3px; background: transparent; color: var(--ink); font-size: 0.875rem; font-weight: 600; cursor: pointer; transition: border-color 100ms ease-out, background-color 100ms ease-out; }
+.file-tile__add:hover { background: var(--paper); border-color: var(--ink); }
+.file-tile__add:active { transform: translateY(1px); }
+/* One ruled line per file: its name, the supplier to write and the sheet to read. */
+.file-list { display: grid; }
+.file-list__head, .file-list__row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 0.9fr); gap: 16px; align-items: center; }
+.file-list__head { padding-bottom: 6px; border-bottom: 1px solid var(--ink); font-size: 0.8125rem; font-weight: 600; }
+.file-list__row { padding: 10px 0; border-bottom: 1px solid var(--rule); }
+.file-list__file { font: 0.8125rem/1.3 var(--figures); color: var(--muted); overflow-wrap: anywhere; }
+.file-list__none { font-size: 0.8125rem; color: var(--muted); }
+.file-list__problem { grid-column: 1 / -1; margin-top: 0; }
+.file-list .hint { margin-top: 10px; }
+@media (max-width: 640px) {
+  .file-tile { flex-basis: 132px; height: 132px; }
+  .file-list__head { display: none; }
+  .file-list__row { grid-template-columns: 1fr; gap: 6px; }
+}
 .queue-tray { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; font-size: 0.8125rem; }
 .queue-tray__item { display: grid; gap: 2px; }
 .queue-tray__file { font-weight: 560; overflow-wrap: anywhere; }

@@ -1,6 +1,6 @@
 import { useI18n, type TextKey } from "../../i18n";
 import { Button } from "../atoms/Button";
-import type { QueueDraft } from "./UploadQueue";
+import type { QueueDraft } from "./UploadForm";
 
 export type QueueStatus = "pending" | "reviewing" | "approved" | "failed" | "skipped";
 

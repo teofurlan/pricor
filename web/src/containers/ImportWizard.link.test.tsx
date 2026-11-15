@@ -77,7 +77,7 @@ describe("opening a personal link (U6d)", () => {
     mount(client);
 
     await waitFor(() => expect(window.location.hash).toBe(""));
-    await screen.findByLabelText("Supplier name");
+    await screen.findByLabelText("Price list file");
     expect(client.claimWorkspace).not.toHaveBeenCalled();
     expect(client.currentWorkspace).not.toHaveBeenCalled();
   });

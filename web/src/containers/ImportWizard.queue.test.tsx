@@ -79,7 +79,7 @@ describe("ImportWizard with several files", () => {
     const select = await screen.findByLabelText("Sheet for acme-semana-3.xlsx");
     expect(screen.queryByLabelText("Sheet for Ferreteria_lista.csv")).toBeNull();
     await userEvent.selectOptions(select, "Precios");
-    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    await userEvent.click(screen.getByRole("button", { name: "Start import" }));
     await waitFor(() => expect(createImport).toHaveBeenCalledTimes(1));
     expect(createImport.mock.calls[0][0]).toMatchObject({ supplierName: "acme", sheet: "Precios" });
   });
@@ -94,7 +94,7 @@ describe("ImportWizard with several files", () => {
     const api = fakeApi({ createImport, approve });
     renderWithI18n(<ImportWizard api={api} />);
     await pick();
-    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    await userEvent.click(screen.getByRole("button", { name: "Start import" }));
 
     await waitFor(() => expect(createImport).toHaveBeenCalledTimes(1));
     expect(createImport.mock.calls[0][0]).toMatchObject({ supplierName: "Ferreteria" });
@@ -129,7 +129,7 @@ describe("ImportWizard with several files", () => {
       .mockResolvedValueOnce(ready("s2", "acme"));
     renderWithI18n(<ImportWizard api={fakeApi({ createImport })} />);
     await pick();
-    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    await userEvent.click(screen.getByRole("button", { name: "Start import" }));
 
     await waitFor(() => expect(createImport).toHaveBeenCalledTimes(2));
     const tray = screen.getByRole("list", { name: "Files" });
@@ -143,7 +143,7 @@ describe("ImportWizard with several files", () => {
     const createImport = vi.fn().mockResolvedValueOnce(ready("s1", "Ferreteria")).mockResolvedValueOnce(ready("s2", "acme"));
     renderWithI18n(<ImportWizard api={fakeApi({ createImport })} />);
     await pick();
-    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    await userEvent.click(screen.getByRole("button", { name: "Start import" }));
     await screen.findByRole("button", { name: "Confirm columns" });
 
     await userEvent.click(screen.getByRole("button", { name: "Skip" }));
@@ -162,7 +162,7 @@ describe("ImportWizard with several files", () => {
     renderWithI18n(<ImportWizard api={fakeApi({ createImport, approve })} />, "es");
     await pick("es");
     expect(screen.getByLabelText("Proveedor de Ferreteria_lista.csv")).toHaveValue("Ferreteria");
-    await userEvent.click(screen.getByRole("button", { name: "Empezar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Iniciar importación" }));
     await reviewAndApprove("es");
     await userEvent.click(await screen.findByRole("button", { name: "Revisar el siguiente archivo (2 de 2)" }));
     await reviewAndApprove("es");
@@ -174,8 +174,9 @@ describe("ImportWizard with several files", () => {
   it("keeps the one-file flow as it was", async () => {
     const createImport = vi.fn().mockResolvedValue(ready("s1", "Ferreteria Ejemplo"));
     renderWithI18n(<ImportWizard api={fakeApi({ createImport })} />);
-    await userEvent.type(screen.getByLabelText("Supplier name"), "Ferreteria Ejemplo");
     await userEvent.upload(screen.getByLabelText("Price list file"), new File(["a"], "lista.csv"));
+    await userEvent.clear(screen.getByLabelText("Supplier for lista.csv"));
+    await userEvent.type(screen.getByLabelText("Supplier for lista.csv"), "Ferreteria Ejemplo");
     await userEvent.click(screen.getByRole("button", { name: "Start import" }));
     await screen.findByRole("button", { name: "Confirm columns" });
     expect(screen.queryByRole("list", { name: "Files" })).toBeNull();

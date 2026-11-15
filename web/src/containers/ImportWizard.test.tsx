@@ -35,11 +35,12 @@ function fakeApi(overrides: Partial<ApiClient> = {}): ApiClient {
 }
 
 async function startImport(lang: "en" | "es" = "en") {
-  const supplierLabel = lang === "es" ? "Nombre del proveedor" : "Supplier name";
+  const supplierLabel = lang === "es" ? "Proveedor de lista.csv" : "Supplier for lista.csv";
   const fileLabel = lang === "es" ? "Archivo de la lista de precios" : "Price list file";
   const buttonLabel = lang === "es" ? "Iniciar importación" : "Start import";
-  await userEvent.type(screen.getByLabelText(supplierLabel), "Ferreteria Ejemplo");
   await userEvent.upload(screen.getByLabelText(fileLabel), new File(["a,b"], "lista.csv"));
+  await userEvent.clear(screen.getByLabelText(supplierLabel));
+  await userEvent.type(screen.getByLabelText(supplierLabel), "Ferreteria Ejemplo");
   await userEvent.click(screen.getByRole("button", { name: buttonLabel }));
 }
 

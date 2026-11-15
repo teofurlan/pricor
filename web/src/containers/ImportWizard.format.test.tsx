@@ -51,8 +51,9 @@ function fakeApi(stored: OutputFormat | null, overrides: Partial<ApiClient> = {}
 }
 
 async function toPreview() {
-  await userEvent.type(screen.getByLabelText("Supplier name"), "Ferreteria Ejemplo");
   await userEvent.upload(screen.getByLabelText("Price list file"), new File(["a,b"], "lista.csv"));
+  await userEvent.clear(screen.getByLabelText("Supplier for lista.csv"));
+  await userEvent.type(screen.getByLabelText("Supplier for lista.csv"), "Ferreteria Ejemplo");
   await userEvent.click(screen.getByRole("button", { name: "Start import" }));
   await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
   await userEvent.click(await screen.findByRole("button", { name: "Continue to approval" }));
@@ -105,8 +106,9 @@ describe("ImportWizard output format step", () => {
 
   it("speaks to the user as usted in Spanish", async () => {
     renderWithI18n(<ImportWizard api={fakeApi(confirmed)} />, "es");
-    await userEvent.type(screen.getByLabelText("Nombre del proveedor"), "Ferreteria Ejemplo");
     await userEvent.upload(screen.getByLabelText("Archivo de la lista de precios"), new File(["a,b"], "lista.csv"));
+    await userEvent.clear(screen.getByLabelText("Proveedor de lista.csv"));
+    await userEvent.type(screen.getByLabelText("Proveedor de lista.csv"), "Ferreteria Ejemplo");
     await userEvent.click(screen.getByRole("button", { name: "Iniciar importación" }));
     await userEvent.click(await screen.findByRole("button", { name: "Confirmar columnas" }));
     await userEvent.click(await screen.findByRole("button", { name: "Continuar a la aprobación" }));

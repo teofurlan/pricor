@@ -37,8 +37,9 @@ function fakeApi(overrides: Partial<ApiClient & MemoryApiClient> = {}): ApiClien
 }
 
 async function startImport() {
-  await userEvent.type(screen.getByLabelText("Supplier name"), "Acme");
   await userEvent.upload(screen.getByLabelText("Price list file"), new File(["a,b"], "list.csv"));
+  await userEvent.clear(screen.getByLabelText("Supplier for list.csv"));
+  await userEvent.type(screen.getByLabelText("Supplier for list.csv"), "Acme");
   await userEvent.click(screen.getByRole("button", { name: "Start import" }));
   await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
 }

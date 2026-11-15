@@ -20,7 +20,7 @@ import { RejectedList } from "../components/organisms/RejectedList";
 import { Stepper, type StepId, type StepItem } from "../components/organisms/Stepper";
 import { WorkspacePanel } from "../components/organisms/WorkspacePanel";
 import { UploadForm } from "../components/organisms/UploadForm";
-import type { QueueDraft } from "../components/organisms/UploadQueue";
+import type { QueueDraft } from "../components/organisms/UploadForm";
 import { UploadQueueTray, QueueSummary, type QueueItem } from "../components/organisms/UploadQueueTray";
 import { captureGroup, storedGroup } from "../lib/group";
 import { describeError } from "../i18n/serverText";

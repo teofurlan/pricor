@@ -48,9 +48,9 @@ describe("UploadForm sample picker", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: /Example distributor, week 1/ }));
 
-    await waitFor(() => expect(screen.getByLabelText("Supplier name")).toHaveValue("Distribuidora Ejemplo"));
+    await waitFor(() => expect(screen.getByLabelText("Supplier for demo-semana-1.xlsx")).toHaveValue("Distribuidora Ejemplo"));
     expect(onLoadSample).toHaveBeenCalledWith(week1);
-    expect(await screen.findByText("demo-semana-1.xlsx")).toBeInTheDocument();
+    expect(await screen.findByText("demo-semana-1")).toBeInTheDocument();
     expect(onInspectSheets).toHaveBeenCalledWith(file);
     await userEvent.click(screen.getByRole("button", { name: "Start import" }));
     expect(onSubmit).toHaveBeenCalledWith({ file, supplierName: "Distribuidora Ejemplo", sheet: "", language: "en" });
@@ -65,7 +65,8 @@ describe("UploadForm sample picker", () => {
     await userEvent.click(await screen.findByRole("button", { name: /week 1/ }));
 
     expect(await screen.findByText(/Could not load the sample list/)).toBeInTheDocument();
-    expect(screen.getByLabelText("Supplier name")).toHaveValue("");
+    expect(screen.queryByRole("list", { name: "Chosen files" })).toBeNull();
+    expect(screen.queryByLabelText(/^Supplier for /)).toBeNull();
     expect(screen.getByRole("button", { name: "Start import" })).toBeDisabled();
   });
 
