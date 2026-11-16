@@ -22,7 +22,16 @@ COPY pyproject.toml README.md ./
 COPY src/ ./src/
 COPY --from=web-builder /app/src/pricor/web_dist ./src/pricor/web_dist
 
-RUN uv pip install --system --no-cache "."
+# Laya runs on the CPU: install the CPU build of torch first so the laya package does not pull
+# the CUDA wheels from PyPI. Only the files inference reads are copied (see .gcloudignore).
+RUN uv pip install --system --no-cache --index-url https://download.pytorch.org/whl/cpu "torch==2.14.1" \
+    && uv pip install --system --no-cache "." "laya==0.4.6"
+COPY models/laya-pricor/ ./models/laya-pricor/
+
+ENV PRICOR_LAYA_DEVICE=cpu \
+    PRICOR_PRELOAD_MODELS=1 \
+    HF_HUB_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=1
 
 EXPOSE 8080
 

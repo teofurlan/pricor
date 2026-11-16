@@ -17,14 +17,14 @@
       "reason": "no threshold meets the target precision with the minimum support"
     },
     "laya": {
-      "threshold": 0.9959,
+      "threshold": 0.9924,
       "n": 161,
-      "support": 42,
-      "precision": 0.9761904761904762,
+      "support": 62,
+      "precision": 0.9516129032258065,
       "reason": "met",
       "real_only": {
-        "support": 1,
-        "precision": 0.0
+        "support": 7,
+        "precision": 0.8571428571428571
       }
     },
     "gemma": {

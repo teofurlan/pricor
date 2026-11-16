@@ -15,4 +15,11 @@ data/raw
 docs
 bench-results
 brag-output
-models
+# Only the Laya files inference reads; never checkpoints or datasets (real cell values).
+models/*
+!models/laya-pricor/
+models/laya-pricor/*
+!models/laya-pricor/model.safetensors
+!models/laya-pricor/rl_agent_config.json
+!models/laya-pricor/tokenizer/
+!models/laya-pricor/encoder/

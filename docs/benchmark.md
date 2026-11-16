@@ -120,6 +120,12 @@ GPU: NVIDIA GeForce RTX 4060 Laptop GPU. Laya latency is the model call for one 
 - Outcome of the agreement stage: on validation the two classifiers agree on 108 of 161 columns, but only 88.0% of those answers are right, below the target. Requiring a confidence bar reaches the target only at 0.9959, which is Laya's own threshold, where the stage settles 31 columns at 96.8% precision (a subset of the 42 columns Laya alone settles at 97.6%). So `agreement>laya>gemma` ties `laya>gemma` on validation (61.5% escalated, 98.4% accurate); the tie keeps the default order, and the shipped cascade does not include the agreement stage. On the held-out set it also ties (62.1% escalated), so the escalation rate is unchanged.
 - In the second run the cascade settled Gemma 8 columns instead of 9. No label of a column Gemma settled changed, so this is not an effect of the relabeling; it is most likely run-to-run variation of the model (an inference, not checked).
 
+## Laya retrained (2026-11-16)
+
+- The fine-tuned weights were lost from `models/` and Laya was retrained with the same pipeline and seed (`tools/laya/train`, 3 epochs, RTX 4060, 675 s). GPU training is not bit-for-bit reproducible, so the result differs slightly.
+- Held-out accuracy of the new weights: 21/29 (72.4%), against 22/29 (75.9%) for the lost weights after the Dipel relabeling.
+- Only the Laya threshold was recalibrated (`collect --classifiers heuristics,laya_finetuned`, then `calibrate`): 0.9924, accepting 62 of 161 validation columns at 95.2% precision (real columns: 7 at 85.7%). The previous weights had 0.9959, 42 columns at 97.6%. The Gemma entry and the tables above still describe the earlier run.
+
 ## Previous run
 
 - First run, before any post-hoc change (2026-10-14): held-out accuracy was Heuristics 26/29 (89.7%), Laya zero-shot 16/29 (55.2%), Laya fine-tuned 24/29 (82.8%) and Gemma 27/29 (93.1%), with 3 `retail_price` columns.
