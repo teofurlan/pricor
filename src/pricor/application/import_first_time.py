@@ -486,6 +486,7 @@ class ImportFirstTime:
         except ModelError as error:
             if isinstance(error, ModelUnavailableError | ModelTimeoutError):
                 session.model_unreachable = True
+            logger.warning("plan advisor failed (%s): %s", type(error).__name__, error)
             session.add_notice(
                 Notice(
                     "model_unavailable",

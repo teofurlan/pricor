@@ -1,3 +1,4 @@
+import logging
 from decimal import Decimal
 
 import pytest
@@ -338,6 +339,16 @@ def test_advisor_failure_keeps_the_deterministic_questions_and_records_a_notice(
     answer_all(use_case, session.id)
     assert use_case.get(session.id).status is SessionStatus.READY_FOR_PREVIEW
     assert advisor.calls == 1  # a failure is not retried on every answer
+
+
+def test_advisor_failure_is_logged_as_a_warning_with_the_reason(caplog):
+    use_case, _ = make(advisor=FakeAdvisor(error=ModelSchemaError("$.hypotheses[0].value: not a token")))
+    with caplog.at_level(logging.INFO, logger="pricor.application.import_first_time"):
+        start(use_case)
+    (warning,) = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert "advisor" in warning.getMessage()
+    assert "ModelSchemaError" in warning.getMessage()
+    assert "not a token" in warning.getMessage()
 
 
 def test_model_stage_failure_sends_low_confidence_columns_to_the_user():

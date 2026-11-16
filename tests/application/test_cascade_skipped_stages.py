@@ -1,3 +1,5 @@
+import logging
+
 from pricor.application.cascade import ClassifierStage, run_cascade
 from pricor.domain.profile import profile_sheet
 from pricor.domain.roles import ColumnRole
@@ -49,3 +51,24 @@ def test_an_unreachable_server_still_ends_the_cascade():
     assert after.seen_indexes == []
     assert unreachable is True
     assert len(notices) == 1
+
+
+def test_a_failed_stage_is_logged_as_a_warning_with_the_reason(caplog):
+    down = FakeClassifier(error=ModelUnavailableError("gemini answered HTTP 503"))
+
+    with caplog.at_level(logging.INFO, logger="pricor.application.cascade"):
+        run_cascade([ClassifierStage("gemma", down)], profile_sheet(ROWS))
+
+    (warning,) = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert "gemma" in warning.getMessage()
+    assert "ModelUnavailableError" in warning.getMessage()
+    assert "HTTP 503" in warning.getMessage()
+
+
+def test_a_stage_skipped_on_purpose_is_not_a_warning(caplog):
+    skipped = ClassifierStage("laya", FakeClassifier(CONFIDENT), skipped_reason="the 'laya' extra is not installed")
+
+    with caplog.at_level(logging.INFO, logger="pricor.application.cascade"):
+        run_cascade([skipped, ClassifierStage("heuristics", FakeClassifier(CONFIDENT))], profile_sheet(ROWS))
+
+    assert [r for r in caplog.records if r.levelno >= logging.WARNING] == []

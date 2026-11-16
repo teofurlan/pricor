@@ -205,10 +205,13 @@ def run_cascade(
             outcomes = evaluate(stage, subset)
         except ModelNotInstalledError as error:
             logger.info("cascade stage %s: %.2fs", stage.name, time.perf_counter() - started)
+            logger.warning("cascade stage %s skipped (%s): %s", stage.name, type(error).__name__, error)
             notices.append(_skipped_notice(stage, str(error)))
             continue
         except ModelError as error:
             logger.info("cascade stage %s: %.2fs", stage.name, time.perf_counter() - started)
+            # The notice reaches the user; without this line a failed model call leaves no trace in the server logs.
+            logger.warning("cascade stage %s failed (%s): %s", stage.name, type(error).__name__, error)
             notices.append(
                 Notice(
                     "model_unavailable",
