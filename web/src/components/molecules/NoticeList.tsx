@@ -3,6 +3,9 @@ import type { Notice } from "../../api/types";
 import { useI18n } from "../../i18n";
 import { localizeNotice } from "../../i18n/serverText";
 
+/** The stages that are Gemma: the column stage of that name and the plan advisor. Any other stage is not Gemma's to answer for. */
+const GEMMA_STAGES = new Set(["gemma", "advisor"]);
+
 /** Session notices, calm but impossible to miss. */
 export function NoticeList({ notices, compact = false }: { notices: Notice[]; compact?: boolean }) {
   const { t, language } = useI18n();
@@ -12,10 +15,15 @@ export function NoticeList({ notices, compact = false }: { notices: Notice[]; co
     <div className="notices">
       {notices.map((notice) => {
         const modelNotice = notice.code === "model_unavailable";
+        const title = t(
+          notice.stage !== null && !GEMMA_STAGES.has(notice.stage)
+            ? "notice.stageUnavailable.title"
+            : hosted ? "notice.modelUnavailable.title.hosted" : "notice.modelUnavailable.title",
+        );
         if (compact && modelNotice) {
           return (
             <div key={`${notice.code}-${notice.stage}-${notice.message}`} role="status" className="notice">
-              <strong className="notice__title">{t(hosted ? "notice.modelUnavailable.title.hosted" : "notice.modelUnavailable.title")}</strong>
+              <strong className="notice__title">{title}</strong>
             </div>
           );
         }
@@ -24,7 +32,7 @@ export function NoticeList({ notices, compact = false }: { notices: Notice[]; co
           <div key={`${notice.code}-${notice.stage}-${notice.message}`} role="status" className="notice">
             {modelNotice && (
               <>
-                <strong className="notice__title">{t(hosted ? "notice.modelUnavailable.title.hosted" : "notice.modelUnavailable.title")}</strong>
+                <strong className="notice__title">{title}</strong>
                 <p>{t("notice.modelUnavailable.body")}</p>
               </>
             )}

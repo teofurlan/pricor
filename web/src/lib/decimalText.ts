@@ -17,6 +17,26 @@ export function formatDecimalText(text: string, language: Language): string {
   return `${sign}${grouped}${shown ? marks.decimal + shown : ""}${cut ? "…" : ""}`;
 }
 
+/** The mark that separates the decimals in `language` (es-AR: comma, en: point). */
+export function decimalMark(language: Language): string {
+  return MARKS[language].decimal;
+}
+
+/** A whole number such as a counter, grouped the way `language` writes it. */
+export function formatInteger(value: number, language: Language): string {
+  return formatDecimalText(String(Math.trunc(value)), language);
+}
+
+const FIGURE = /^([+-]?)(\d+(?:\.\d+)?)(.*)$/s;
+
+/** A figure that may carry a sign or a trailing unit ("+855.00 ARS"): only its number is rewritten. */
+export function formatFigure(text: string, language: Language): string {
+  const match = FIGURE.exec(text);
+  if (!match) return text;
+  const [, sign, number, rest] = match;
+  return `${sign}${formatDecimalText(number, language)}${rest}`;
+}
+
 interface Conversion {
   source: string;
   rate: string;

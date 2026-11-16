@@ -208,7 +208,7 @@ describe("ImportWizard", () => {
     expect(screen.getByLabelText("Rejected")).toHaveTextContent("1");
     expect(screen.getByLabelText("Data rows")).toHaveTextContent("6");
     expect(
-      await screen.findByText((_, el) => Boolean(el?.classList.contains("trace__value") && el?.textContent === "1000.00 ARS")),
+      await screen.findByText((_, el) => Boolean(el?.classList.contains("trace__value") && el?.textContent === "1,000.00 ARS")),
     ).toBeInTheDocument();
     expect(screen.getByText(/cannot parse 'abc'/)).toBeInTheDocument();
 
@@ -268,7 +268,7 @@ describe("ImportWizard", () => {
     await screen.findByRole("link", { name: "Products (CSV)" });
 
     await userEvent.click(within(screen.getByRole("navigation", { name: "Import steps" })).getByRole("button", { name: "Preview" }));
-    expect(await screen.findByText("1 USD = 1535 ARS")).toBeInTheDocument();
+    expect(await screen.findByText("1 USD = 1,535 ARS")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Use this rate" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Get the live rate again" })).toBeNull();
   });
@@ -701,8 +701,12 @@ describe("ImportWizard", () => {
         startWithTimers();
         await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
         expect(screen.queryByText(notice)).toBeNull();
+        expect(screen.getByText(/Working. Local models can take up to a minute/)).toBeInTheDocument();
         await act(async () => { await vi.advanceTimersByTimeAsync(1500); });
+        // One waiting message at a time: the minute is explained once, by the notice that replaces the generic line.
         expect(screen.getByText(notice)).toBeInTheDocument();
+        expect(screen.queryByText(/Working. Local models can take up to a minute/)).toBeNull();
+        expect(screen.getAllByText(/up to a minute/)).toHaveLength(1);
         await act(async () => { finish(withQuestion); await vi.advanceTimersByTimeAsync(0); });
         expect(screen.queryByText(notice)).toBeNull();
       } finally {
@@ -736,6 +740,8 @@ describe("ImportWizard", () => {
         startWithTimers("Archivo de la lista de precios", "Iniciar importación");
         await act(async () => { await vi.advanceTimersByTimeAsync(5500); });
         expect(screen.getByText("La primera lista puede tardar hasta un minuto mientras se prepara el modelo.")).toBeInTheDocument();
+        expect(screen.queryByText(/Trabajando\./)).toBeNull();
+        expect(screen.getAllByText(/hasta un minuto/)).toHaveLength(1);
       } finally {
         vi.useRealTimers();
       }

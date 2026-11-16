@@ -62,8 +62,8 @@ describe("PriceReportView", () => {
     const row = within(section).getByRole("row", { name: /A2/ });
     expect(row).toHaveClass("row--anomaly");
     expect(within(row).getByText("800.00 ARS")).toBeInTheDocument();
-    expect(within(row).getByText("3200.00 ARS")).toBeInTheDocument();
-    expect(within(row).getByText("+2400.00 ARS")).toBeInTheDocument();
+    expect(within(row).getByText("3,200.00 ARS")).toBeInTheDocument();
+    expect(within(row).getByText("+2,400.00 ARS")).toBeInTheDocument();
     expect(within(row).getByText("+300.00%")).toBeInTheDocument();
   });
 
@@ -101,7 +101,7 @@ describe("PriceReportView", () => {
     );
 
     const up = within(screen.getByRole("region", { name: "Price increases (1)" })).getByRole("row", { name: /A1/ });
-    expect(within(up).getByText("1000.00 ARS")).toBeInTheDocument();
+    expect(within(up).getByText("1,000.00 ARS")).toBeInTheDocument();
     expect(within(up).getByText("+100.00 ARS")).toBeInTheDocument();
     expect(within(up).getByText("+10.00%")).toBeInTheDocument();
     const down = within(screen.getByRole("region", { name: "Price decreases (1)" })).getByRole("row", { name: /B1/ });
@@ -178,7 +178,7 @@ describe("PriceReportView", () => {
     const section = screen.getByRole("region", { name: "Currency changed (1)" });
     expect(within(section).getByText(/not compared/)).toBeInTheDocument();
     const row = within(section).getByRole("row", { name: /C1/ });
-    expect(within(row).getByText("1000.00 ARS")).toBeInTheDocument();
+    expect(within(row).getByText("1,000.00 ARS")).toBeInTheDocument();
     expect(within(row).getByText("1.00 USD")).toBeInTheDocument();
   });
 
@@ -251,7 +251,7 @@ describe("PriceReportView", () => {
     expect(tape).toHaveTextContent("sin cambios312");
     expect(tape).toHaveTextContent("subieron85");
     expect(tape).toHaveTextContent("bajaron4");
-    expect(tape).toHaveTextContent("variación mediana +4.20%");
+    expect(tape).toHaveTextContent("variación mediana +4,20%");
     expect(tape).toHaveTextContent("anomalías para revisar3");
   });
 });

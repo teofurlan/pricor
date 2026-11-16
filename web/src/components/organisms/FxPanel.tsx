@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import type { FxState } from "../../api/types";
 import { useI18n } from "../../i18n";
+import { formatDecimalText } from "../../lib/decimalText";
 import { Badge } from "../atoms/Badge";
 import { Button } from "../atoms/Button";
 import { usePendingAction } from "../atoms/usePendingAction";
@@ -16,7 +17,7 @@ interface Props {
 
 /** The exchange rate of this run: what was used and where it came from, or a way to supply one. */
 export function FxPanel({ fx, busy, onManual, onRefresh, readOnly = false }: Props) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const pending = usePendingAction<"manual" | "refresh">(busy);
   const [typed, setTyped] = useState("");
   const inputId = useId();
@@ -26,7 +27,7 @@ export function FxPanel({ fx, busy, onManual, onRefresh, readOnly = false }: Pro
       <h2 className="subtitle">{t("fx.title")}</h2>
       {snapshot ? (
         <div className="fx__rate">
-          <p className="fx__line">{t("fx.rateLine", { from: fx.from, to: fx.to, rate: snapshot.rate })}</p>
+          <p className="fx__line">{t("fx.rateLine", { from: fx.from, to: fx.to, rate: formatDecimalText(snapshot.rate, language) })}</p>
           <p className="fx__detail">{t("fx.type", { type: snapshot.rate_type, side: snapshot.side })}</p>
           <p className="fx__detail">{t("fx.source", { source: snapshot.source })}</p>
           <p className="fx__detail">{t("fx.date", { date: snapshot.date })}</p>

@@ -32,17 +32,17 @@ describe("printed preview tape", () => {
     const journal = screen.getByRole("region", { name: "Preview rows" });
     const tape = screen.getByRole("region", { name: "From file to cost" });
     journal.focus();
-    expect(within(tape).getByText(traceVal("1000.00 ARS"))).toBeInTheDocument();
+    expect(within(tape).getByText(traceVal("1,000.00 ARS"))).toBeInTheDocument();
     fireEvent.keyDown(journal, { key: "ArrowDown" });
-    expect(within(tape).getByText(traceVal("2420.00 ARS"))).toBeInTheDocument();
+    expect(within(tape).getByText(traceVal("2,420.00 ARS"))).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Row 4" })).toHaveAttribute("aria-pressed", "true");
     expect(journal).toHaveFocus();
     fireEvent.keyDown(journal, { key: "ArrowDown" });
-    expect(within(tape).getByText(traceVal("2420.00 ARS"))).toBeInTheDocument();
+    expect(within(tape).getByText(traceVal("2,420.00 ARS"))).toBeInTheDocument();
     fireEvent.keyDown(journal, { key: "ArrowUp" });
-    expect(within(tape).getByText(traceVal("1000.00 ARS"))).toBeInTheDocument();
+    expect(within(tape).getByText(traceVal("1,000.00 ARS"))).toBeInTheDocument();
     fireEvent.keyDown(journal, { key: "ArrowUp" });
-    expect(within(tape).getByText(traceVal("1000.00 ARS"))).toBeInTheDocument();
+    expect(within(tape).getByText(traceVal("1,000.00 ARS"))).toBeInTheDocument();
   });
 
   it("prints the selected row's actual trace and final cost, not the worked example", () => {
@@ -50,9 +50,9 @@ describe("printed preview tape", () => {
     renderWithI18n(<PreviewTable page={page} busy={false} onPage={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Row 4" }));
     const tape = screen.getByRole("region", { name: "From file to cost" });
-    expect(within(tape).getByText(traceVal("2420.00 ARS")).closest("li")).toHaveClass("trace__step--final");
+    expect(within(tape).getByText(traceVal("2,420.00 ARS")).closest("li")).toHaveClass("trace__step--final");
     expect(within(tape).getAllByRole("listitem")).toHaveLength(second.trace.length);
-    expect(within(tape).queryByText(traceVal("1000.00 ARS"))).not.toBeInTheDocument();
+    expect(within(tape).queryByText(traceVal("1,000.00 ARS"))).not.toBeInTheDocument();
     expect(within(tape).queryByText(traceVal("855.00 ARS"))).not.toBeInTheDocument();
   });
 
@@ -62,7 +62,7 @@ describe("printed preview tape", () => {
     renderWithI18n(<PreviewTable page={page} busy={false} onPage={vi.fn()} />);
     const tape = screen.getByRole("region", { name: "From file to cost" });
     expect(within(tape).getAllByRole("listitem")).toHaveLength(page.items[0].trace.length);
-    expect(within(tape).getByRole("status")).toHaveTextContent("Final cost: 1000.00 ARS");
+    expect(within(tape).getByRole("status")).toHaveTextContent("Final cost: 1,000.00 ARS");
     expect(vi.getTimerCount()).toBe(0);
   });
 
@@ -77,7 +77,7 @@ describe("printed preview tape", () => {
     expect(within(tape).getAllByRole("listitem")).toHaveLength(2);
     fireEvent.click(screen.getByRole("button", { name: "Row 4" }));
     expect(within(tape).getAllByRole("listitem")).toHaveLength(second.trace.length);
-    expect(within(tape).getByRole("status")).toHaveTextContent("Final cost: 2420.00 ARS");
+    expect(within(tape).getByRole("status")).toHaveTextContent("Final cost: 2,420.00 ARS");
     expect(vi.getTimerCount()).toBe(0);
     fireEvent.click(screen.getByRole("button", { name: "Row 3" }));
     expect(within(tape).getAllByRole("listitem")).toHaveLength(page.items[0].trace.length);
@@ -117,5 +117,19 @@ describe("tape figures", () => {
     expect(within(val90 as HTMLElement).getByText(".90")).toHaveClass("num-frac");
     expect(within(total as HTMLElement).getByText("855")).toHaveClass("num-int");
     expect(within(total as HTMLElement).getByText(".00 ARS")).toHaveClass("num-frac");
+  });
+
+  it("keeps the decimal column in Spanish figures, thousands dot included", () => {
+    render(<>
+      <TapeFigure value="3.387,84 ARS" language="es" fracWidth={3} />
+      <TapeFigure value="1.234" language="es" fracWidth={3} />
+      <TapeFigure value={1234} language="es" fracWidth={0} />
+    </>);
+    const [price, whole, counter] = Array.from(document.querySelectorAll(".num-split"));
+    expect(price.querySelector(".num-int")).toHaveTextContent("3.387");
+    expect(price.querySelector(".num-frac")).toHaveTextContent(",84 ARS");
+    expect(whole.querySelector(".num-int")).toHaveTextContent("1.234");
+    expect(whole.querySelector(".num-frac")).toBeEmptyDOMElement();
+    expect(counter.querySelector(".num-int")).toHaveTextContent("1.234");
   });
 });

@@ -1,5 +1,6 @@
 import { useId, useState, type FormEvent, type ReactNode } from "react";
-import type { PriceReport, ReportChange, ReportProduct } from "../../api/types";
+import type { Language, PriceReport, ReportChange, ReportProduct } from "../../api/types";
+import { formatFigure, formatInteger } from "../../lib/decimalText";
 import { percentToRatio, ratioToPercent, signedPercent } from "../../lib/percent";
 import { useI18n, type TextKey } from "../../i18n";
 import { Button } from "../atoms/Button";
@@ -15,9 +16,9 @@ interface Props {
   onThreshold(ratio: string): void;
 }
 
-const money = (value: string, currency: string) => `${value} ${currency}`;
-const signedMoney = (value: string, currency: string) =>
-  money(value.startsWith("-") ? value : `+${value}`, currency);
+const money = (value: string, currency: string, language: Language) => formatFigure(`${value} ${currency}`, language);
+const signedMoney = (value: string, currency: string, language: Language) =>
+  money(value.startsWith("-") ? value : `+${value}`, currency, language);
 
 function Section({
   title,
@@ -30,7 +31,7 @@ function Section({
   count: number;
   children(visible: number): ReactNode;
 }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const headingId = useId();
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? count : Math.min(count, ROW_LIMIT);
@@ -43,7 +44,7 @@ function Section({
       <div className="table-wrap">{children(visible)}</div>
       {visible < count && (
         <div className="actions">
-          <Button onClick={() => setExpanded(true)}>{t("report.showAll", { count })}</Button>
+          <Button onClick={() => setExpanded(true)}>{t("report.showAll", { count: formatInteger(count, language) })}</Button>
         </div>
       )}
     </section>
@@ -51,7 +52,7 @@ function Section({
 }
 
 function ChangeTable({ rows, showPercent = true }: { rows: ReportChange[]; showPercent?: boolean }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   return (
     <table className="table table--report">
       <thead>
@@ -70,10 +71,10 @@ function ChangeTable({ rows, showPercent = true }: { rows: ReportChange[]; showP
           <tr key={`${row.supplier_code}-${position}`} className={row.anomaly ? "row--anomaly" : undefined}>
             <th scope="row">{row.supplier_code}</th>
             <td>{row.description}</td>
-            <td className="num">{money(row.previous_cost, row.currency)}</td>
-            <td className="num">{money(row.current_cost, row.currency)}</td>
-            <td className={`num${row.change.startsWith("-") ? " num--negative" : ""}`}>{signedMoney(row.change, row.currency)}</td>
-            {showPercent && <td className={`num${row.change_pct?.startsWith("-") ? " num--negative" : ""}`}>{row.change_pct === null ? "" : signedPercent(row.change_pct)}</td>}
+            <td className="num">{money(row.previous_cost, row.currency, language)}</td>
+            <td className="num">{money(row.current_cost, row.currency, language)}</td>
+            <td className={`num${row.change.startsWith("-") ? " num--negative" : ""}`}>{signedMoney(row.change, row.currency, language)}</td>
+            {showPercent && <td className={`num${row.change_pct?.startsWith("-") ? " num--negative" : ""}`}>{row.change_pct === null ? "" : formatFigure(signedPercent(row.change_pct), language)}</td>}
             <td>{row.anomaly && <span className="anomaly-mark">✱ {t("report.review")}</span>}</td>
           </tr>
         ))}
@@ -83,7 +84,7 @@ function ChangeTable({ rows, showPercent = true }: { rows: ReportChange[]; showP
 }
 
 function ProductTable({ rows }: { rows: ReportProduct[] }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   return (
     <table className="table table--report">
       <thead>
@@ -98,7 +99,7 @@ function ProductTable({ rows }: { rows: ReportProduct[] }) {
           <tr key={`${row.supplier_code}-${position}`}>
             <th scope="row">{row.supplier_code}</th>
             <td>{row.description}</td>
-            <td className="num">{money(row.unit_cost_net, row.currency)}</td>
+            <td className="num">{money(row.unit_cost_net, row.currency, language)}</td>
           </tr>
         ))}
       </tbody>
@@ -139,20 +140,20 @@ function ThresholdForm({ initial, busy, onApply }: { initial: string; busy: bool
 
 /** What changed since the supplier's previous list: a one-line summary, then every section. */
 export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { summary } = report;
   const threshold = ratioToPercent(report.threshold);
   const plural = (base: "report.anomaly" | "report.new", count: number) =>
-    t(`${base}.${count === 1 ? "one" : "other"}` as TextKey, { count });
+    t(`${base}.${count === 1 ? "one" : "other"}` as TextKey, { count: formatInteger(count, language) });
   const times = (count: number) => t(`report.times.${count === 1 ? "one" : "other"}` as TextKey, { count });
 
   const summaryLines = [
     { mark: "◇", value: summary.unchanged, label: t("report.unchanged", { count: "" }).trim() },
     { mark: "↑", value: summary.increases, label: t("report.up", { count: "" }).trim() },
     { mark: "↓", value: summary.decreases, label: t("report.down", { count: "" }).trim(), negative: true },
-    { mark: "+", value: summary.new_products, label: plural("report.new", summary.new_products).replace(String(summary.new_products), "").trim() },
+    { mark: "+", value: summary.new_products, label: plural("report.new", summary.new_products).replace(formatInteger(summary.new_products, language), "").trim() },
     { mark: "−", value: summary.discontinued, label: t("report.gone", { count: "" }).trim() },
-    { mark: "✱", value: summary.anomalies, label: plural("report.anomaly", summary.anomalies).replace(String(summary.anomalies), "").trim(), total: true },
+    { mark: "✱", value: summary.anomalies, label: plural("report.anomaly", summary.anomalies).replace(formatInteger(summary.anomalies, language), "").trim(), total: true },
   ];
 
   return (
@@ -162,15 +163,15 @@ export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
           <h2 className="report__headline">{t("report.summary")}</h2>
           <ol className="report__summary-list">
             {summaryLines.map((line) => <li key={line.label} className={`report__summary-line${line.negative ? " report__summary-line--negative" : ""}${line.total ? " report__summary-line--total" : ""}`}>
-              <span aria-hidden="true">{line.mark}</span><span className="report__summary-label">{line.label}</span><TapeFigure className="report__summary-value" value={line.value} fracWidth={0} />
+              <span aria-hidden="true">{line.mark}</span><span className="report__summary-label">{line.label}</span><TapeFigure className="report__summary-value" language={language} value={line.value} fracWidth={0} />
             </li>)}
           </ol>
-          {summary.median_change_pct !== null && <p className="hint report__median">{t("report.median", { median: signedPercent(summary.median_change_pct) })}</p>}
+          {summary.median_change_pct !== null && <p className="hint report__median">{t("report.median", { median: formatFigure(signedPercent(summary.median_change_pct), language) })}</p>}
           <div className="tape__tear" aria-hidden="true" />
         </section>
         <div className="report__tools">
-        {summary.currency_changed > 0 && <p className="hint">{t("report.note.currency", { count: summary.currency_changed })}</p>}
-        {summary.ambiguous > 0 && <p className="hint">{t("report.note.ambiguous", { count: summary.ambiguous })}</p>}
+        {summary.currency_changed > 0 && <p className="hint">{t("report.note.currency", { count: formatInteger(summary.currency_changed, language) })}</p>}
+        {summary.ambiguous > 0 && <p className="hint">{t("report.note.ambiguous", { count: formatInteger(summary.ambiguous, language) })}</p>}
         <div className="actions">
           <ThresholdForm initial={threshold} busy={busy} onApply={onThreshold} />
           <a className="button button--quiet" href={csvUrl} download>
@@ -182,7 +183,7 @@ export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
 
       {report.anomalies.length > 0 ? (
         <Section
-          title={t("report.anomalies", { count: report.anomalies.length })}
+          title={t("report.anomalies", { count: formatInteger(report.anomalies.length, language) })}
           lede={t("report.anomalies.lede", { threshold })}
           count={report.anomalies.length}
         >
@@ -192,18 +193,18 @@ export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
         <p className="lede">{t("report.noAnomalies", { threshold })}</p>
       )}
       {report.increases.length > 0 && (
-        <Section title={t("report.increases", { count: report.increases.length })} count={report.increases.length}>
+        <Section title={t("report.increases", { count: formatInteger(report.increases.length, language) })} count={report.increases.length}>
           {(visible) => <ChangeTable rows={report.increases.slice(0, visible)} />}
         </Section>
       )}
       {report.decreases.length > 0 && (
-        <Section title={t("report.decreases", { count: report.decreases.length })} count={report.decreases.length}>
+        <Section title={t("report.decreases", { count: formatInteger(report.decreases.length, language) })} count={report.decreases.length}>
           {(visible) => <ChangeTable rows={report.decreases.slice(0, visible)} />}
         </Section>
       )}
       {report.from_zero.length > 0 && (
         <Section
-          title={t("report.fromZero", { count: report.from_zero.length })}
+          title={t("report.fromZero", { count: formatInteger(report.from_zero.length, language) })}
           lede={t("report.fromZero.lede")}
           count={report.from_zero.length}
         >
@@ -211,18 +212,18 @@ export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
         </Section>
       )}
       {report.new_products.length > 0 && (
-        <Section title={t("report.newProducts", { count: report.new_products.length })} count={report.new_products.length}>
+        <Section title={t("report.newProducts", { count: formatInteger(report.new_products.length, language) })} count={report.new_products.length}>
           {(visible) => <ProductTable rows={report.new_products.slice(0, visible)} />}
         </Section>
       )}
       {report.discontinued.length > 0 && (
-        <Section title={t("report.discontinued", { count: report.discontinued.length })} count={report.discontinued.length}>
+        <Section title={t("report.discontinued", { count: formatInteger(report.discontinued.length, language) })} count={report.discontinued.length}>
           {(visible) => <ProductTable rows={report.discontinued.slice(0, visible)} />}
         </Section>
       )}
       {report.currency_changed.length > 0 && (
         <Section
-          title={t("report.currencyChanged", { count: report.currency_changed.length })}
+          title={t("report.currencyChanged", { count: formatInteger(report.currency_changed.length, language) })}
           lede={t("report.currencyChanged.lede")}
           count={report.currency_changed.length}
         >
@@ -241,8 +242,8 @@ export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
                   <tr key={`${row.supplier_code}-${position}`}>
                     <th scope="row">{row.supplier_code}</th>
                     <td>{row.description}</td>
-                    <td className="num">{money(row.previous_cost, row.previous_currency)}</td>
-                    <td className="num">{money(row.current_cost, row.current_currency)}</td>
+                    <td className="num">{money(row.previous_cost, row.previous_currency, language)}</td>
+                    <td className="num">{money(row.current_cost, row.current_currency, language)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -253,7 +254,7 @@ export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
       {report.ambiguous_codes.length > 0 && (
         <section className="stack report__section" aria-labelledby="report-ambiguous">
           <h3 id="report-ambiguous" className="subtitle">
-            {t("report.ambiguous", { count: report.ambiguous_codes.length })}
+            {t("report.ambiguous", { count: formatInteger(report.ambiguous_codes.length, language) })}
           </h3>
           <p className="hint">{t("report.ambiguous.lede")}</p>
           <ul className="report__left-out">

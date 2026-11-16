@@ -33,3 +33,23 @@ describe("PreviewTable calculation tape", () => {
     expect(screen.getByRole("button", { name: "Row 3" })).toHaveAttribute("aria-pressed", "false");
   });
 });
+
+describe("PreviewTable Argentine numbers", () => {
+  const big = () => previewPage({
+    items: [previewItem({ row_number: 3, record: { supplier_code: "A1", description: "Cable", unit_cost_net: "3387.84", currency: "ARS" } })],
+    total_items: 1234,
+  });
+
+  it("writes costs, the tape and the pager with dots for thousands and commas for decimals in Spanish", () => {
+    renderWithI18n(<PreviewTable page={big()} busy={false} onPage={vi.fn()} />, "es");
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("3.387,84")).toBeInTheDocument();
+    expect(within(table).queryByText("3387.84")).not.toBeInTheDocument();
+    expect(screen.getByText(/de 1\.234/)).toBeInTheDocument();
+  });
+
+  it("keeps the same grouping logic in English", () => {
+    renderWithI18n(<PreviewTable page={big()} busy={false} onPage={vi.fn()} />, "en");
+    expect(within(screen.getByRole("table")).getByText("3,387.84")).toBeInTheDocument();
+  });
+});

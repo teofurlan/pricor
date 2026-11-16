@@ -23,6 +23,7 @@ import { UploadForm } from "../components/organisms/UploadForm";
 import type { QueueDraft } from "../components/organisms/UploadForm";
 import { UploadQueueTray, QueueSummary, type QueueItem } from "../components/organisms/UploadQueueTray";
 import { captureGroup, storedGroup } from "../lib/group";
+import { formatFigure } from "../lib/decimalText";
 import { describeError } from "../i18n/serverText";
 import { useI18n, type TextKey } from "../i18n";
 import { PriceChanges } from "./PriceChanges";
@@ -61,7 +62,7 @@ function takeLinkToken(): string | null {
   return pendingLinkToken;
 }
 
-/** How long starting an import may take before the page says the model is getting ready. */
+/** How long starting an import may take before the generic wait line gives way to the note that the model is getting ready. */
 const SLOW_START_MS = 5000;
 const PRODUCTS_DOWNLOAD = /\/imports\/[^/?#]+\/export(?:[?#]|$)/;
 
@@ -229,7 +230,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
     ? preview.page.items
         .slice(0, 5)
         .map((item) =>
-          item.record?.unit_cost_net ? `${item.record.unit_cost_net} ${item.record.currency ?? ""}`.trim() : null,
+          item.record?.unit_cost_net ? formatFigure(`${item.record.unit_cost_net} ${item.record.currency ?? ""}`.trim(), language) : null,
         )
     : undefined;
 
@@ -506,7 +507,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
           {queue && !queueDone && session && !session.approved && (
             <div className="actions"><Button variant="quiet" disabled={busy} onClick={skipCurrent}>{t("queue.skip")}</Button></div>
           )}
-          {busy && <div className="working"><TapeLoader size="small" text={t(hosted ? "common.working.hosted" : "common.working")} />{slowStart && <p className="working__note">{t("common.working.slowStart")}</p>}</div>}
+          {busy && <div className="working"><TapeLoader size="small" text={t(slowStart ? "common.working.slowStart" : hosted ? "common.working.hosted" : "common.working")} /></div>}
 
           {switchPrompt && (
             <div className="workspace-switch" role="alertdialog" aria-labelledby="workspace-switch-body">

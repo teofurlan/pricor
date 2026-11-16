@@ -115,6 +115,7 @@ export const es: Record<TextKey, string> = {
 
   "notice.modelUnavailable.title": "Gemma no estaba disponible",
   "notice.modelUnavailable.title.hosted": "Gemma no respondió",
+  "notice.stageUnavailable.title": "Un paso automático no estaba disponible",
   "notice.detail": "Detalle técnico: {detail}",
   "notice.modelUnavailable.body": "La importación sigue solo con detección automática. Revise las columnas usted mismo y responda todas las preguntas.",
 

@@ -97,8 +97,8 @@ describe("StepTrace", () => {
     const steps = screen.getAllByRole("listitem");
     expect(steps).toHaveLength(trace.length);
     expect(steps[0]).toHaveTextContent("#Original1.210,00");
-    expect(steps[1]).toHaveTextContent("÷VAT removed1000.00");
-    expect(steps[2]).toHaveTextContent("=Final cost1000.00 ARS✱");
+    expect(steps[1]).toHaveTextContent("÷VAT removed1,000.00");
+    expect(steps[2]).toHaveTextContent("=Final cost1,000.00 ARS✱");
   });
 
   it("shortens long intermediate decimals for reading but keeps the exact value in a tooltip", () => {
@@ -112,10 +112,23 @@ describe("StepTrace", () => {
         currency="ARS"
       />,
     );
-    const shown = screen.getByText((_, el) => Boolean(el?.classList.contains("trace__value") && el?.textContent === "1720.6611…"));
+    const shown = screen.getByText((_, el) => Boolean(el?.classList.contains("trace__value") && el?.textContent === "1,720.6611…"));
     expect(shown).toHaveAttribute("title", long);
-    const finalVal = screen.getByText((_, el) => Boolean(el?.classList.contains("trace__value") && el?.textContent === "1720.66 ARS"));
+    const finalVal = screen.getByText((_, el) => Boolean(el?.classList.contains("trace__value") && el?.textContent === "1,720.66 ARS"));
     expect(finalVal).not.toHaveAttribute("title");
+  });
+
+  it("prints Spanish figures with the thousands dot and keeps the decimal column aligned", () => {
+    renderWithI18n(
+      <StepTrace trace={[{ step: "original", value: "3387" }, { step: "rounding", value: "3387.84" }]} currency="ARS" />,
+      "es",
+    );
+    const values = Array.from(document.querySelectorAll(".trace__value"));
+    expect(values[0]).toHaveTextContent("3.387");
+    expect(values[1]).toHaveTextContent("3.387,84 ARS");
+    expect(values[1].querySelector(".num-int")).toHaveTextContent("3.387");
+    expect(values[1].querySelector(".num-frac")).toHaveTextContent(",84 ARS");
+    expect(values[0].querySelector(".num-frac")).toBeEmptyDOMElement();
   });
 
   it("falls back to the raw step name for a step it does not know", () => {
@@ -191,6 +204,34 @@ describe("NoticeList", () => {
     expect(notice).not.toHaveTextContent("La etapa 'gemma' no pudo clasificar las columnas.");
     expect(notice).not.toHaveTextContent("Detalle técnico");
     expect(notice).not.toHaveTextContent("La importación sigue solo con detección automática");
+  });
+
+  it("does not blame Gemma for another stage that was skipped or failed", () => {
+    renderWithI18n(
+      <ServerConfigProvider hosted={true}>
+        <NoticeList
+          compact
+          notices={[{ code: "model_unavailable", message: "stage 'laya' was skipped: the 'laya' extra is not installed", stage: "laya" }]}
+        />
+      </ServerConfigProvider>,
+      "es",
+    );
+    const notice = screen.getByRole("status");
+    expect(notice).toHaveTextContent("Un paso automático no estaba disponible");
+    expect(notice).not.toHaveTextContent("Gemma");
+  });
+
+  it("names Gemma when the plan advisor is the one that failed", () => {
+    renderWithI18n(
+      <ServerConfigProvider hosted={true}>
+        <NoticeList
+          compact
+          notices={[{ code: "model_unavailable", message: "the plan advisor could not help (ModelTimeoutError): slow", stage: "advisor" }]}
+        />
+      </ServerConfigProvider>,
+      "es",
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Gemma no respondió");
   });
 
   it("shows hosted-aware title when hosted is true", () => {

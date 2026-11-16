@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import type { TraceStep } from "../../api/types";
+import type { Language, TraceStep } from "../../api/types";
 import { isTextKey, useI18n } from "../../i18n";
-import { conversionText } from "../../lib/decimalText";
+import { conversionText, formatDecimalText, formatFigure } from "../../lib/decimalText";
 import { splitFigure, TapeFigure } from "../atoms/TapeFigure";
 
 const LONG_DECIMAL = /^(-?\d+)\.(\d{7,})$/;
@@ -11,13 +11,15 @@ const OPERATORS: Record<string, string> = {
 };
 
 /** Display shortening only; the exact intermediate value remains available on hover. */
-function readable(value: string): { text: string; full?: string } {
+function readable(value: string, language: Language): { text: string; full?: string } {
   const match = LONG_DECIMAL.exec(value);
-  return match ? { text: `${match[1]}.${match[2].slice(0, 4)}…`, full: value } : { text: value };
+  return match
+    ? { text: `${formatDecimalText(`${match[1]}.${match[2].slice(0, 4)}`, language)}…`, full: value }
+    : { text: formatDecimalText(value, language) };
 }
 
-export function decimalTail(text: string): number {
-  return splitFigure(text).fracPart.length;
+export function decimalTail(text: string, language: Language = "en"): number {
+  return splitFigure(text, language).fracPart.length;
 }
 
 function useReducedMotion() {
@@ -63,14 +65,14 @@ function TracePrint({ trace, currency, convertedCurrency, animate, announce }: {
   const last = trace.at(-1);
   const lastCurrency = last?.step === "convert_currency" ? convertedCurrency : currency;
   const result = last && ["rounding", "convert_currency"].includes(last.step)
-    ? `${last.value}${lastCurrency ? ` ${lastCurrency}` : ""}` : null;
+    ? `${formatDecimalText(last.value, language)}${lastCurrency ? ` ${lastCurrency}` : ""}` : null;
   const shownValues = trace.map((item) => {
     const unit = item.step === "convert_currency" ? convertedCurrency : currency;
     return ["rounding", "convert_currency"].includes(item.step)
-      ? { text: unit ? `${item.value} ${unit}` : item.value }
-      : readable(item.value);
+      ? { text: formatFigure(unit ? `${item.value} ${unit}` : item.value, language) }
+      : readable(item.value, language);
   });
-  const decimalColumn = Math.max(0, ...shownValues.map((value) => splitFigure(value.text).fracPart.length));
+  const decimalColumn = Math.max(0, ...shownValues.map((value) => splitFigure(value.text, language).fracPart.length));
   return (
     <>
       <ol className={`trace${animate && !reduced ? " trace--printing" : ""}`}>
@@ -90,7 +92,7 @@ function TracePrint({ trace, currency, convertedCurrency, animate, announce }: {
                   </small>
                 )}
               </span>
-              <TapeFigure className="trace__value" value={shown.text} full={shown.full} fracWidth={decimalColumn} />
+              <TapeFigure className="trace__value" language={language} value={shown.text} full={shown.full} fracWidth={decimalColumn} />
               {isTotal && <span className="trace__mark" aria-hidden="true">✱</span>}
             </li>
           );

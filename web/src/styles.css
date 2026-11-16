@@ -59,7 +59,6 @@ a:hover { text-decoration-thickness: 2px; }
 .hint { color: var(--muted); font-size: 0.8125rem; max-width: 72ch; }
 .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .working { color: var(--muted); border-block: 1px dashed var(--muted); padding: 10px 0; font-size: 0.875rem; }
-.working__note { margin: 6px 0 0; max-width: 60ch; }
 .empty-state { color: var(--muted); border-block: 1px dashed var(--rule); padding: 24px 16px; max-width: 72ch; }
 .loading-rules { display: grid; gap: 14px; background: var(--paper); padding: 20px; }
 .loading-rules span { height: 28px; border-bottom: 1px solid var(--rule); }
@@ -449,13 +448,18 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
 .table-actions-top { margin-bottom: 10px; display: flex; justify-content: flex-start; }
 .role-actions, .role-decision { display: inline-flex; align-items: center; gap: 6px; flex-wrap: nowrap; white-space: nowrap; }
 .role-decision__value { font-weight: 600; font-size: 0.8125rem; font-family: var(--ui); }
-/* Every column has a width, so the table scrolls on narrow screens instead of crushing one. */
-.table--columns { table-layout: fixed; min-width: 67rem; }
-.table--columns .col--column { width: 14rem; }
-.table--columns .col--role { width: 11rem; }
-.table--columns .col--actions { width: 17rem; }
-.table--columns .col--status { width: 11rem; }
-.table--columns .col--suggestion { width: 14rem; }
+/* Column widths are shares of the table, so it fits the page from 1200 px up and the suggestion is never cut off.
+   Between 640 and about 820 px it scrolls inside its frame; below 640 px each column becomes a stacked block. */
+.table--columns { table-layout: fixed; min-width: 50rem; }
+.table--columns .col--column { width: 22%; }
+.table--columns .col--role { width: 12%; }
+.table--columns .col--actions { width: 28%; }
+.table--columns .col--status { width: 15%; }
+.table--columns .col--suggestion { width: 23%; }
+.table--columns .cell--status { white-space: normal; }
+.table--columns .cell--suggestion { white-space: normal; }
+.table--columns .suggestion__label { overflow-wrap: anywhere; }
+.table--columns .role-actions { flex-wrap: wrap; white-space: normal; }
 .table--columns .cell--role { padding-right: 4px; overflow-wrap: anywhere; }
 .role-decision__empty { color: var(--muted); }
 .button--action { min-height: 32px; padding: 4px 8px; font-size: 0.8125rem; }
@@ -796,3 +800,13 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
 .queue-tray__status { color: var(--muted); }
 .queue-tray__item--reviewing .queue-tray__status { color: var(--ink); font-weight: 650; }
 .queue-tray__item--failed .queue-tray__status, .queue-tray__error { color: var(--ink-brick); }
+@media (max-width: 640px) {
+  .table--columns { display: block; min-width: 0; table-layout: auto; }
+  .table--columns colgroup, .table--columns thead { display: none; }
+  .table--columns tbody, .table--columns tr, .table--columns th, .table--columns td { display: block; }
+  .table--columns tbody tr { padding: 10px 0; border-bottom: 1px solid var(--rule); }
+  .table--columns tbody tr:last-child { border-bottom: 0; }
+  .table--columns th, .table--columns td { border: 0; padding: 4px 12px; }
+  .table--columns .cell--role { padding-right: 12px; }
+  .table--columns td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 2px; color: var(--muted); font-size: 0.6875rem; letter-spacing: 0.035em; text-transform: uppercase; }
+}

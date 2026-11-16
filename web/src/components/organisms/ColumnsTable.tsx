@@ -322,7 +322,7 @@ export function ColumnsTable({ columns, issues, busy, sample, onConfirm }: Props
                     )}
                     {duplicated && <span className="cell__samples" role="alert">{t("columns.duplicateRole", { role: t(`role.${role}`) })}</span>}
                   </th>
-                  <td className="cell--role">
+                  <td className="cell--role" data-label={t("columns.role")}>
                     {role !== null ? <span className="role-decision__value">{t(`role.${role}`)}</span> : <span className="role-decision__empty" aria-hidden="true">—</span>}
                   </td>
                   <td className="cell--actions">
@@ -367,10 +367,10 @@ export function ColumnsTable({ columns, issues, busy, sample, onConfirm }: Props
                       />
                     </div>
                   </td>
-                  <td className="cell--status">
+                  <td className="cell--status" data-label={t("columns.status")}>
                     <span className={`status-badge ${statusClass}`}>{statusText}</span>
                   </td>
-                  <td className="cell--suggestion">
+                  <td className="cell--suggestion" data-label={t("columns.suggestion")}>
                     {bestProposal ? (
                       <div className="suggestion-box">
                         <ConfidenceMeter best={bestProposal} allProposals={allProposals} />

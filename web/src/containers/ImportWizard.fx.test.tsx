@@ -93,9 +93,9 @@ describe("ImportWizard: currency conversion", () => {
     expect(api.setManualRate).toHaveBeenCalledWith("s1", "1420,5");
 
     await userEvent.click(await screen.findByRole("button", { name: "See the preview" }));
-    expect(await screen.findByText("1 USD = 1420.5 ARS")).toBeInTheDocument();
+    expect(await screen.findByText("1 USD = 1,420.5 ARS")).toBeInTheDocument();
     expect(screen.getByText("Typed by you")).toBeInTheDocument();
-    expect(screen.getByText("3551.25 ARS")).toBeInTheDocument();
+    expect(screen.getByText("3,551.25 ARS")).toBeInTheDocument();
   });
 
   it("goes straight to the questions step when a new file already needs a rate", async () => {
@@ -119,7 +119,7 @@ describe("ImportWizard: currency conversion", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Get the live rate again" }));
 
     expect(api.refreshRate).toHaveBeenCalledWith("s1");
-    expect(await screen.findByText("1 USD = 1535 ARS")).toBeInTheDocument();
+    expect(await screen.findByText("1 USD = 1,535 ARS")).toBeInTheDocument();
   });
 
   it("reloads the preview after the rate is changed on the preview step", async () => {
@@ -134,13 +134,13 @@ describe("ImportWizard: currency conversion", () => {
     });
     renderWithI18n(<ImportWizard api={api} />);
     await startImport(); // a ready import goes straight to the preview
-    expect(await screen.findByText("3551.25 ARS")).toBeInTheDocument();
+    expect(await screen.findByText("3,551.25 ARS")).toBeInTheDocument();
     expect(screen.queryByText("Preview updated with the new rate.")).toBeNull();
 
     await userEvent.type(screen.getByLabelText("Rate typed by you (USD to ARS)"), "1500");
     await userEvent.click(screen.getByRole("button", { name: "Use this rate" }));
-    expect(await screen.findByText("3750.00 ARS")).toBeInTheDocument();
-    expect(screen.queryByText("3551.25 ARS")).toBeNull();
+    expect(await screen.findByText("3,750.00 ARS")).toBeInTheDocument();
+    expect(screen.queryByText("3,551.25 ARS")).toBeNull();
     expect(screen.getByText("Preview updated with the new rate.")).toHaveAttribute("role", "status");
   });
 

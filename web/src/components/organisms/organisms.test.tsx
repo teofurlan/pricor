@@ -839,7 +839,7 @@ describe("PreviewTable", () => {
     const tape = screen.getByRole("region", { name: "From file to cost" });
     expect(await within(tape).findByText("VAT removed")).toBeInTheDocument();
     expect(
-      await within(tape).findByText((_, el) => Boolean(el?.classList.contains("trace__value") && el?.textContent === "1000.00 ARS")),
+      await within(tape).findByText((_, el) => Boolean(el?.classList.contains("trace__value") && el?.textContent === "1,000.00 ARS")),
     ).toBeInTheDocument();
   });
 

@@ -18,7 +18,7 @@ describe("FxPanel", () => {
   it("shows the rate used with its type, side, source and date", () => {
     renderWithI18n(<FxPanel fx={fxState()} busy={false} onManual={noop} onRefresh={noop} />);
 
-    expect(screen.getByText("1 USD = 1535 ARS")).toBeInTheDocument();
+    expect(screen.getByText("1 USD = 1,535 ARS")).toBeInTheDocument();
     expect(screen.getByText("Rate: oficial, venta")).toBeInTheDocument();
     expect(screen.getByText("Source: dolarapi")).toBeInTheDocument();
     expect(screen.getByText("Quoted 2026-10-14")).toBeInTheDocument();
@@ -121,7 +121,7 @@ describe("converted costs in the preview", () => {
     );
 
     expect(screen.getByRole("columnheader", { name: "Converted (ARS)" })).toBeInTheDocument();
-    expect(screen.getAllByText("3837.50 ARS").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("3,837.50 ARS").length).toBeGreaterThan(0);
     expect(
       await screen.findByText((_, el) => Boolean(el?.classList.contains("trace__value") && el?.textContent === "2.50 USD")),
     ).toBeInTheDocument(); // the original stays visible as the tape prints
@@ -146,7 +146,7 @@ describe("converted costs in the preview", () => {
     });
     renderWithI18n(<PreviewTable page={previewPage({ items: [precise] })} busy={false} onPage={noop} fx={fxState()} />);
 
-    const cell = screen.getAllByText("4011.40 ARS")[0].closest("td")!;
+    const cell = screen.getAllByText("4,011.40 ARS")[0].closest("td")!;
     expect(cell).toHaveAttribute("title", "2.588 USD × 1,550 = 4,011.40 ARS");
   });
 

@@ -1,7 +1,7 @@
 import { useId, useRef, useState, type KeyboardEvent } from "react";
 import type { FxState, Language, PreviewItem, PreviewPage } from "../../api/types";
 import { useI18n } from "../../i18n";
-import { conversionText } from "../../lib/decimalText";
+import { conversionText, formatDecimalText, formatFigure, formatInteger } from "../../lib/decimalText";
 import { Badge } from "../atoms/Badge";
 import { Button } from "../atoms/Button";
 import { StepTrace } from "../molecules/StepTrace";
@@ -93,9 +93,9 @@ export function PreviewTable({ page, busy, onPage, fx = null }: Props) {
                       {item.status === "rejected" && <div className="reasons"><Badge tone="bad">{t("preview.rejected")}</Badge>{item.reasons.map((reason) => <p key={reason}>{reason}</p>)}</div>}
                     </td>
                     <td className="num cell--cost">
-                      {item.record?.unit_cost_net ? <><span>{item.record.unit_cost_net}</span><small>{item.record.currency}</small></> : "—"}
+                      {item.record?.unit_cost_net ? <><span>{formatDecimalText(item.record.unit_cost_net, language)}</span><small>{item.record.currency}</small></> : "—"}
                     </td>
-                    {fx && <td className="num cell--converted" title={conversionTitle(item, fx.to, language)}>{item.record?.unit_cost_net_converted ? `${item.record.unit_cost_net_converted} ${fx.to}` : "—"}</td>}
+                    {fx && <td className="num cell--converted" title={conversionTitle(item, fx.to, language)}>{item.record?.unit_cost_net_converted ? formatFigure(`${item.record.unit_cost_net_converted} ${fx.to}`, language) : "—"}</td>}
                   </tr>
                 ))}
               </tbody>
@@ -103,7 +103,7 @@ export function PreviewTable({ page, busy, onPage, fx = null }: Props) {
             {page.items.length === 0 && <p className="empty-state">{t("preview.empty")}</p>}
           </div>
           <div className="pager">
-            <span>{t("preview.range", { first, last, total: page.total_items })}</span>
+            <span>{t("preview.range", { first: formatInteger(first, language), last: formatInteger(last, language), total: formatInteger(page.total_items, language) })}</span>
             <div className="actions">
               <Button disabled={busy || page.offset === 0} loading={pending.isLoading("previous")} onClick={() => { pending.mark("previous"); turnPage(Math.max(0, page.offset - page.limit)); }}>{t("preview.previous")}</Button>
               <Button disabled={busy || last >= page.total_items} loading={pending.isLoading("next")} onClick={() => { pending.mark("next"); turnPage(page.offset + page.limit); }}>{t("preview.next")}</Button>

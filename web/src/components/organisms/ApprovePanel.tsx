@@ -2,6 +2,7 @@ import { useId } from "react";
 import type { ExportFile, ExportSheet } from "../../api/client";
 import type { PreviewTotals } from "../../api/types";
 import { useI18n } from "../../i18n";
+import { formatInteger } from "../../lib/decimalText";
 import { Button } from "../atoms/Button";
 import { CountsSummary } from "../molecules/CountsSummary";
 import { usePendingAction } from "../atoms/usePendingAction";
@@ -25,16 +26,16 @@ interface Props {
 
 /** The signature and its receipts share the exact counts that were previewed. */
 export function ApprovePanel({ totals, approved, busy, links, supplier, file, sheets = {}, onApprove }: Props) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const pending = usePendingAction<"approve">(busy);
   return (
     <div className="stack">
       <div className="workbench workbench--approval">
         <div className="sign">
           <p className="sign__statement">
-            {approved ? t("approve.done", { count: totals.accepted }) : <>
-              {t(totals.accepted === 1 ? "approve.statement.one" : "approve.statement.other", { count: totals.accepted })}{" "}
-              {t(totals.rejected === 1 ? "approve.rejected.one" : "approve.rejected.other", { count: totals.rejected })}
+            {approved ? t("approve.done", { count: formatInteger(totals.accepted, language) }) : <>
+              {t(totals.accepted === 1 ? "approve.statement.one" : "approve.statement.other", { count: formatInteger(totals.accepted, language) })}{" "}
+              {t(totals.rejected === 1 ? "approve.rejected.one" : "approve.rejected.other", { count: formatInteger(totals.rejected, language) })}
             </>}
           </p>
           {approved && <ul className="downloads" aria-label={t("approve.downloads")}>
@@ -67,13 +68,13 @@ export function ApprovePanel({ totals, approved, busy, links, supplier, file, sh
 
 /** The first rows of one exported file, cell for cell as the download contains them. */
 function SheetPreview({ sheet, file }: { sheet: ExportSheet; file: ExportFile }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const titleId = useId();
   return (
     <section className="output-sheet stack" aria-labelledby={titleId}>
       <div>
         <h2 className="subtitle" id={titleId}>{t(file === "products" ? "approve.sheetTitle" : "approve.rejectedSheetTitle")}</h2>
-        {sheet.total > 0 && <p className="hint">{t("approve.sheetHint")} <span>{t("approve.sheetRange", { shown: sheet.rows.length, total: sheet.total })}</span></p>}
+        {sheet.total > 0 && <p className="hint">{t("approve.sheetHint")} <span>{t("approve.sheetRange", { shown: formatInteger(sheet.rows.length, language), total: formatInteger(sheet.total, language) })}</span></p>}
       </div>
       {sheet.total === 0 ? (
         <p className="empty-state">{t("rejected.none")}</p>

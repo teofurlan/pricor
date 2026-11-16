@@ -112,6 +112,7 @@ export const en = {
 
   "notice.modelUnavailable.title": "Gemma was not available",
   "notice.modelUnavailable.title.hosted": "Gemma did not answer",
+  "notice.stageUnavailable.title": "An automatic step was not available",
   "notice.detail": "Technical detail: {detail}",
   "notice.modelUnavailable.body": "Import continues with automatic detection only. Review the columns yourself and answer every question.",
 
