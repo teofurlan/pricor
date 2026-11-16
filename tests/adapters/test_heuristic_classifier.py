@@ -249,3 +249,18 @@ def test_digits_are_separated_from_letters_when_normalizing():
 def test_classification_words_suppress_description_keywords():
     result = classify("Categoría del producto", DESCRIPTIONS)
     assert result.role is ColumnRole.IGNORE
+
+
+@pytest.mark.parametrize(
+    "header",
+    ["Stock", "Stock unidades", "Cantidad disponible", "Unidades disponibles", "Disponibles",
+     "Existencia", "Existencias", "Cant. en stock", "Inventario"],
+)
+def test_stock_or_available_quantity_is_never_units_per_pack(header):
+    result = classify(header, UNITS)
+    assert result.role is ColumnRole.IGNORE
+
+
+@pytest.mark.parametrize("header", ["Unidades", "Cantidad", "Bulto", "UxB"])
+def test_pack_headers_without_stock_words_stay_units_per_pack(header):
+    assert classify(header, UNITS).role is ColumnRole.UNITS_PER_PACK

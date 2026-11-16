@@ -71,9 +71,13 @@ _KEYWORDS: dict[ColumnRole, dict[tuple[str, ...], float]] = {
         ("stock*",): 0.7, ("marca",): 0.7, ("rubro",): 0.7, ("linea",): 0.7,
         ("familia",): 0.7, ("categoria",): 0.7, ("fecha",): 0.7, ("obs*",): 0.7,
         ("imagen",): 0.7, ("foto",): 0.7, ("link",): 0.7, ("url",): 0.7, ("peso",): 0.6,
-        ("disponible",): 0.6,
+        ("disponib*",): 0.9, ("existencia*",): 0.9, ("inventario",): 0.9,
     },
 }  # fmt: skip
+
+# Words that name stock on hand. A count of available units is never the size of a pack, even when
+# the header also says "unidades" or "cantidad".
+_STOCK_WORDS = ("stock*", "disponib*", "existencia*", "inventario")
 
 _PRICE_WORDS = frozenset({"precio", "precios", "pcio", "prec", "pr", "p", "importe", "valor", "monto"})
 _COST_MODIFIERS = frozenset(
@@ -113,6 +117,10 @@ def _header_evidence(header: str) -> dict[ColumnRole, tuple[float, str]]:
         for phrase, weight in table.items():
             if _phrase_in(phrase, tokens) and weight > found.get(role, (0.0, ""))[0]:
                 found[role] = (weight, " ".join(phrase).replace("*", ""))
+    stock = next((w for w in _STOCK_WORDS if any(_token_matches(w, t) for t in tokens)), None)
+    if stock is not None:
+        found.pop(R.UNITS_PER_PACK, None)
+        found[R.IGNORE] = (max(0.9, found.get(R.IGNORE, (0.0, ""))[0]), stock.replace("*", ""))
     if R.BARCODE in found and found[R.BARCODE][0] >= 0.85:
         found.pop(R.CODE, None)  # "cod barra" is a barcode, not a supplier code
     if found.get(R.IGNORE, (0.0, ""))[0] >= 0.7:

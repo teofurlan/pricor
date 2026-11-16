@@ -36,11 +36,11 @@ ROLE_DESCRIPTIONS: dict[ColumnRole, str] = {
     ColumnRole.COST_PRICE: "the price the store pays the supplier (list/wholesale price)",
     ColumnRole.RETAIL_PRICE: "a suggested price to the public",
     ColumnRole.VAT_RATE: "the VAT (IVA) rate of the product",
-    ColumnRole.UNITS_PER_PACK: "how many units a pack or box contains",
+    ColumnRole.UNITS_PER_PACK: "how many units a pack or box contains (a fixed pack size, never stock or available quantity)",
     ColumnRole.BARCODE: "an EAN/GTIN barcode",
     ColumnRole.DISCOUNT: "a discount, possibly chained like 10+5",
     ColumnRole.CURRENCY: "the currency of the prices",
-    ColumnRole.IGNORE: "anything else (stock, brand, category, dates, images, ...)",
+    ColumnRole.IGNORE: "anything else (stock or available quantity, brand, category, dates, images, ...)",
 }
 
 UNTRUSTED_RULES = (
