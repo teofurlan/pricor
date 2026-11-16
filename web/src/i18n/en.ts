@@ -314,6 +314,7 @@ export const en = {
   "rejected.title": "Rejected rows ({count})",
   "common.working": "Working. Local models can take up to a minute.",
   "common.working.hosted": "Working. This can take up to a minute.",
+  "common.working.slowStart": "The first list can take up to a minute while the model gets ready.",
   "questions.remaining.one": "{count} still to answer.",
   "questions.remaining.other": "{count} still to answer.",
 

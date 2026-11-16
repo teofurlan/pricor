@@ -317,6 +317,7 @@ export const es: Record<TextKey, string> = {
   "rejected.title": "Filas rechazadas ({count})",
   "common.working": "Trabajando. Los modelos locales pueden demorar hasta un minuto.",
   "common.working.hosted": "Trabajando. Puede demorar hasta un minuto.",
+  "common.working.slowStart": "La primera lista puede tardar hasta un minuto mientras se prepara el modelo.",
   "questions.remaining.one": "Falta {count} por responder.",
   "questions.remaining.other": "Faltan {count} por responder.",
 

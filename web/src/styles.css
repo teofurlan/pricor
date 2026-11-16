@@ -59,6 +59,7 @@ a:hover { text-decoration-thickness: 2px; }
 .hint { color: var(--muted); font-size: 0.8125rem; max-width: 72ch; }
 .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .working { color: var(--muted); border-block: 1px dashed var(--muted); padding: 10px 0; font-size: 0.875rem; }
+.working__note { margin: 6px 0 0; max-width: 60ch; }
 .empty-state { color: var(--muted); border-block: 1px dashed var(--rule); padding: 24px 16px; max-width: 72ch; }
 .loading-rules { display: grid; gap: 14px; background: var(--paper); padding: 20px; }
 .loading-rules span { height: 28px; border-bottom: 1px solid var(--rule); }

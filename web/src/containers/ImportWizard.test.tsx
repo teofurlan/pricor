@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ApiError, type ApiClient } from "../api/client";
@@ -681,5 +681,64 @@ describe("ImportWizard", () => {
     const history = screen.getByRole("list", { name: "Answered questions" });
     expect(within(history).getByText(/Argentine pesos/)).toBeInTheDocument();
     expect(within(history).getByText(/Yes/)).toBeInTheDocument();
+  });
+
+  describe("slow first import notice", () => {
+    const notice = /The first list can take up to a minute while the model gets ready/;
+    // userEvent hangs under fake timers, so the form is driven with fireEvent.
+    function startWithTimers(file = "Price list file", button = "Start import") {
+      fireEvent.change(screen.getByLabelText(file), { target: { files: [new File(["a,b"], "lista.csv")] } });
+      fireEvent.click(screen.getByRole("button", { name: button }));
+    }
+
+    it("shows the notice only after the wait, and removes it when the answer arrives", async () => {
+      try {
+        let finish: (value: SessionState) => void = () => {};
+        const api = fakeApi({ createImport: vi.fn().mockReturnValue(new Promise<SessionState>((resolve) => (finish = resolve))) });
+        renderWithI18n(<ImportWizard api={api} />);
+        await screen.findByLabelText("Price list file");
+        vi.useFakeTimers();
+        startWithTimers();
+        await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
+        expect(screen.queryByText(notice)).toBeNull();
+        await act(async () => { await vi.advanceTimersByTimeAsync(1500); });
+        expect(screen.getByText(notice)).toBeInTheDocument();
+        await act(async () => { finish(withQuestion); await vi.advanceTimersByTimeAsync(0); });
+        expect(screen.queryByText(notice)).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("removes the notice when the import fails", async () => {
+      try {
+        let fail: (reason: unknown) => void = () => {};
+        const api = fakeApi({ createImport: vi.fn().mockReturnValue(new Promise<SessionState>((_, reject) => (fail = reject))) });
+        renderWithI18n(<ImportWizard api={api} />);
+        await screen.findByLabelText("Price list file");
+        vi.useFakeTimers();
+        startWithTimers();
+        await act(async () => { await vi.advanceTimersByTimeAsync(5500); });
+        expect(screen.getByText(notice)).toBeInTheDocument();
+        await act(async () => { fail(new ApiError(415, "unsupported_format", "unsupported file type")); await vi.advanceTimersByTimeAsync(0); });
+        expect(screen.queryByText(notice)).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("says it in Spanish", async () => {
+      try {
+        const api = fakeApi({ createImport: vi.fn().mockReturnValue(new Promise<SessionState>(() => {})) });
+        renderWithI18n(<ImportWizard api={api} />, "es");
+        await screen.findByLabelText("Archivo de la lista de precios");
+        vi.useFakeTimers();
+        startWithTimers("Archivo de la lista de precios", "Iniciar importación");
+        await act(async () => { await vi.advanceTimersByTimeAsync(5500); });
+        expect(screen.getByText("La primera lista puede tardar hasta un minuto mientras se prepara el modelo.")).toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

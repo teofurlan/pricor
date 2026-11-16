@@ -61,6 +61,8 @@ function takeLinkToken(): string | null {
   return pendingLinkToken;
 }
 
+/** How long starting an import may take before the page says the model is getting ready. */
+const SLOW_START_MS = 5000;
 const PRODUCTS_DOWNLOAD = /\/imports\/[^/?#]+\/export(?:[?#]|$)/;
 
 /** Owns the import session and the calls to the API; the steps themselves are presentational. */
@@ -135,6 +137,17 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   const [step, setStep] = useState<StepId>("upload");
   const [headerNeeded, setHeaderNeeded] = useState(false);
   const [busy, setBusy] = useState(false);
+  // True while an import is being created; after a few seconds the wait gets an honest note (cold model start).
+  const [starting, setStarting] = useState(false);
+  const [slowStart, setSlowStart] = useState(false);
+  useEffect(() => {
+    if (!starting) return;
+    const timer = setTimeout(() => setSlowStart(true), SLOW_START_MS);
+    return () => {
+      clearTimeout(timer);
+      setSlowStart(false);
+    };
+  }, [starting]);
   const [error, setError] = useState<ApiError | null>(null);
   // The server only lists open questions; answered ones are remembered here so they stay changeable.
   const [askedQuestions, setAskedQuestions] = useState<Question[]>([]);
@@ -259,7 +272,12 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   const upload = (input: CreateImportInput) =>
     run(async () => {
       resetAnswerQueue();
-      open(await api.createImport(input));
+      setStarting(true);
+      try {
+        open(await api.createImport(input));
+      } finally {
+        setStarting(false);
+      }
     });
 
   // Several files: each one stays its own import; the queue only lives here in the client.
@@ -278,12 +296,15 @@ export function ImportWizard({ api }: { api: ApiClient }) {
         setQueue(list);
         setQueueIndex(index);
         resetAnswerQueue();
+        setStarting(true);
         try {
           open(await api.createImport({ file: list[index].file, supplierName: list[index].supplierName, sheet: list[index].sheet, language }));
           return;
         } catch (failure) {
           const reason = failure && typeof (failure as ApiError).code === "string" ? describeError(failure as ApiError, language) : failure instanceof Error ? failure.message : String(failure);
           list = list.map((item, position) => (position === index ? { ...item, status: "failed", error: reason } : item));
+        } finally {
+          setStarting(false);
         }
       }
       setQueue(list);
@@ -485,7 +506,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
           {queue && !queueDone && session && !session.approved && (
             <div className="actions"><Button variant="quiet" disabled={busy} onClick={skipCurrent}>{t("queue.skip")}</Button></div>
           )}
-          {busy && <div className="working"><TapeLoader size="small" text={t(hosted ? "common.working.hosted" : "common.working")} /></div>}
+          {busy && <div className="working"><TapeLoader size="small" text={t(hosted ? "common.working.hosted" : "common.working")} />{slowStart && <p className="working__note">{t("common.working.slowStart")}</p>}</div>}
 
           {switchPrompt && (
             <div className="workspace-switch" role="alertdialog" aria-labelledby="workspace-switch-body">
