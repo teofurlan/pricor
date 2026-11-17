@@ -24,6 +24,12 @@ Environment variables:
                            per visitor; PRICOR_DB is then unused       (default: off, one database)
     PRICOR_WORKSPACES_MAX_OPEN workspaces kept open in memory, least recently used closed first
                            (default 16)
+    PRICOR_RATE_LIMIT_RPM  per-IP requests/min for general API and public endpoints
+                           (default 120 in hosted mode, 0 = off locally)
+    PRICOR_RATE_LIMIT_HEAVY_RPM per-IP requests/min for model/upload/warm-up/workspace creation
+                           (default 30, capped at PRICOR_RATE_LIMIT_RPM)
+    PRICOR_TRUSTED_PROXIES trusted reverse-proxy hops used from the right of X-Forwarded-For
+                           (default 1 in hosted mode, 0 locally)
 
 Run with: uv run uvicorn pricor.entrypoints.wiring:app_from_env --factory
 """
@@ -88,6 +94,12 @@ from pricor.application.reuse_supplier_plan import ReuseSupplierPlan
 from pricor.domain.fx import MARKET_RATE_TYPES
 from pricor.entrypoints.api import ApiDependencies, create_app
 from pricor.entrypoints.calibration_file import DEFAULT_CALIBRATION_PATH, load_calibration
+from pricor.entrypoints.rate_limit import (
+    DEFAULT_GENERAL_RPM,
+    DEFAULT_HEAVY_RPM,
+    RateLimitConfig,
+    RateLimitMiddleware,
+)
 from pricor.entrypoints.web_app import DEFAULT_WEB_DIST
 from pricor.entrypoints.workspaces import (
     DEFAULT_MAX_OPEN,
@@ -425,11 +437,55 @@ def workspace_app_from_env(env: Mapping[str, str], directory: Path) -> ASGIApp:
     return create_workspace_app(public, registry)
 
 
+def _parse_int_env(env: Mapping[str, str], name: str, *, minimum: int, label: str) -> int | None:
+    raw = env.get(name, "").strip()
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        value = minimum - 1
+    if value < minimum:
+        raise ValueError(f"{name} must be {label}")
+    return value
+
+
+def rate_limit_from_env(env: Mapping[str, str], *, hosted: bool) -> RateLimitConfig | None:
+    """Per-IP rate-limit settings: enabled by default in hosted mode, off locally unless set."""
+    general = _parse_int_env(
+        env, "PRICOR_RATE_LIMIT_RPM", minimum=0, label="a non-negative whole number"
+    )
+    heavy = _parse_int_env(
+        env, "PRICOR_RATE_LIMIT_HEAVY_RPM", minimum=1, label="a whole number of at least 1"
+    )
+    trusted = _parse_int_env(
+        env, "PRICOR_TRUSTED_PROXIES", minimum=0, label="a non-negative whole number"
+    )
+
+    general_rpm = (DEFAULT_GENERAL_RPM if hosted else 0) if general is None else general
+    if general_rpm == 0:
+        return None
+    heavy_rpm = min(DEFAULT_HEAVY_RPM, general_rpm) if heavy is None else heavy
+    trusted_proxies = (1 if hosted else 0) if trusted is None else trusted
+    return RateLimitConfig(
+        general_rpm=general_rpm,
+        heavy_rpm=heavy_rpm,
+        trusted_proxies=trusted_proxies,
+    )
+
+
 def app_for_env(env: Mapping[str, str]) -> ASGIApp:
     directory = workspaces_dir_from_env(env)
-    if directory is not None:
-        return workspace_app_from_env(env, directory)
-    return create_app(dependencies_from_env(env))
+    hosted = directory is not None
+    app: ASGIApp = (
+        workspace_app_from_env(env, directory)
+        if directory is not None
+        else create_app(dependencies_from_env(env))
+    )
+    rate_limit = rate_limit_from_env(env, hosted=hosted)
+    if rate_limit is not None:
+        return RateLimitMiddleware(app, rate_limit)
+    return app
 
 
 def configure_logging() -> None:

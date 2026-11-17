@@ -25,6 +25,14 @@ Everything runs on your computer. The only outbound request is an optional one t
 
 **Status:** a research prototype. It has been tested on public lists from six Argentine distributors, not yet with a store using it every week. The classifier comparison and its limits are in [docs/benchmark.md](docs/benchmark.md); on that data most uncertain columns still go to the user, which is the intended behavior.
 
+## Hosted demo
+
+You can try Pricor in the browser without installing anything at **[pricor-5j263sdefq-uc.a.run.app](https://pricor-5j263sdefq-uc.a.run.app)** (Google Cloud Run).
+
+- Each visitor gets an isolated private workspace backed by its own SQLite database and a personal link (`/#w=...`) to resume later; files are never shared across visitors.
+- After an idle period, the first import can take up to about a minute while the Laya column classifier warms up on CPU.
+- Hosted mode (`PRICOR_WORKSPACES_DIR`) enables a lightweight per-IP rate limit by default so public endpoints cannot be flooded; local installs leave it off unless configured.
+
 ## Quick start
 
 Requires Python 3.13 with [uv](https://docs.astral.sh/uv/), Node 22 with npm, and [Ollama](https://ollama.com) with the `gemma4:e4b` model pulled (`bge-m3` too for semantic memory).
@@ -78,6 +86,10 @@ All settings are environment variables; every one has a working default.
 | `PRICOR_CALIBRATION` | the thresholds file shipped in the package (`src/pricor/entrypoints/thresholds.json`) |
 | `PRICOR_FX_RATE_TYPE` | `oficial` (rate type suggested for conversion: `oficial`, `blue`, `bolsa`, `contadoconliqui`, `mayorista`, `cripto`, `tarjeta`) |
 | `PRICOR_FX_TIMEOUT` | `10` (seconds per DolarAPI request) |
+| `PRICOR_WORKSPACES_DIR` | unset (local single-database mode; set a directory to enable private per-visitor workspaces for hosted demo mode) |
+| `PRICOR_RATE_LIMIT_RPM` | `120` in hosted mode, `0` (off) locally (per-IP requests per minute for general API and public endpoints; `0` disables) |
+| `PRICOR_RATE_LIMIT_HEAVY_RPM` | `30` (capped at `PRICOR_RATE_LIMIT_RPM`; per-IP requests per minute for imports, AI questions, templates, warm-up and workspace creation) |
+| `PRICOR_TRUSTED_PROXIES` | `1` in hosted mode, `0` locally (trusted reverse-proxy hops used from the right of `X-Forwarded-For`; `0` uses the direct peer IP) |
 
 `gemma4:e4b` crashes with flash attention on the tested setup (`fattn.cu:110`), hence `OLLAMA_FLASH_ATTENTION=0` in the quick start.
 
@@ -131,6 +143,10 @@ gcloud logging read 'textPayload:"pricor_event"' --project pricor --limit 200
 ### Keeping the model loading (`POST /warm-up`)
 
 The web app calls `POST /warm-up` once per page load, ignoring the answer. It waits (up to 120 seconds) for the Laya warm-up that starts with the server, and answers `200` with `{"models": "ready" | "loading" | "unavailable"}`: `loading` when the wait ran out, `unavailable` when no warm-up is configured or it failed. It never starts a second load and never answers with a model error. It exists because Cloud Run throttles the CPU outside requests, so the background load only crawls until a request is open. The endpoint is public: it needs no workspace cookie and never creates a workspace.
+
+### Rate limiting (hosted mode)
+
+When `PRICOR_WORKSPACES_DIR` is set, a lightweight in-memory per-IP sliding-window limiter protects public and API endpoints (`PRICOR_RATE_LIMIT_RPM`, default 120/min for general calls and `POST /events`; `PRICOR_RATE_LIMIT_HEAVY_RPM`, default 30/min for `POST /imports`, AI questions, templates, `POST /warm-up` and workspace creation). Static assets, `/config` and `/samples` are exempt. Exceeded limits return `429` with `Retry-After` and the standard error envelope (`"code": "rate_limited"`). Set `PRICOR_RATE_LIMIT_RPM=0` to disable it.
 
 ### Exports
 
