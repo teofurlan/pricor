@@ -99,6 +99,11 @@ export const en = {
   "trace.per_unit": "Per unit",
   "trace.rounding": "Final cost",
   "trace.convert_currency": "Converted",
+  "trace.skip.parse_number": "already a number",
+  "trace.skip.apply_discounts": "no discounts",
+  "trace.skip.strip_vat": "no VAT to remove",
+  "trace.skip.per_unit": "already a unit price",
+  "trace.skip.rounding": "already rounded",
 
   "counts.accepted": "Accepted",
   "counts.rejected": "Rejected",

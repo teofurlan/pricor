@@ -137,6 +137,91 @@ describe("StepTrace", () => {
   });
 });
 
+describe("StepTrace unchanged steps", () => {
+  const noop = [
+    { step: "original", value: "3387.84" },
+    { step: "parse_number", value: "3387.84" },
+    { step: "apply_discounts", value: "3387.84" },
+    { step: "strip_vat", value: "3387.84" },
+    { step: "per_unit", value: "3387.84" },
+    { step: "rounding", value: "3387.84" },
+  ];
+
+  it("keeps the original and the final cost and summarizes the steps that changed nothing", () => {
+    renderWithI18n(<StepTrace trace={noop} currency="ARS" />);
+    const steps = screen.getAllByRole("listitem");
+    expect(steps).toHaveLength(2);
+    expect(steps[0]).toHaveTextContent("#Original3,387.84");
+    expect(steps[1]).toHaveTextContent("=Final cost3,387.84 ARS✱");
+    expect(screen.getByText("No discounts · no VAT to remove · already a unit price")).toBeInTheDocument();
+  });
+
+  it("says the same in Spanish, with the first word capitalized and the Argentine format", () => {
+    renderWithI18n(<StepTrace trace={noop} currency="ARS" />, "es");
+    expect(screen.getAllByRole("listitem")[1]).toHaveTextContent("=Costo final3.387,84 ARS✱");
+    expect(screen.getByText("Sin descuentos · sin IVA para quitar · ya es precio por unidad")).toBeInTheDocument();
+    expect(screen.queryByText(/número|redondeado/)).toBeNull();
+  });
+
+  it("shows the VAT step when it changes the value and leaves it out of the summary", () => {
+    const withVat = [
+      { step: "original", value: "1210.00" },
+      { step: "parse_number", value: "1210.00" },
+      { step: "apply_discounts", value: "1210.00" },
+      { step: "strip_vat", value: "1000.00" },
+      { step: "per_unit", value: "1000.00" },
+      { step: "rounding", value: "1000.00" },
+    ];
+    renderWithI18n(<StepTrace trace={withVat} currency="ARS" />);
+    const steps = screen.getAllByRole("listitem");
+    expect(steps).toHaveLength(3);
+    expect(steps[1]).toHaveTextContent("÷VAT removed1,000.00");
+    const summary = screen.getByText(/^No discounts/);
+    expect(summary).toHaveTextContent("No discounts · already a unit price");
+    expect(summary).not.toHaveTextContent(/VAT/);
+  });
+
+  it("shows the per-unit step when it changes the value", () => {
+    renderWithI18n(
+      <StepTrace trace={[
+        { step: "original", value: "120.00" },
+        { step: "strip_vat", value: "120.00" },
+        { step: "per_unit", value: "10.00" },
+        { step: "rounding", value: "10.00" },
+      ]} currency="ARS" />,
+    );
+    expect(screen.getAllByRole("listitem")[1]).toHaveTextContent("÷Per unit10.00");
+    expect(screen.getByText("No VAT to remove")).toBeInTheDocument();
+  });
+
+  it("shows the reading step when the original text is not already a plain number", () => {
+    renderWithI18n(
+      <StepTrace trace={[
+        { step: "original", value: "$ 3.387,84" },
+        { step: "parse_number", value: "3387.84" },
+        { step: "rounding", value: "3387.84" },
+      ]} currency="ARS" />,
+      "es",
+    );
+    expect(screen.getAllByRole("listitem")[1]).toHaveTextContent("◇Leído como número3.387,84");
+    expect(screen.queryByText(/Ya es un número/)).toBeNull();
+  });
+
+  it("compares exact decimal values, not their spelling, and prints no line when nothing was hidden", () => {
+    renderWithI18n(
+      <StepTrace trace={[
+        { step: "original", value: "100" },
+        { step: "apply_discounts", value: "100.00" },
+        { step: "rounding", value: "100.00" },
+      ]} currency="ARS" />,
+    );
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.getByText("No discounts")).toBeInTheDocument();
+    const { container } = renderWithI18n(<StepTrace trace={[{ step: "original", value: "100" }, { step: "rounding", value: "100.01" }]} currency="ARS" />);
+    expect(container.querySelector(".trace__skipped")).toBeNull();
+  });
+});
+
 describe("CountsSummary", () => {
   it("shows accepted plus rejected equal to the data rows", () => {
     renderWithI18n(<CountsSummary totals={previewPage().totals} />);

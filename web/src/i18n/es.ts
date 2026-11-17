@@ -102,6 +102,11 @@ export const es: Record<TextKey, string> = {
   "trace.per_unit": "Por unidad",
   "trace.rounding": "Costo final",
   "trace.convert_currency": "Convertido",
+  "trace.skip.parse_number": "ya es un número",
+  "trace.skip.apply_discounts": "sin descuentos",
+  "trace.skip.strip_vat": "sin IVA para quitar",
+  "trace.skip.per_unit": "ya es precio por unidad",
+  "trace.skip.rounding": "ya está redondeado",
 
   "counts.accepted": "Aceptadas",
   "counts.rejected": "Rechazadas",

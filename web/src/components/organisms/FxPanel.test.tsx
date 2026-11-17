@@ -123,8 +123,8 @@ describe("converted costs in the preview", () => {
     expect(screen.getByRole("columnheader", { name: "Converted (ARS)" })).toBeInTheDocument();
     expect(screen.getAllByText("3,837.50 ARS").length).toBeGreaterThan(0);
     expect(
-      await screen.findByText((_, el) => Boolean(el?.classList.contains("trace__value") && el?.textContent === "2.50 USD")),
-    ).toBeInTheDocument(); // the original stays visible as the tape prints
+      await screen.findByText((_, el) => Boolean(el?.classList.contains("trace__value") && el?.textContent === "2.50")),
+    ).toBeInTheDocument(); // the original stays visible as the tape prints; the unchanged reading and rounding are summarized
     expect(await screen.findByText("Converted")).toBeInTheDocument();
   });
 

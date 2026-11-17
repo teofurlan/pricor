@@ -22,6 +22,46 @@ export function decimalTail(text: string, language: Language = "en"): number {
   return splitFigure(text, language).fracPart.length;
 }
 
+const PLAIN_NUMBER = /^(-?)0*(\d+)(?:\.(\d*?)0*)?$/;
+/** Exact decimal identity without floats: "100", "100.00" and "0100.0" are the same number; text is never a plain number. */
+function plainNumber(value: string): string | null {
+  const match = PLAIN_NUMBER.exec(value.trim());
+  if (!match) return null;
+  const [, sign, whole, fraction = ""] = match;
+  return fraction ? `${sign}${whole}.${fraction}` : whole === "0" ? "0" : `${sign}${whole}`;
+}
+
+const SKIPPED_TEXT = {
+  parse_number: "trace.skip.parse_number",
+  apply_discounts: "trace.skip.apply_discounts",
+  strip_vat: "trace.skip.strip_vat",
+  per_unit: "trace.skip.per_unit",
+  rounding: "trace.skip.rounding",
+} as const;
+
+/**
+ * Keep the first and last lines, and any known step whose value differs from the previous kept one.
+ * Unknown steps are always kept; a step is never hidden unless its effect is known to be nil.
+ */
+export function visibleSteps(trace: TraceStep[], currency: string | null, convertedCurrency: string | null) {
+  const shown: TraceStep[] = [];
+  const hidden: TraceStep[] = [];
+  let previous: TraceStep | null = null;
+  trace.forEach((item, position) => {
+    const known = item.step in SKIPPED_TEXT;
+    const exact = plainNumber(item.value);
+    const unchanged = previous !== null && exact !== null && exact === plainNumber(previous.value);
+    const sameCurrency = item.step !== "convert_currency" || convertedCurrency === currency;
+    if (position === 0 || position === trace.length - 1 || !known || !unchanged || !sameCurrency) {
+      shown.push(item);
+      previous = item;
+    } else {
+      hidden.push(item);
+    }
+  });
+  return { shown, hidden };
+}
+
 function useReducedMotion() {
   const [reduced, setReduced] = useState(() => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false);
   useEffect(() => {
@@ -49,10 +89,17 @@ export function StepTrace({
   return <TracePrint key={JSON.stringify([trace, currency, convertedCurrency])} trace={trace} currency={currency} convertedCurrency={convertedCurrency} animate={animate} announce={announce} />;
 }
 
-function TracePrint({ trace, currency, convertedCurrency, animate, announce }: {
+function TracePrint({ trace: fullTrace, currency, convertedCurrency, animate, announce }: {
   trace: TraceStep[]; currency: string | null; convertedCurrency: string | null; animate: boolean; announce: boolean;
 }) {
   const { t, language } = useI18n();
+  const { shown: trace, hidden } = visibleSteps(fullTrace, currency, convertedCurrency);
+  // Reading and rounding are technical: when they change nothing they hide without being named.
+  const skipped = hidden
+    .filter((item) => item.step !== "parse_number" && item.step !== "rounding")
+    .map((item) => t(SKIPPED_TEXT[item.step as keyof typeof SKIPPED_TEXT]))
+    .map((text, index) => (index === 0 ? text.charAt(0).toUpperCase() + text.slice(1) : text))
+    .join(" · ");
   const reduced = useReducedMotion();
   const [printed, setPrinted] = useState(1);
   const count = !animate || reduced ? trace.length : printed;
@@ -98,6 +145,7 @@ function TracePrint({ trace, currency, convertedCurrency, animate, announce }: {
           );
         })}
       </ol>
+      {complete && skipped && <p className="trace__skipped">{skipped}</p>}
       {announce && <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{complete && result ? `${t("trace.rounding")}: ${result}` : ""}</p>}
       {complete && <div className="tape__tear" aria-hidden="true" />}
     </>
