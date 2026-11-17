@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: deploy-cloud-run
@@ -16,11 +15,19 @@ concurrency:
 jobs:
   ci:
     name: Run CI checks before deploy
+    if: >-
+      vars.GCP_PROJECT_ID != '' &&
+      vars.GCP_WIF_PROVIDER != '' &&
+      vars.GCP_SERVICE_ACCOUNT != '' &&
+      vars.GCP_LAYA_MODELS_GCS_URI != ''
     uses: ./.github/workflows/ci.yml
 
   deploy:
     name: Deploy Pricor to Cloud Run
     needs: [ci]
+    permissions:
+      contents: read
+      id-token: write
     # Runs only once GCP Workload Identity Federation and GCS weights URI are configured as repo variables.
     if: >-
       vars.GCP_PROJECT_ID != '' &&
