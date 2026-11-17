@@ -1,0 +1,39 @@
+name: Implementation Idea
+description: Capture a planned feature or product idea that adds value for store owners
+title: "[idea]: "
+labels: ["idea"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem & value
+      description: Who needs this (e.g., hardware store owner, distributor, monotributista) and what real workflow pain does it solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How should this work from the user's perspective?
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: principles
+    attributes:
+      label: Product principles check
+      description: Confirm how this aligns with PRODUCT.md.
+      options:
+        - label: Deterministic math only (no model output is ever executed)
+        - label: Explicit user confirmation before applying cost-changing assumptions
+        - label: Works locally by default (no mandatory external service)
+        - label: Keeps the adding-machine-tape visual language (Impeccable)
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Out of scope / Open questions
+      description: What should explicitly stay out of v1, or what needs validation with real testers first?
+    validations:
+      required: false

@@ -1,0 +1,57 @@
+name: Bug / Fix
+description: Report a bug, regression, or unexpected behavior to fix
+title: "[fix]: "
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Web UI
+        - Backend / HTTP API
+        - Domain / Calculation engine
+        - Column classifier (Laya / Heuristics)
+        - Gemma / Plan advisor & memory
+        - Export / Output templates
+        - Deploy / CI
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior clearly (include error messages, row numbers, or screenshots if applicable).
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Upload list ...
+        2. Confirm columns ...
+        3. Observe ...
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - High (blocks testers or corrupts costs)
+        - Medium (noticeable friction)
+        - Low (polish / minor hygiene)
+    validations:
+      required: true

@@ -55,6 +55,12 @@ npm --prefix web run test        # front end
 uv run pytest -m live -s         # opt-in smoke tests against a running Ollama
 ```
 
+### CI and Cloud Run deploy
+
+GitHub Actions runs backend tests (`uv run pytest -q`) and web tests + build (`npm test` and `npm run build`) automatically on pushes and pull requests via [.github/workflows/ci.yml](.github/workflows/ci.yml).
+
+[.github/workflows/deploy-cloud-run.yml](.github/workflows/deploy-cloud-run.yml) runs on pushes to `main` (and manual `workflow_dispatch`), executes `ci.yml` first, and deploys to Cloud Run only once the repository variables `GCP_PROJECT_ID`, `GCP_WIF_PROVIDER`, `GCP_SERVICE_ACCOUNT` and `GCP_LAYA_MODELS_GCS_URI` (the Cloud Storage prefix holding the gitignored `models/laya-pricor/` weights) are configured; optional overrides are `GCP_REGION` (`us-central1`) and `CLOUD_RUN_SERVICE` (`pricor`).
+
 ## Configuration
 
 All settings are environment variables; every one has a working default.

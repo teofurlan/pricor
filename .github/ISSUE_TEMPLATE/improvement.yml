@@ -1,0 +1,54 @@
+name: Modification / Improvement
+description: Propose a concrete change to an existing flow, UX detail, or technical component
+title: "[improve]: "
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Web UI / UX
+        - Backend / HTTP API
+        - Domain / Calculation engine
+        - Export / Output templates
+        - Price-change report
+        - Memory & reuse
+        - Docs / DX / CI
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: Current behavior
+      description: How does Pricor handle this today, and where does it fall short?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed change
+      description: Describe the concrete modification to make.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: What observable behavior or tests prove this change is done?
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: false
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: References / Tradeoffs
+      description: Link related ODD task IDs (e.g., T18, T23), files, or constraints.
+    validations:
+      required: false

@@ -1,0 +1,62 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-cloud-run
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    name: Run CI checks before deploy
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    name: Deploy Pricor to Cloud Run
+    needs: [ci]
+    # Runs only once GCP Workload Identity Federation and GCS weights URI are configured as repo variables.
+    if: >-
+      vars.GCP_PROJECT_ID != '' &&
+      vars.GCP_WIF_PROVIDER != '' &&
+      vars.GCP_SERVICE_ACCOUNT != '' &&
+      vars.GCP_LAYA_MODELS_GCS_URI != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Fetch gitignored Laya weights from Cloud Storage
+        env:
+          GCP_LAYA_MODELS_GCS_URI: ${{ vars.GCP_LAYA_MODELS_GCS_URI }}
+        run: |
+          mkdir -p models/laya-pricor
+          uri="${GCP_LAYA_MODELS_GCS_URI%/}"
+          gcloud storage cp -r "${uri}/*" models/laya-pricor/
+
+      - name: Deploy service from source
+        env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ vars.GCP_REGION || 'us-central1' }}
+          CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE || 'pricor' }}
+        run: |
+          gcloud run deploy "$CLOUD_RUN_SERVICE" \
+            --source . \
+            --region "$GCP_REGION" \
+            --project "$GCP_PROJECT_ID" \
+            --quiet
