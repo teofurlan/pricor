@@ -112,6 +112,12 @@ export interface EventsApiClient {
   recordEvent(event: FunnelEvent, group: string | null): Promise<void>;
 }
 
+/** Asks the server to load its models now and keeps the request open meanwhile (`POST /warm-up`). */
+export interface WarmUpApiClient {
+  /** Fire-and-forget: resolves whatever happens, never rejects. */
+  warmUp(): Promise<void>;
+}
+
 type Fetch = typeof fetch;
 
 async function fail(response: Response): Promise<never> {
@@ -128,7 +134,7 @@ async function fail(response: Response): Promise<never> {
   throw new ApiError(response.status, "unexpected_response", `The server answered ${response.status}.`);
 }
 
-export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), baseUrl = ""): ApiClient & MemoryApiClient & OutputFormatApiClient & SampleApiClient & WorkspaceApiClient & CombinedExportApiClient & EventsApiClient {
+export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), baseUrl = ""): ApiClient & MemoryApiClient & OutputFormatApiClient & SampleApiClient & WorkspaceApiClient & CombinedExportApiClient & EventsApiClient & WarmUpApiClient {
   async function call<T>(path: string, init?: RequestInit): Promise<T> {
     let response: Response;
     try {
@@ -239,6 +245,13 @@ export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), 
       return { blob: await response.blob(), fileName: named?.[1] ?? `pricor-combined-${kind}.${format}` };
     },
     recordEvent: (event, group) => call<void>("/events", json("POST", { event, group })),
+    warmUp: async () => {
+      try {
+        await fetchImpl(`${baseUrl}/warm-up`, { method: "POST" });
+      } catch {
+        // The page works the same without it.
+      }
+    },
     listSamples: () => call<SampleListing[]>("/samples"),
     async downloadSample(sample) {
       let response: Response;

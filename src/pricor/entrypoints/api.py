@@ -208,6 +208,7 @@ class ApiDependencies:
     demo: bool = False
     warm_up: Callable[[], None] | None = None  # run once in the background at startup
     workspaces: bool = False  # private workspace per visitor (hosted demo); see workspaces.py
+    warm_up_timeout: float = 120.0  # seconds `POST /warm-up` holds a request open for the load
 
 
 class OutputMappingBody(BaseModel):
@@ -708,22 +709,48 @@ def _store_upload(
 # -- app --------------------------------------------------------------------------
 
 
-def _run_warm_up(warm_up: Callable[[], None]) -> None:
-    try:
-        warm_up()
-    except Exception as error:  # a failed warm-up only costs the first import its load time
-        logger.warning("model warm-up failed (%s: %s); models load on first use", type(error).__name__, error)
+class _WarmUp:
+    """Runs the warm-up at most once, in a daemon thread, whoever asks first (startup or a visit)."""
+
+    def __init__(self, warm_up: Callable[[], None]):
+        self._warm_up = warm_up
+        self._lock = threading.Lock()
+        self._started = False
+        self._done = threading.Event()
+        self._ok = False
+
+    def start(self) -> None:
+        with self._lock:
+            if self._started:
+                return
+            self._started = True
+        threading.Thread(target=self._run, name="model-warm-up", daemon=True).start()
+
+    def _run(self) -> None:
+        try:
+            self._warm_up()
+            self._ok = True
+        except Exception as error:  # a failed warm-up only costs the first import its load time
+            logger.warning("model warm-up failed (%s: %s); models load on first use", type(error).__name__, error)
+        finally:
+            self._done.set()
+
+    def wait(self, timeout: float) -> str:
+        self.start()
+        if not self._done.wait(timeout):
+            return "loading"
+        return "ready" if self._ok else "unavailable"
 
 
 def create_app(
     dependencies: ApiDependencies, extra_routes: Callable[[FastAPI], None] | None = None
 ) -> FastAPI:
-    warm_up = dependencies.warm_up
+    warm_up = _WarmUp(dependencies.warm_up) if dependencies.warm_up is not None else None
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         if warm_up is not None:
-            threading.Thread(target=_run_warm_up, args=(warm_up,), name="model-warm-up", daemon=True).start()
+            warm_up.start()
         yield
 
     app = FastAPI(title="Pricor", version="0.1.0", lifespan=lifespan)
@@ -949,6 +976,14 @@ def create_app(
         kept = group if isinstance(group, str) and _GROUP.fullmatch(group) else "-"
         events_logger.info("pricor_event event=%s group=%s", event, kept)
         return Response(status_code=204)
+
+    @app.post("/warm-up")
+    def warm_up_models() -> dict[str, str]:
+        # Sync handler: runs in the threadpool, so waiting here never blocks the event loop. The
+        # open request is what keeps Cloud Run's CPU allocated while the model loads.
+        if warm_up is None:
+            return {"models": "unavailable"}
+        return {"models": warm_up.wait(dependencies.warm_up_timeout)}
 
     @app.get("/config")
     def get_config() -> dict[str, Any]:

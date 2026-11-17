@@ -122,6 +122,10 @@ It says which group arrived and how far it got, not which person. To read the li
 gcloud logging read 'textPayload:"pricor_event"' --project pricor --limit 200
 ```
 
+### Keeping the model loading (`POST /warm-up`)
+
+The web app calls `POST /warm-up` once per page load, ignoring the answer. It waits (up to 120 seconds) for the Laya warm-up that starts with the server, and answers `200` with `{"models": "ready" | "loading" | "unavailable"}`: `loading` when the wait ran out, `unavailable` when no warm-up is configured or it failed. It never starts a second load and never answers with a model error. It exists because Cloud Run throttles the CPU outside requests, so the background load only crawls until a request is open. The endpoint is public: it needs no workspace cookie and never creates a workspace.
+
 ### Exports
 
 Once a session is approved, `GET /imports/{id}/export?format=csv|xlsx` returns the products and `GET /imports/{id}/rejected?format=csv|xlsx` the rejected-rows report (409 before approval).
