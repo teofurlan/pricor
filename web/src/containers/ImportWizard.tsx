@@ -608,6 +608,8 @@ export function ImportWizard({ api }: { api: ApiClient }) {
                   busy={preview.loading}
                   onPage={(offset) => void preview.load(offset)}
                   fx={session?.fx ?? null}
+                  filter={preview.filter}
+                  onFilter={preview.setFilter}
                 />
                 <section className="stack">
                   <h2 className="subtitle">{t("rejected.title", { count: preview.page.totals.rejected })}</h2>

@@ -7,6 +7,7 @@ import type {
   AskTurn,
   CreateImportInput,
   ExportFormat,
+  PreviewFilter,
   PreviewPage,
   PriceReport,
   SessionState,
@@ -52,7 +53,7 @@ export interface ApiClient {
   setManualRate(id: string, rate: string): Promise<SessionState>;
   /** Ask the live source for the plan's rate again. */
   refreshRate(id: string): Promise<SessionState>;
-  preview(id: string, offset: number, limit: number): Promise<PreviewPage>;
+  preview(id: string, offset: number, limit: number, filter?: Partial<PreviewFilter>): Promise<PreviewPage>;
   approve(id: string): Promise<SessionState>;
   /** What changed since the supplier's previous approved import; `threshold` is a ratio ("0.30"). */
   report(id: string, threshold?: string): Promise<PriceReport>;
@@ -177,7 +178,13 @@ export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), 
       call(`${base(id)}/answers`, json("POST", { question_id: questionId, option })),
     setManualRate: (id, rate) => call(`${base(id)}/fx`, json("PUT", { rate })),
     refreshRate: (id) => call(`${base(id)}/fx/refresh`, { method: "POST" }),
-    preview: (id, offset, limit) => call(`${base(id)}/preview?offset=${offset}&limit=${limit}`),
+    preview: (id, offset, limit, filter) => {
+      const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
+      const query = filter?.query?.trim();
+      if (query) params.set("q", query);
+      if (filter?.status && filter.status !== "all") params.set("status", filter.status);
+      return call(`${base(id)}/preview?${params.toString()}`);
+    },
     approve: (id) => call(`${base(id)}/approve`, { method: "POST" }),
     report: (id, threshold) =>
       call(`${base(id)}/report${threshold === undefined ? "" : `?threshold=${encodeURIComponent(threshold)}`}`),

@@ -14,6 +14,7 @@ the heuristic stage and asks the user more.
 
 import logging
 import time
+import unicodedata
 import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
@@ -224,17 +225,33 @@ class ImportFirstTime:
         self._repository.save(session)
         return session
 
-    def preview(self, session_id: str, offset: int = 0, limit: int = 50) -> PreviewPage:
+    def preview(
+        self,
+        session_id: str,
+        offset: int = 0,
+        limit: int = 50,
+        query: str = "",
+        status: str = "all",
+    ) -> PreviewPage:
         if offset < 0:
             raise InvalidInputError("offset must be zero or positive")
         if not 1 <= limit <= MAX_PREVIEW_LIMIT:
             raise InvalidInputError(f"limit must be between 1 and {MAX_PREVIEW_LIMIT}")
+        if status not in ("all", "accepted", "rejected"):
+            raise InvalidInputError("status must be one of: all, accepted, rejected")
+        needle = _fold(query)
+        if len(needle) > 200:
+            raise InvalidInputError("search query must be at most 200 characters")
         session = self._repository.get(session_id)
         if session.status not in (SessionStatus.READY_FOR_PREVIEW, SessionStatus.APPROVED):
             raise InvalidOperationError(
                 f"the session is {session.status.value}; answer the open questions first"
             )
         items = self._preview_rows(session)
+        if status != "all":
+            items = [row for row in items if row.status == status]
+        if needle:
+            items = [row for row in items if _row_matches(row, needle)]
         page = tuple(items[offset : offset + limit])
         return PreviewPage(offset, limit, len(items), page, self._totals(session))
 
@@ -561,3 +578,18 @@ class ImportFirstTime:
             "reason_counts": dict(sorted(reasons.items(), key=lambda pair: -pair[1])),
             "skipped_rows": skipped,
         }
+
+
+def _fold(text: str) -> str:
+    """Accent- and case-insensitive search key."""
+    decomposed = unicodedata.normalize("NFKD", text.strip())
+    return "".join(ch for ch in decomposed if not unicodedata.combining(ch)).casefold()
+
+
+def _row_matches(row: PreviewRow, needle: str) -> bool:
+    if row.record:
+        for key in ("supplier_code", "description"):
+            value = row.record.get(key)
+            if value and needle in _fold(str(value)):
+                return True
+    return any(needle in _fold(cell) for cell in row.original)

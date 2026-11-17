@@ -298,6 +298,13 @@ export interface PreviewTotals {
   skipped_rows: Record<string, number>;
 }
 
+export type PreviewStatusFilter = "all" | "accepted" | "rejected";
+
+export interface PreviewFilter {
+  query: string;
+  status: PreviewStatusFilter;
+}
+
 export interface PreviewPage {
   offset: number;
   limit: number;

@@ -41,7 +41,7 @@ Endpoints:
                                   -> {"reply": "...", "suggested_option": "yes" | null}
     PUT  /imports/{id}/fx         {"rate": "1420,50"}  a manual exchange rate for this run
     POST /imports/{id}/fx/refresh ask the live source for the plan's rate again
-    GET  /imports/{id}/preview    ?offset=0&limit=50  -> per-row original, trace, final values
+    GET  /imports/{id}/preview    ?offset=0&limit=50&q=&status=all  -> per-row original, trace, final values
     POST /imports/{id}/approve    freezes the plan and the result
     GET  /imports/{id}/export     ?format=csv|xlsx (default csv)  -> the products file
     GET  /imports/{id}/rejected   ?format=csv|xlsx (default csv)  -> the rejected-rows report
@@ -902,8 +902,14 @@ def create_app(
         return session_state(use_case.refresh_fx(session_id))
 
     @app.get("/imports/{session_id}/preview")
-    def preview(session_id: str, offset: int = 0, limit: int = 50) -> dict[str, Any]:
-        return preview_body(use_case.preview(session_id, offset, limit))
+    def preview(
+        session_id: str,
+        offset: int = 0,
+        limit: int = 50,
+        q: str = "",
+        status: str = "all",
+    ) -> dict[str, Any]:
+        return preview_body(use_case.preview(session_id, offset, limit, query=q, status=status))
 
     @app.get("/imports/{session_id}/sample")
     def sample(session_id: str, limit: int = 5) -> dict[str, Any]:

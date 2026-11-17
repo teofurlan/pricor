@@ -367,3 +367,58 @@ def test_columns_report_how_many_data_rows_are_empty():
     by_header = {column["header"]: column for column in state["columns"]}
     assert (by_header["Codigo"]["empty_rows"], by_header["Codigo"]["data_rows"]) == (1, 2)
     assert by_header["Descripcion"]["empty_rows"] == 0
+
+
+def test_preview_filters_by_status_and_accent_insensitive_search():
+    rows = [
+        ["Codigo", "Descripcion", "Precio lista", "IVA"],
+        ["A-10", "Lámpara LED 12W", "1.210,00", "21%"],
+        ["A-20", "Tornillo 8x1", "968,00", "21%"],
+        ["A-21", "Tuerca M8", "121,00", "21%"],
+        ["A-22", "Arandela 1/4", "60,50", "21%"],
+        ["B-30", "Lámpara cálida", "sin-precio", "21%"],
+    ]
+    client = make_client()
+    session_id = upload(client, rows=rows).json()["id"]
+    answer(client, session_id, "price_includes_vat", "yes")
+    answer(client, session_id, "currency", "ARS")
+
+    rejected = client.get(f"/imports/{session_id}/preview", params={"status": "rejected"}).json()
+    assert rejected["total_items"] == 1
+    assert [i["status"] for i in rejected["items"]] == ["rejected"]
+    assert rejected["totals"]["accepted"] == 4
+    assert rejected["totals"]["rejected"] == 1
+
+    accepted = client.get(f"/imports/{session_id}/preview", params={"status": "accepted"}).json()
+    assert accepted["total_items"] == 4
+    assert all(i["status"] == "accepted" for i in accepted["items"])
+
+    # Accent- and case-insensitive search matches both accepted description and rejected original cells.
+    lamps = client.get(f"/imports/{session_id}/preview", params={"q": "lampara"}).json()
+    assert lamps["total_items"] == 2
+    assert [i["status"] for i in lamps["items"]] == ["accepted", "rejected"]
+
+    # Combined status + search by code.
+    by_code = client.get(f"/imports/{session_id}/preview", params={"q": "b-30", "status": "rejected"}).json()
+    assert by_code["total_items"] == 1
+    assert by_code["items"][0]["original"][0] == "B-30"
+
+    empty = client.get(f"/imports/{session_id}/preview", params={"q": "inexistente"}).json()
+    assert empty["total_items"] == 0
+    assert empty["items"] == []
+
+
+def test_preview_rejects_unknown_status_or_overlong_query():
+    client = make_client()
+    session_id = upload(client).json()["id"]
+    answer(client, session_id, "price_includes_vat", "yes")
+    answer(client, session_id, "currency", "ARS")
+
+    bad_status = client.get(f"/imports/{session_id}/preview", params={"status": "bogus"})
+    assert bad_status.status_code == 422
+    assert bad_status.json()["error"]["code"] == "invalid_input"
+
+    too_long = client.get(f"/imports/{session_id}/preview", params={"q": "x" * 201})
+    assert too_long.status_code == 422
+    assert too_long.json()["error"]["code"] == "invalid_input"
+

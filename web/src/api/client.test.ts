@@ -84,6 +84,16 @@ describe("api client", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("/imports/s1/preview?offset=50&limit=25");
   });
 
+  it("includes q and status query params when preview filters are active", async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(jsonResponse({ items: [] })));
+    const client = createApiClient(fetchMock);
+    await client.preview("s1", 0, 50, { query: "  lámpara  ", status: "rejected" });
+    expect(fetchMock.mock.calls[0][0]).toBe("/imports/s1/preview?offset=0&limit=50&q=l%C3%A1mpara&status=rejected");
+
+    await client.preview("s1", 0, 50, { query: "   ", status: "all" });
+    expect(fetchMock.mock.calls[1][0]).toBe("/imports/s1/preview?offset=0&limit=50");
+  });
+
   it("builds download links for both formats", () => {
     const api = createApiClient(vi.fn());
     expect(api.exportUrl("s 1", "xlsx")).toBe("/imports/s%201/export?format=xlsx");

@@ -1,5 +1,5 @@
-import { useId, useRef, useState, type KeyboardEvent } from "react";
-import type { FxState, Language, PreviewItem, PreviewPage } from "../../api/types";
+import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import type { FxState, Language, PreviewFilter, PreviewItem, PreviewPage, PreviewStatusFilter } from "../../api/types";
 import { useI18n } from "../../i18n";
 import { conversionText, formatDecimalText, formatFigure, formatInteger } from "../../lib/decimalText";
 import { Badge } from "../atoms/Badge";
@@ -7,11 +7,17 @@ import { Button } from "../atoms/Button";
 import { StepTrace, visibleSteps } from "../molecules/StepTrace";
 import { usePendingAction } from "../atoms/usePendingAction";
 
+const DEFAULT_FILTER: PreviewFilter = { query: "", status: "all" };
+const STATUS_OPTIONS: readonly PreviewStatusFilter[] = ["all", "accepted", "rejected"];
+const SEARCH_DEBOUNCE_MS = 200;
+
 interface Props {
   page: PreviewPage;
   busy: boolean;
   onPage(offset: number): void;
   fx?: FxState | null;
+  filter?: PreviewFilter;
+  onFilter?(next: PreviewFilter): void;
 }
 
 /** The accessible hint of a converted cell: the unrounded input and the rate behind the figure. */
@@ -23,20 +29,62 @@ function conversionTitle(item: PreviewItem, to: string, language: Language): str
 }
 
 /** The ruled journal keeps every row; the selected row feeds the adjacent tape. */
-export function PreviewTable({ page, busy, onPage, fx = null }: Props) {
+export function PreviewTable({ page, busy, onPage, fx = null, filter = DEFAULT_FILTER, onFilter }: Props) {
   const { t, language } = useI18n();
   const pending = usePendingAction<"previous" | "next">(busy);
   const [selection, setSelection] = useState({ offset: page.offset, row: page.items[0]?.row_number });
   // Only the first trace is printed line by line; once the user browses, results appear at once.
   const [browsed, setBrowsed] = useState(false);
+  const [draftQuery, setDraftQuery] = useState(filter.query);
+  const debounceRef = useRef<number | null>(null);
   const tableRef = useRef<HTMLTableElement>(null);
   const helpId = useId();
+  const searchId = useId();
   const selected = (selection.offset === page.offset && page.items.find((row) => row.row_number === selection.row)) || page.items[0];
   const first = page.items.length === 0 ? 0 : page.offset + 1;
   const last = page.offset + page.items.length;
+  const filtered = filter.query.trim() !== "" || filter.status !== "all";
   const vatStripped = page.items.some((item) =>
     visibleSteps(item.trace, item.record?.currency ?? null, fx?.to ?? null).shown.some((step) => step.step === "strip_vat"),
   );
+
+  useEffect(() => {
+    setDraftQuery(filter.query);
+  }, [filter.query]);
+
+  useEffect(() => () => {
+    if (debounceRef.current !== null) window.clearTimeout(debounceRef.current);
+  }, []);
+
+  function commitFilter(next: PreviewFilter) {
+    if (debounceRef.current !== null) {
+      window.clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    setBrowsed(true);
+    onFilter?.(next);
+  }
+
+  function handleQueryChange(value: string) {
+    setDraftQuery(value);
+    if (!onFilter) return;
+    if (debounceRef.current !== null) window.clearTimeout(debounceRef.current);
+    debounceRef.current = window.setTimeout(() => {
+      debounceRef.current = null;
+      setBrowsed(true);
+      onFilter({ query: value, status: filter.status });
+    }, SEARCH_DEBOUNCE_MS);
+  }
+
+  function handleSearchSubmit(event: FormEvent) {
+    event.preventDefault();
+    commitFilter({ query: draftQuery, status: filter.status });
+  }
+
+  function clearFilters() {
+    setDraftQuery("");
+    commitFilter(DEFAULT_FILTER);
+  }
 
   function select(row: number) {
     setBrowsed(true);
@@ -65,6 +113,37 @@ export function PreviewTable({ page, busy, onPage, fx = null }: Props) {
       <p className="hint" id={helpId}>{t("preview.keyboard")}</p>
       <div className="workbench workbench--preview">
         <div className="preview-journal">
+          {onFilter && (
+            <form className="filter-bar" role="search" onSubmit={handleSearchSubmit}>
+              <div className="filter-bar__search">
+                <label className="sr-only" htmlFor={searchId}>{t("preview.search.label")}</label>
+                <input
+                  id={searchId}
+                  type="search"
+                  value={draftQuery}
+                  placeholder={t("preview.search.placeholder")}
+                  autoComplete="off"
+                  onChange={(event) => handleQueryChange(event.target.value)}
+                />
+              </div>
+              <div className="filter-keys" role="group" aria-label={t("preview.filter.label")}>
+                {STATUS_OPTIONS.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className="button lang__option"
+                    aria-pressed={filter.status === option}
+                    onClick={() => commitFilter({ query: draftQuery, status: option })}
+                  >
+                    {t(`preview.filter.${option}`)}
+                  </button>
+                ))}
+              </div>
+              {(filtered || draftQuery.trim() !== "") && (
+                <Button variant="quiet" onClick={clearFilters}>{t("preview.filter.clear")}</Button>
+              )}
+            </form>
+          )}
           <div className="table-wrap preview-journal__rows" role="region" aria-label={t("preview.rows")} tabIndex={0} aria-describedby={helpId} aria-busy={busy} onKeyDown={move}>
             <table ref={tableRef} className="table table--preview">
               <thead>
@@ -103,7 +182,14 @@ export function PreviewTable({ page, busy, onPage, fx = null }: Props) {
                 ))}
               </tbody>
             </table>
-            {page.items.length === 0 && <p className="empty-state">{t("preview.empty")}</p>}
+            {page.items.length === 0 && (
+              <div className="empty-state">
+                <p>{t(filtered ? "preview.filter.empty" : "preview.empty")}</p>
+                {filtered && onFilter && (
+                  <div className="actions"><Button variant="quiet" onClick={clearFilters}>{t("preview.filter.clear")}</Button></div>
+                )}
+              </div>
+            )}
           </div>
           <div className="pager">
             <span>{t("preview.range", { first: formatInteger(first, language), last: formatInteger(last, language), total: formatInteger(page.total_items, language) })}</span>

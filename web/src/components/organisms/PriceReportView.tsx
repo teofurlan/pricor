@@ -8,6 +8,14 @@ import { TapeFigure } from "../atoms/TapeFigure";
 
 const ROW_LIMIT = 50;
 
+function foldText(text: string): string {
+  return text.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function matchesItem(item: { supplier_code: string; description?: string }, needle: string): boolean {
+  return foldText(item.supplier_code).includes(needle) || (item.description ? foldText(item.description).includes(needle) : false);
+}
+
 interface Props {
   report: PriceReport;
   csvUrl: string;
@@ -141,11 +149,32 @@ function ThresholdForm({ initial, busy, onApply }: { initial: string; busy: bool
 /** What changed since the supplier's previous list: a one-line summary, then every section. */
 export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
   const { t, language } = useI18n();
+  const [query, setQuery] = useState("");
+  const searchId = useId();
   const { summary } = report;
   const threshold = ratioToPercent(report.threshold);
   const plural = (base: "report.anomaly" | "report.new", count: number) =>
     t(`${base}.${count === 1 ? "one" : "other"}` as TextKey, { count: formatInteger(count, language) });
   const times = (count: number) => t(`report.times.${count === 1 ? "one" : "other"}` as TextKey, { count });
+
+  const needle = foldText(query.trim());
+  const byQuery = <T extends { supplier_code: string; description?: string }>(rows: T[]): T[] =>
+    needle ? rows.filter((row) => matchesItem(row, needle)) : rows;
+
+  const anomalies = byQuery(report.anomalies);
+  const increases = byQuery(report.increases);
+  const decreases = byQuery(report.decreases);
+  const fromZero = byQuery(report.from_zero);
+  const newProducts = byQuery(report.new_products);
+  const discontinued = byQuery(report.discontinued);
+  const currencyChanged = byQuery(report.currency_changed);
+  const ambiguousCodes = byQuery(report.ambiguous_codes);
+  const matchingCount =
+    anomalies.length + increases.length + decreases.length + fromZero.length +
+    newProducts.length + discontinued.length + currencyChanged.length + ambiguousCodes.length;
+  const hasAnyRows =
+    report.anomalies.length + report.increases.length + report.decreases.length + report.from_zero.length +
+    report.new_products.length + report.discontinued.length + report.currency_changed.length + report.ambiguous_codes.length > 0;
 
   const summaryLines = [
     { mark: "◇", value: summary.unchanged, label: t("report.unchanged", { count: "" }).trim() },
@@ -178,54 +207,79 @@ export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
             {t("report.csv")}
           </a>
         </div>
+        {hasAnyRows && (
+          <div className="filter-bar report__search" role="search">
+            <div className="filter-bar__search">
+              <label className="sr-only" htmlFor={searchId}>{t("report.search.label")}</label>
+              <input
+                id={searchId}
+                type="search"
+                value={query}
+                placeholder={t("report.search.placeholder")}
+                autoComplete="off"
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </div>
+            {query.trim() !== "" && (
+              <Button variant="quiet" onClick={() => setQuery("")}>{t("preview.filter.clear")}</Button>
+            )}
+          </div>
+        )}
         </div>
       </div>
 
-      {report.anomalies.length > 0 ? (
-        <Section
-          title={t("report.anomalies", { count: formatInteger(report.anomalies.length, language) })}
-          lede={t("report.anomalies.lede", { threshold })}
-          count={report.anomalies.length}
-        >
-          {(visible) => <ChangeTable rows={report.anomalies.slice(0, visible)} />}
-        </Section>
+      {needle && matchingCount === 0 ? (
+        <div className="empty-state">
+          <p>{t("report.search.empty", { query: query.trim() })}</p>
+          <div className="actions"><Button variant="quiet" onClick={() => setQuery("")}>{t("preview.filter.clear")}</Button></div>
+        </div>
       ) : (
-        <p className="lede">{t("report.noAnomalies", { threshold })}</p>
-      )}
-      {report.increases.length > 0 && (
-        <Section title={t("report.increases", { count: formatInteger(report.increases.length, language) })} count={report.increases.length}>
-          {(visible) => <ChangeTable rows={report.increases.slice(0, visible)} />}
-        </Section>
-      )}
-      {report.decreases.length > 0 && (
-        <Section title={t("report.decreases", { count: formatInteger(report.decreases.length, language) })} count={report.decreases.length}>
-          {(visible) => <ChangeTable rows={report.decreases.slice(0, visible)} />}
-        </Section>
-      )}
-      {report.from_zero.length > 0 && (
+        <>
+      {anomalies.length > 0 ? (
         <Section
-          title={t("report.fromZero", { count: formatInteger(report.from_zero.length, language) })}
-          lede={t("report.fromZero.lede")}
-          count={report.from_zero.length}
+          title={t("report.anomalies", { count: formatInteger(anomalies.length, language) })}
+          lede={t("report.anomalies.lede", { threshold })}
+          count={anomalies.length}
         >
-          {(visible) => <ChangeTable rows={report.from_zero.slice(0, visible)} showPercent={false} />}
+          {(visible) => <ChangeTable rows={anomalies.slice(0, visible)} />}
+        </Section>
+      ) : !needle ? (
+        <p className="lede">{t("report.noAnomalies", { threshold })}</p>
+      ) : null}
+      {increases.length > 0 && (
+        <Section title={t("report.increases", { count: formatInteger(increases.length, language) })} count={increases.length}>
+          {(visible) => <ChangeTable rows={increases.slice(0, visible)} />}
         </Section>
       )}
-      {report.new_products.length > 0 && (
-        <Section title={t("report.newProducts", { count: formatInteger(report.new_products.length, language) })} count={report.new_products.length}>
-          {(visible) => <ProductTable rows={report.new_products.slice(0, visible)} />}
+      {decreases.length > 0 && (
+        <Section title={t("report.decreases", { count: formatInteger(decreases.length, language) })} count={decreases.length}>
+          {(visible) => <ChangeTable rows={decreases.slice(0, visible)} />}
         </Section>
       )}
-      {report.discontinued.length > 0 && (
-        <Section title={t("report.discontinued", { count: formatInteger(report.discontinued.length, language) })} count={report.discontinued.length}>
-          {(visible) => <ProductTable rows={report.discontinued.slice(0, visible)} />}
-        </Section>
-      )}
-      {report.currency_changed.length > 0 && (
+      {fromZero.length > 0 && (
         <Section
-          title={t("report.currencyChanged", { count: formatInteger(report.currency_changed.length, language) })}
+          title={t("report.fromZero", { count: formatInteger(fromZero.length, language) })}
+          lede={t("report.fromZero.lede")}
+          count={fromZero.length}
+        >
+          {(visible) => <ChangeTable rows={fromZero.slice(0, visible)} showPercent={false} />}
+        </Section>
+      )}
+      {newProducts.length > 0 && (
+        <Section title={t("report.newProducts", { count: formatInteger(newProducts.length, language) })} count={newProducts.length}>
+          {(visible) => <ProductTable rows={newProducts.slice(0, visible)} />}
+        </Section>
+      )}
+      {discontinued.length > 0 && (
+        <Section title={t("report.discontinued", { count: formatInteger(discontinued.length, language) })} count={discontinued.length}>
+          {(visible) => <ProductTable rows={discontinued.slice(0, visible)} />}
+        </Section>
+      )}
+      {currencyChanged.length > 0 && (
+        <Section
+          title={t("report.currencyChanged", { count: formatInteger(currencyChanged.length, language) })}
           lede={t("report.currencyChanged.lede")}
-          count={report.currency_changed.length}
+          count={currencyChanged.length}
         >
           {(visible) => (
             <table className="table table--report">
@@ -238,7 +292,7 @@ export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {report.currency_changed.slice(0, visible).map((row, position) => (
+                {currencyChanged.slice(0, visible).map((row, position) => (
                   <tr key={`${row.supplier_code}-${position}`}>
                     <th scope="row">{row.supplier_code}</th>
                     <td>{row.description}</td>
@@ -251,14 +305,14 @@ export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
           )}
         </Section>
       )}
-      {report.ambiguous_codes.length > 0 && (
+      {ambiguousCodes.length > 0 && (
         <section className="stack report__section" aria-labelledby="report-ambiguous">
           <h3 id="report-ambiguous" className="subtitle">
-            {t("report.ambiguous", { count: formatInteger(report.ambiguous_codes.length, language) })}
+            {t("report.ambiguous", { count: formatInteger(ambiguousCodes.length, language) })}
           </h3>
           <p className="hint">{t("report.ambiguous.lede")}</p>
           <ul className="report__left-out">
-            {report.ambiguous_codes.map((item, position) => (
+            {ambiguousCodes.map((item, position) => (
               <li key={`${item.supplier_code}-${position}`}>
                 {t("report.ambiguous.item", {
                   code: item.supplier_code,
@@ -269,6 +323,8 @@ export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
             ))}
           </ul>
         </section>
+      )}
+        </>
       )}
     </div>
   );

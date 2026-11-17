@@ -254,4 +254,34 @@ describe("PriceReportView", () => {
     expect(tape).toHaveTextContent("variación mediana +4,20%");
     expect(tape).toHaveTextContent("anomalías para revisar3");
   });
+
+  it("filters every section by code or description (accent-insensitive) and shows an empty state with Clear", async () => {
+    view(
+      priceReport({
+        increases: [
+          reportChange({ supplier_code: "A1", description: "Lámpara LED 12W" }),
+          reportChange({ supplier_code: "A2", description: "Tornillo 8x1" }),
+        ],
+        decreases: [
+          reportChange({ supplier_code: "B1", description: "Arandela plana", change: "-10.00", change_pct: "-10.00" }),
+        ],
+      }),
+    );
+
+    const search = screen.getByRole("searchbox", { name: "Search products in the report" });
+    await userEvent.type(search, "lampara");
+
+    const increases = screen.getByRole("region", { name: "Price increases (1)" });
+    expect(within(increases).getByText("Lámpara LED 12W")).toBeInTheDocument();
+    expect(within(increases).queryByText("Tornillo 8x1")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /Price decreases/ })).not.toBeInTheDocument();
+
+    await userEvent.clear(search);
+    await userEvent.type(search, "sin-coincidencias");
+    expect(screen.getByText("No products in this report match “sin-coincidencias”.")).toBeInTheDocument();
+
+    await userEvent.click(screen.getAllByRole("button", { name: "Clear filters" })[0]);
+    expect(screen.getByRole("region", { name: "Price increases (2)" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Price decreases (1)" })).toBeInTheDocument();
+  });
 });

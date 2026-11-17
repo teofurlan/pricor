@@ -85,3 +85,39 @@ describe("PreviewTable Argentine numbers", () => {
     expect(await within(screen.getByRole("region", { name: "Del archivo al costo" })).findByText("Costo unitario")).toBeInTheDocument();
   });
 });
+
+describe("PreviewTable search and status filters", () => {
+  it("forwards search submission and status filter clicks, and offers Clear filters on empty matches", async () => {
+    const onFilter = vi.fn();
+    const { rerender } = renderWithI18n(
+      <PreviewTable
+        page={page()}
+        busy={false}
+        onPage={vi.fn()}
+        filter={{ query: "", status: "all" }}
+        onFilter={onFilter}
+      />,
+      "es",
+    );
+
+    const search = screen.getByRole("searchbox", { name: "Buscar filas por código o descripción" });
+    await userEvent.type(search, "tuerca{enter}");
+    expect(onFilter).toHaveBeenCalledWith({ query: "tuerca", status: "all" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Rechazadas" }));
+    expect(onFilter).toHaveBeenLastCalledWith({ query: "tuerca", status: "rejected" });
+
+    rerender(
+      <PreviewTable
+        page={previewPage({ items: [], total_items: 0 })}
+        busy={false}
+        onPage={vi.fn()}
+        filter={{ query: "tuerca", status: "rejected" }}
+        onFilter={onFilter}
+      />,
+    );
+    expect(screen.getByText("Ninguna fila coincide con ese filtro.")).toBeInTheDocument();
+    await userEvent.click(screen.getAllByRole("button", { name: "Limpiar filtros" })[0]);
+    expect(onFilter).toHaveBeenLastCalledWith({ query: "", status: "all" });
+  });
+});
