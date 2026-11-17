@@ -686,8 +686,9 @@ describe("ImportWizard", () => {
   describe("slow first import notice", () => {
     const notice = /The first list can take up to a minute while the model gets ready/;
     // userEvent hangs under fake timers, so the form is driven with fireEvent.
-    function startWithTimers(file = "Price list file", button = "Start import") {
+    async function startWithTimers(file = "Price list file", button = "Start import") {
       fireEvent.change(screen.getByLabelText(file), { target: { files: [new File(["a,b"], "lista.csv")] } });
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
       fireEvent.click(screen.getByRole("button", { name: button }));
     }
 
@@ -698,7 +699,7 @@ describe("ImportWizard", () => {
         renderWithI18n(<ImportWizard api={api} />);
         await screen.findByLabelText("Price list file");
         vi.useFakeTimers();
-        startWithTimers();
+        await startWithTimers();
         await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
         expect(screen.queryByText(notice)).toBeNull();
         expect(screen.getByText(/Working. Local models can take up to a minute/)).toBeInTheDocument();
@@ -721,7 +722,7 @@ describe("ImportWizard", () => {
         renderWithI18n(<ImportWizard api={api} />);
         await screen.findByLabelText("Price list file");
         vi.useFakeTimers();
-        startWithTimers();
+        await startWithTimers();
         await act(async () => { await vi.advanceTimersByTimeAsync(5500); });
         expect(screen.getByText(notice)).toBeInTheDocument();
         await act(async () => { fail(new ApiError(415, "unsupported_format", "unsupported file type")); await vi.advanceTimersByTimeAsync(0); });
@@ -737,7 +738,7 @@ describe("ImportWizard", () => {
         renderWithI18n(<ImportWizard api={api} />, "es");
         await screen.findByLabelText("Archivo de la lista de precios");
         vi.useFakeTimers();
-        startWithTimers("Archivo de la lista de precios", "Iniciar importación");
+        await startWithTimers("Archivo de la lista de precios", "Iniciar importación");
         await act(async () => { await vi.advanceTimersByTimeAsync(5500); });
         expect(screen.getByText("La primera lista puede tardar hasta un minuto mientras se prepara el modelo.")).toBeInTheDocument();
         expect(screen.queryByText(/Trabajando\./)).toBeNull();

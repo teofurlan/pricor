@@ -13,6 +13,8 @@ export interface QueueDraft {
   file: File;
   supplierName: string;
   sheet: string;
+  language?: Language;
+  forceFirstImport?: boolean;
 }
 
 /** The supplier a file name suggests: the text before the first `_`, `-` or `.`. */
@@ -71,7 +73,7 @@ export function UploadForm({ busy, onSubmit, onSubmitMany, onInspectSheets, onLi
   const freshId = useId();
   const freshHintId = useId();
 
-  const ready = !busy && chosen.length > 0 && chosen.every((item) => item.supplierName.trim() !== "");
+  const ready = !busy && chosen.length > 0 && chosen.every((item) => item.supplierName.trim() !== "" && !item.reading);
   const single = chosen.length === 1 ? chosen[0] : null;
 
   useEffect(() => {
@@ -131,7 +133,7 @@ export function UploadForm({ busy, onSubmit, onSubmitMany, onInspectSheets, onLi
     if (single) {
       onSubmit({ file: single.file, supplierName: single.supplierName.trim(), sheet: single.sheet, language, ...(fresh && { forceFirstImport: true }) });
     } else {
-      onSubmitMany?.(chosen.map(({ file, supplierName, sheet }) => ({ file, supplierName: supplierName.trim(), sheet })));
+      onSubmitMany?.(chosen.map(({ file, supplierName, sheet }) => ({ file, supplierName: supplierName.trim(), sheet, language, forceFirstImport: fresh })));
     }
   }
 
@@ -260,26 +262,22 @@ export function UploadForm({ busy, onSubmit, onSubmitMany, onInspectSheets, onLi
       )}
       {onListSamples && onLoadSample && <SamplePicker list={onListSamples} onChoose={chooseSample} disabled={busy} />}
       {notice && <p className="field__error" role="status">{notice}</p>}
-      {chosen.length <= 1 && (
-        <>
-          <div className="form__row">
-            <label className="field">
-              <span className="field__label">{t("upload.language")}</span>
-              <select value={language} onChange={(event) => setManualLanguage(event.target.value as Language)}>
-                <option value="en">{t("language.en")}</option>
-                <option value="es">{t("language.es")}</option>
-              </select>
-            </label>
-          </div>
-          <div className="check">
-            <input id={freshId} type="checkbox" checked={fresh} aria-describedby={freshHintId} onChange={(event) => setFresh(event.target.checked)} />
-            <div>
-              <label className="check__label" htmlFor={freshId}>{t("upload.fresh")}</label>
-              <span id={freshHintId} className="field__hint">{t("upload.freshHint")}</span>
-            </div>
-          </div>
-        </>
-      )}
+      <div className="form__row">
+        <label className="field">
+          <span className="field__label">{t("upload.language")}</span>
+          <select value={language} onChange={(event) => setManualLanguage(event.target.value as Language)}>
+            <option value="en">{t("language.en")}</option>
+            <option value="es">{t("language.es")}</option>
+          </select>
+        </label>
+      </div>
+      <div className="check">
+        <input id={freshId} type="checkbox" checked={fresh} aria-describedby={freshHintId} onChange={(event) => setFresh(event.target.checked)} />
+        <div>
+          <label className="check__label" htmlFor={freshId}>{t("upload.fresh")}</label>
+          <span id={freshHintId} className="field__hint">{t("upload.freshHint")}</span>
+        </div>
+      </div>
       <Button type="submit" variant="primary" disabled={!ready || busy} className={busy ? "button--busy" : undefined}>
         {busy ? <TapeLoader size="normal" text={t("upload.reading")} /> : t("upload.start")}
       </Button>

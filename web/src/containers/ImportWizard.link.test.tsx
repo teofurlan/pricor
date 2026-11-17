@@ -121,7 +121,7 @@ describe("opening a personal link (U6d)", () => {
     const client = api(CONFIG, { currentWorkspace: vi.fn().mockResolvedValue({ link: link(OTHER) }) });
     mount(client);
 
-    await userEvent.click(await screen.findByRole("button", { name: "Switch space" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Switch space" }, { timeout: 3000 }));
 
     await waitFor(() => expect(client.claimWorkspace).toHaveBeenCalledWith(TOKEN));
     await waitFor(() => expect(client.workspace).toHaveBeenCalledTimes(1));

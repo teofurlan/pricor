@@ -194,8 +194,39 @@ describe("UploadForm", () => {
     await userEvent.click(screen.getByRole("button", { name: "Start import" }));
     expect(onSubmit).not.toHaveBeenCalled();
     expect(onSubmitMany).toHaveBeenCalledWith([
-      { file: first, supplierName: "Ferreteria", sheet: "" },
-      { file: third, supplierName: "Dipel SA", sheet: "" },
+      { file: first, supplierName: "Ferreteria", sheet: "", language: "en", forceFirstImport: false },
+      { file: third, supplierName: "Dipel SA", sheet: "", language: "en", forceFirstImport: false },
+    ]);
+  });
+
+  it("waits until sheet inspection finishes before enabling Start import", async () => {
+    let resolveSheets!: (names: string[]) => void;
+    const onInspectSheets = vi.fn(() => new Promise<string[]>((resolve) => { resolveSheets = resolve; }));
+    renderWithI18n(<UploadForm busy={false} onSubmit={vi.fn()} onInspectSheets={onInspectSheets} />);
+    await userEvent.upload(screen.getByLabelText("Price list file"), new File(["a"], "catalogo.xlsx"));
+
+    const start = screen.getByRole("button", { name: "Start import" });
+    expect(start).toBeDisabled();
+
+    resolveSheets(["Hoja 1", "Hoja 2"]);
+    await screen.findByLabelText("Sheet for catalogo.xlsx");
+    expect(start).toBeEnabled();
+  });
+
+  it("keeps question language and start-from-scratch available when queuing several files", async () => {
+    const onSubmitMany = vi.fn();
+    renderWithI18n(<UploadForm busy={false} onSubmit={vi.fn()} onSubmitMany={onSubmitMany} />);
+    const first = new File(["a"], "Ferreteria_lista.csv");
+    const second = new File(["b"], "acme-semana-3.xlsx");
+    await userEvent.upload(screen.getByLabelText("Price list file"), [first, second]);
+
+    await userEvent.selectOptions(screen.getByLabelText("Language of the questions"), "es");
+    await userEvent.click(screen.getByLabelText("Start from scratch instead of reusing the saved plan"));
+    await userEvent.click(screen.getByRole("button", { name: "Start import" }));
+
+    expect(onSubmitMany).toHaveBeenCalledWith([
+      { file: first, supplierName: "Ferreteria", sheet: "", language: "es", forceFirstImport: true },
+      { file: second, supplierName: "acme", sheet: "", language: "es", forceFirstImport: true },
     ]);
   });
 

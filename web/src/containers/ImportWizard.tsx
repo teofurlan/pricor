@@ -299,7 +299,13 @@ export function ImportWizard({ api }: { api: ApiClient }) {
         resetAnswerQueue();
         setStarting(true);
         try {
-          open(await api.createImport({ file: list[index].file, supplierName: list[index].supplierName, sheet: list[index].sheet, language }));
+          open(await api.createImport({
+            file: list[index].file,
+            supplierName: list[index].supplierName,
+            sheet: list[index].sheet,
+            language: list[index].language ?? language,
+            ...(list[index].forceFirstImport && { forceFirstImport: true }),
+          }));
           return;
         } catch (failure) {
           const reason = failure && typeof (failure as ApiError).code === "string" ? describeError(failure as ApiError, language) : failure instanceof Error ? failure.message : String(failure);

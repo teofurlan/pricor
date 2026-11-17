@@ -552,9 +552,9 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
 .upload-step .upload { max-width: none; }
 .workspace { border-top: 1px solid var(--rule); padding: 14px 0; max-width: 78ch; display: grid; gap: 6px; }
 .workspace__title { margin: 0; font-size: 0.9rem; font-weight: 600; }
-.workspace__body { margin: 0; color: var(--ink-soft, inherit); font-size: 0.875rem; }
+.workspace__body { margin: 0; color: var(--muted); font-size: 0.875rem; }
 .workspace__row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-.workspace__link { flex: 1 1 260px; min-width: 0; font: inherit; font-family: var(--mono, monospace); font-size: 0.8rem; padding: 6px 8px; border: 1px solid var(--rule); background: transparent; color: inherit; }
+.workspace__link { flex: 1 1 260px; min-width: 0; font: inherit; font-family: var(--figures); font-size: 0.8rem; padding: 6px 8px; border: 1px solid var(--rule); background: transparent; color: inherit; }
 .workspace__status { font-size: 0.8rem; }
 .workspace-switch { border: 1px solid var(--rule); padding: 14px 16px; margin: 0 0 16px; max-width: 78ch; display: grid; gap: 10px; }
 .workspace-switch p { margin: 0; }

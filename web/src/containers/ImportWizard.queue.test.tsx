@@ -84,6 +84,26 @@ describe("ImportWizard with several files", () => {
     expect(createImport.mock.calls[0][0]).toMatchObject({ supplierName: "acme", sheet: "Precios" });
   });
 
+  it("forwards chosen question language and forceFirstImport to each queued file", async () => {
+    const createImport = vi.fn()
+      .mockResolvedValueOnce(ready("s1", "Ferreteria"))
+      .mockResolvedValueOnce(ready("s2", "acme"));
+    const approve = vi.fn().mockResolvedValueOnce(approvedOf("s1", "Ferreteria"));
+    renderWithI18n(<ImportWizard api={fakeApi({ createImport, approve })} />);
+    await pick();
+
+    await userEvent.selectOptions(screen.getByLabelText("Language of the questions"), "es");
+    await userEvent.click(screen.getByLabelText("Start from scratch instead of reusing the saved plan"));
+    await userEvent.click(screen.getByRole("button", { name: "Start import" }));
+    await waitFor(() => expect(createImport).toHaveBeenCalledTimes(1));
+    expect(createImport.mock.calls[0][0]).toMatchObject({ supplierName: "Ferreteria", language: "es", forceFirstImport: true });
+
+    await reviewAndApprove();
+    await userEvent.click(await screen.findByRole("button", { name: "Review the next file (2 of 2)" }));
+    await waitFor(() => expect(createImport).toHaveBeenCalledTimes(2));
+    expect(createImport.mock.calls[1][0]).toMatchObject({ supplierName: "acme", language: "es", forceFirstImport: true });
+  });
+
   it("starts with the first file, offers the next after approving and ends with the unified downloads", async () => {
     const createImport = vi.fn()
       .mockResolvedValueOnce(ready("s1", "Ferreteria"))

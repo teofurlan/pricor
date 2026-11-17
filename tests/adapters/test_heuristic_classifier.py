@@ -264,3 +264,18 @@ def test_stock_or_available_quantity_is_never_units_per_pack(header):
 @pytest.mark.parametrize("header", ["Unidades", "Cantidad", "Bulto", "UxB"])
 def test_pack_headers_without_stock_words_stay_units_per_pack(header):
     assert classify(header, UNITS).role is ColumnRole.UNITS_PER_PACK
+
+
+@pytest.mark.parametrize(
+    ("header", "values", "role"),
+    [
+        ("Código stock", CODES, ColumnRole.CODE),
+        ("Cod. stock", CODES, ColumnRole.CODE),
+        ("Descripción stock", DESCRIPTIONS, ColumnRole.DESCRIPTION),
+    ],
+)
+def test_stock_words_do_not_drop_code_or_description_headers(header, values, role):
+    result = classify(header, values)
+    assert result.role is role
+    assert result.score >= 0.8
+
