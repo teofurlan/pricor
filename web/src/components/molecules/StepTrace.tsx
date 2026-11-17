@@ -94,6 +94,8 @@ function TracePrint({ trace: fullTrace, currency, convertedCurrency, animate, an
 }) {
   const { t, language } = useI18n();
   const { shown: trace, hidden } = visibleSteps(fullTrace, currency, convertedCurrency);
+  const vatStripped = trace.some((item) => item.step === "strip_vat");
+  const totalLabelKey = vatStripped ? "trace.rounding.exVat" : "trace.rounding";
   // Reading and rounding are technical: when they change nothing they hide without being named.
   const skipped = hidden
     .filter((item) => item.step !== "parse_number" && item.step !== "rounding")
@@ -124,7 +126,7 @@ function TracePrint({ trace: fullTrace, currency, convertedCurrency, animate, an
     <>
       <ol className={`trace${animate && !reduced ? " trace--printing" : ""}`}>
         {trace.slice(0, count).map((item, position) => {
-          const key = `trace.${item.step}`;
+          const key = item.step === "rounding" ? totalLabelKey : `trace.${item.step}`;
           const label = isTextKey(key) ? t(key) : item.step;
           const isTotal = position === trace.length - 1 && result !== null;
           const shown = shownValues[position];
@@ -146,7 +148,7 @@ function TracePrint({ trace: fullTrace, currency, convertedCurrency, animate, an
         })}
       </ol>
       {complete && skipped && <p className="trace__skipped">{skipped}</p>}
-      {announce && <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{complete && result ? `${t("trace.rounding")}: ${result}` : ""}</p>}
+      {announce && <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{complete && result ? `${t(totalLabelKey)}: ${result}` : ""}</p>}
       {complete && <div className="tape__tear" aria-hidden="true" />}
     </>
   );

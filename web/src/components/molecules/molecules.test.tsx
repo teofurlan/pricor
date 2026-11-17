@@ -98,7 +98,7 @@ describe("StepTrace", () => {
     expect(steps).toHaveLength(trace.length);
     expect(steps[0]).toHaveTextContent("#Original1.210,00");
     expect(steps[1]).toHaveTextContent("÷VAT removed1,000.00");
-    expect(steps[2]).toHaveTextContent("=Final cost1,000.00 ARS✱");
+    expect(steps[2]).toHaveTextContent("=Cost without VAT1,000.00 ARS✱");
   });
 
   it("shortens long intermediate decimals for reading but keeps the exact value in a tooltip", () => {
@@ -158,7 +158,7 @@ describe("StepTrace unchanged steps", () => {
 
   it("says the same in Spanish, with the first word capitalized and the Argentine format", () => {
     renderWithI18n(<StepTrace trace={noop} currency="ARS" />, "es");
-    expect(screen.getAllByRole("listitem")[1]).toHaveTextContent("=Costo final3.387,84 ARS✱");
+    expect(screen.getAllByRole("listitem")[1]).toHaveTextContent("=Costo unitario3.387,84 ARS✱");
     expect(screen.getByText("Sin descuentos · sin IVA para quitar · ya es precio por unidad")).toBeInTheDocument();
     expect(screen.queryByText(/número|redondeado/)).toBeNull();
   });

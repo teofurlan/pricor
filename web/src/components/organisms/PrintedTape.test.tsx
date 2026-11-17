@@ -62,7 +62,7 @@ describe("printed preview tape", () => {
     renderWithI18n(<PreviewTable page={page} busy={false} onPage={vi.fn()} />);
     const tape = screen.getByRole("region", { name: "From file to cost" });
     expect(within(tape).getAllByRole("listitem")).toHaveLength(page.items[0].trace.length);
-    expect(within(tape).getByRole("status")).toHaveTextContent("Final cost: 1,000.00 ARS");
+    expect(within(tape).getByRole("status")).toHaveTextContent("Cost without VAT: 1,000.00 ARS");
     expect(vi.getTimerCount()).toBe(0);
   });
 

@@ -55,3 +55,12 @@ def test_a_model_suggestion_does_not_change_which_options_are_primary():
 def test_questions_without_a_long_list_have_no_groups():
     assert option_groups(question_for(ParameterId.PRICE_INCLUDES_VAT)) is None
     assert option_groups(question_for(ParameterId.CURRENCY)) is None
+
+
+def test_vat_question_explains_stripping_vat_vs_keeping_it_for_monotributista():
+    vat = question_for(ParameterId.PRICE_INCLUDES_VAT)
+    labels = {option.token: option.label for option in vat.options}
+    assert "costo sin IVA" in labels["yes"].es
+    assert "Monotributista" in labels["no"].es
+    assert "keep VAT in the cost" in labels["no"].en
+

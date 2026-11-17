@@ -4,7 +4,7 @@ import { useI18n } from "../../i18n";
 import { conversionText, formatDecimalText, formatFigure, formatInteger } from "../../lib/decimalText";
 import { Badge } from "../atoms/Badge";
 import { Button } from "../atoms/Button";
-import { StepTrace } from "../molecules/StepTrace";
+import { StepTrace, visibleSteps } from "../molecules/StepTrace";
 import { usePendingAction } from "../atoms/usePendingAction";
 
 interface Props {
@@ -34,6 +34,9 @@ export function PreviewTable({ page, busy, onPage, fx = null }: Props) {
   const selected = (selection.offset === page.offset && page.items.find((row) => row.row_number === selection.row)) || page.items[0];
   const first = page.items.length === 0 ? 0 : page.offset + 1;
   const last = page.offset + page.items.length;
+  const vatStripped = page.items.some((item) =>
+    visibleSteps(item.trace, item.record?.currency ?? null, fx?.to ?? null).shown.some((step) => step.step === "strip_vat"),
+  );
 
   function select(row: number) {
     setBrowsed(true);
@@ -69,7 +72,7 @@ export function PreviewTable({ page, busy, onPage, fx = null }: Props) {
                   <th scope="col"># {t("preview.row")}</th>
                   <th scope="col">{t("report.col.code")}</th>
                   <th scope="col">{t("report.col.description")}</th>
-                  <th scope="col" className="num">{t("trace.rounding")}</th>
+                  <th scope="col" className="num">{t(vatStripped ? "trace.rounding.exVat" : "trace.rounding")}</th>
                   {fx && <th scope="col" className="num">{t("preview.converted", { currency: fx.to })}</th>}
                 </tr>
               </thead>

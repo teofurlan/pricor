@@ -98,6 +98,7 @@ export const en = {
   "trace.strip_vat": "VAT removed",
   "trace.per_unit": "Per unit",
   "trace.rounding": "Final cost",
+  "trace.rounding.exVat": "Cost without VAT",
   "trace.convert_currency": "Converted",
   "trace.skip.parse_number": "already a number",
   "trace.skip.apply_discounts": "no discounts",

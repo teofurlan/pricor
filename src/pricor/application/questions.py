@@ -99,7 +99,7 @@ _TEXTS: dict[ParameterId, LocalizedText] = {
     ),
     ParameterId.PRICE_INCLUDES_VAT: _text(
         "Do the prices in this list already include VAT?",
-        "¿Los precios de esta lista ya incluyen IVA?",
+        "¿Los precios de esta lista ya incluyen IVA y quiere descontarlo?",
     ),
     ParameterId.VAT_RATE: _text(
         "Which VAT rate is included in the prices?",
@@ -129,8 +129,14 @@ _OPTIONS: dict[ParameterId, tuple[Option, ...]] = {
         Option("decimal_point", _text("Decimal point (1,234.56)", "Punto decimal (1,234.56)")),
     ),
     ParameterId.PRICE_INCLUDES_VAT: _yes_no(
-        _text("Yes, VAT is included", "Sí, incluyen IVA"),
-        _text("No, prices are net of VAT", "No, son precios sin IVA"),
+        _text(
+            "Yes, VAT is included",
+            "Sí, incluyen IVA: descontarlo para obtener el costo sin IVA (Responsable Inscripto)",
+        ),
+        _text(
+            "No: prices are net of VAT, or keep VAT in the cost",
+            "No: son precios sin IVA, o mantener el IVA en el costo (Monotributista)",
+        ),
     ),
     ParameterId.VAT_RATE: _constants(("21", "10.5"), "%"),
     ParameterId.PRICE_IS_PER_PACK: _yes_no(

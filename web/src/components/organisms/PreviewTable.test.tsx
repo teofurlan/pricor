@@ -52,4 +52,36 @@ describe("PreviewTable Argentine numbers", () => {
     renderWithI18n(<PreviewTable page={big()} busy={false} onPage={vi.fn()} />, "en");
     expect(within(screen.getByRole("table")).getByText("3,387.84")).toBeInTheDocument();
   });
+
+  it("labels the column and tape total 'Costo sin IVA' when VAT was stripped, and 'Costo unitario' when kept", async () => {
+    const withVatStripped = previewPage({
+      items: [previewItem({
+        row_number: 3,
+        trace: [
+          { step: "original", value: "1210.00" },
+          { step: "strip_vat", value: "1000.00" },
+          { step: "rounding", value: "1000.00" },
+        ],
+        record: { supplier_code: "A1", description: "Cable", unit_cost_net: "1000.00", currency: "ARS" },
+      })],
+    });
+    const { rerender } = renderWithI18n(<PreviewTable page={withVatStripped} busy={false} onPage={vi.fn()} />, "es");
+    expect(within(screen.getByRole("table")).getByRole("columnheader", { name: "Costo sin IVA" })).toBeInTheDocument();
+    expect(await within(screen.getByRole("region", { name: "Del archivo al costo" })).findByText("Costo sin IVA")).toBeInTheDocument();
+
+    const withoutVatStripped = previewPage({
+      items: [previewItem({
+        row_number: 3,
+        trace: [
+          { step: "original", value: "1210.00" },
+          { step: "strip_vat", value: "1210.00" },
+          { step: "rounding", value: "1210.00" },
+        ],
+        record: { supplier_code: "A1", description: "Cable", unit_cost_net: "1210.00", currency: "ARS" },
+      })],
+    });
+    rerender(<PreviewTable page={withoutVatStripped} busy={false} onPage={vi.fn()} />);
+    expect(within(screen.getByRole("table")).getByRole("columnheader", { name: "Costo unitario" })).toBeInTheDocument();
+    expect(await within(screen.getByRole("region", { name: "Del archivo al costo" })).findByText("Costo unitario")).toBeInTheDocument();
+  });
 });
