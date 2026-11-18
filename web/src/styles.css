@@ -836,7 +836,25 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
 /* Chosen files: torn slips of paper side by side, the feed key always last. */
 .file-tiles { list-style: none; margin: 0; padding: 4px 2px 10px; display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x proximity; overscroll-behavior-x: contain; }
 .file-tiles--active .file-tile--add .file-tile__add { border-style: solid; border-color: var(--ink); background: #eaece4; }
-.file-tile { position: relative; flex: 0 0 9.25rem; height: 9.25rem; scroll-snap-align: start; display: grid; grid-template-rows: auto 1fr; justify-items: start; gap: 10px; padding: 14px 12px 18px; background: var(--paper); mask-image: linear-gradient(#000 0 0), conic-gradient(from 135deg at 50% 0, #000 90deg, transparent 0); mask-size: 100% calc(100% - 7px), 12px 8px; mask-position: top, bottom; mask-repeat: no-repeat, repeat-x; mask-composite: add; }
+.file-tile {
+  position: relative;
+  flex: 0 0 9.25rem;
+  height: 9.25rem;
+  scroll-snap-align: start;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  justify-items: start;
+  gap: 8px;
+  padding: 12px;
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: border-color 100ms ease-out;
+}
+.file-tile:hover {
+  border-color: var(--ink);
+}
 .file-mark { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); }
 .file-mark svg { flex-shrink: 0; }
 .file-mark__label { font: 600 0.75rem/1 var(--figures); letter-spacing: 0.04em; padding: 3px 5px; border: 1px solid var(--ink); }
@@ -848,8 +866,33 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
 .file-tile__remove { position: absolute; top: 6px; right: 6px; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; border-radius: 2px; }
 .file-tile__remove:hover { color: var(--ink-brick); background: var(--ground); }
 .file-tile__remove:active { transform: translateY(1px); }
-.file-tile--add { padding: 0; background: none; mask: none; }
-.file-tile__add { width: 100%; height: 100%; display: grid; place-content: center; justify-items: center; gap: 8px; padding: 12px; border: 2px dashed var(--muted); border-radius: 3px; background: transparent; color: var(--ink); font-size: 0.875rem; font-weight: 600; cursor: pointer; transition: border-color 100ms ease-out, background-color 100ms ease-out; }
+.file-tile--add {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  background: none;
+  mask: none;
+  border: none;
+  box-shadow: none;
+}
+.file-tile__add {
+  width: 100%;
+  height: 100%;
+  flex: 1 1 auto;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 12px;
+  border: 2px dashed var(--muted);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 100ms ease-out, background-color 100ms ease-out;
+}
 .file-tile__add:hover { background: var(--paper); border-color: var(--ink); }
 .file-tile__add:active { transform: translateY(1px); }
 /* One ruled line per file: its name, the supplier to write and the sheet to read. */
