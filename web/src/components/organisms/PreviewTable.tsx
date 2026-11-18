@@ -38,8 +38,22 @@ export function PreviewTable({ page, busy, onPage, fx = null, filter = DEFAULT_F
   const [draftQuery, setDraftQuery] = useState(filter.query);
   const debounceRef = useRef<number | null>(null);
   const tableRef = useRef<HTMLTableElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const helpId = useId();
   const searchId = useId();
+
+  useEffect(() => {
+    if (!onFilter) return;
+    function onKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) return;
+      const tag = (event.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      event.preventDefault();
+      searchInputRef.current?.focus();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onFilter]);
   const selected = (selection.offset === page.offset && page.items.find((row) => row.row_number === selection.row)) || page.items[0];
   const first = page.items.length === 0 ? 0 : page.offset + 1;
   const last = page.offset + page.items.length;
@@ -118,6 +132,7 @@ export function PreviewTable({ page, busy, onPage, fx = null, filter = DEFAULT_F
               <div className="filter-bar__search">
                 <label className="sr-only" htmlFor={searchId}>{t("preview.search.label")}</label>
                 <input
+                  ref={searchInputRef}
                   id={searchId}
                   type="search"
                   value={draftQuery}

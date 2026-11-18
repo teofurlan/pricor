@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { Language, PriceReport, ReportChange, ReportProduct } from "../../api/types";
 import { formatFigure, formatInteger } from "../../lib/decimalText";
 import { percentToRatio, ratioToPercent, signedPercent } from "../../lib/percent";
@@ -151,6 +151,20 @@ export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
   const { t, language } = useI18n();
   const [query, setQuery] = useState("");
   const searchId = useId();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) return;
+      const tag = (event.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (!searchInputRef.current) return;
+      event.preventDefault();
+      searchInputRef.current.focus();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
   const { summary } = report;
   const threshold = ratioToPercent(report.threshold);
   const plural = (base: "report.anomaly" | "report.new", count: number) =>
@@ -212,6 +226,7 @@ export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
             <div className="filter-bar__search">
               <label className="sr-only" htmlFor={searchId}>{t("report.search.label")}</label>
               <input
+                ref={searchInputRef}
                 id={searchId}
                 type="search"
                 value={query}

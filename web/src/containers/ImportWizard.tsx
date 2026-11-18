@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ApiClient, ApiError, CombinedExportApiClient, EventsApiClient, ExportFile, ExportSheet, MemoryApiClient, OutputFormatApiClient, SampleApiClient, WorkspaceApiClient } from "../api/client";
 import { useServerConfig } from "../api/serverConfig";
-import type { ColumnRole, CreateImportInput, FunnelEvent, Memory, Question, SessionState } from "../api/types";
+import type { ColumnRole, CreateImportInput, FunnelEvent, Memory, OutputFormat, Question, SessionState } from "../api/types";
 import { Button } from "../components/atoms/Button";
 import { TapeLoader } from "../components/atoms/TapeLoader";
 import { CountsSummary } from "../components/molecules/CountsSummary";
@@ -17,6 +17,7 @@ import { PreviewTable } from "../components/organisms/PreviewTable";
 import { QuestionsPanel } from "../components/organisms/QuestionsPanel";
 import { ReuseBanner } from "../components/organisms/ReuseBanner";
 import { RejectedList } from "../components/organisms/RejectedList";
+import { SideDrawer } from "../components/organisms/SideDrawer";
 import { Stepper, type StepId, type StepItem } from "../components/organisms/Stepper";
 import { WorkspacePanel } from "../components/organisms/WorkspacePanel";
 import { UploadForm } from "../components/organisms/UploadForm";
@@ -28,11 +29,11 @@ import { describeError } from "../i18n/serverText";
 import { useI18n, type TextKey } from "../i18n";
 import { PriceChanges } from "./PriceChanges";
 import { MemoryPanelContainer } from "./MemoryPanelContainer";
-import { OutputFormatStep } from "./OutputFormatStep";
+import { OutputFormatContainer } from "./OutputFormatContainer";
 import { toApiError, usePreview } from "./usePreview";
 
 // Steps that change the plan; the server refuses them once the import is approved.
-const PLAN_STEPS: StepId[] = ["header", "columns", "questions", "format"];
+const PLAN_STEPS: StepId[] = ["header", "columns", "questions"];
 
 const TITLES: Record<StepId, { title: TextKey; lede: TextKey }> = {
   upload: { title: "title.upload", lede: "lede.upload" },
@@ -159,9 +160,21 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   const [askedQuestions, setAskedQuestions] = useState<Question[]>([]);
   const [memories, setMemories] = useState<Memory[]>([]);
   const [memoryOpen, setMemoryOpen] = useState(false);
+  const [formatOpen, setFormatOpen] = useState(false);
+  const [savedFormat, setSavedFormat] = useState<OutputFormat | null>(null);
+  const [approveTab, setApproveTab] = useState<"files" | "report">("files");
   const memoryApi = "listMemories" in api ? (api as ApiClient & MemoryApiClient) : null;
   const sampleApi = typeof (api as Partial<SampleApiClient>).listSamples === "function" ? (api as ApiClient & SampleApiClient) : null;
   const formatApi = "getOutputFormat" in api ? (api as ApiClient & OutputFormatApiClient) : null;
+
+  useEffect(() => {
+    if (!formatApi || !dataReady) return;
+    let active = true;
+    formatApi.getOutputFormat()
+      .then((stored) => { if (active) setSavedFormat(stored); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [formatApi, dataReady]);
 
   // Optimistic answers & serialized request queue
   const [localAnswers, setLocalAnswers] = useState<Record<string, string>>({});
@@ -268,6 +281,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   /** Take a freshly created import as the one under review. */
   const open = (created: SessionState) => {
     setAskedQuestions([]);
+    setApproveTab("files");
     remember(created);
     track("import_started");
     const needsHeader = created.status === "header_choice_required";
@@ -488,7 +502,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
     if (switchPrompt) switchDialogRef.current?.focus();
   }, [switchPrompt]);
 
-  const order: StepId[] = ["upload", ...(headerNeeded ? (["header"] as const) : []), "columns", "questions", "preview", ...(formatApi ? (["format"] as const) : []), "approve"];
+  const order: StepId[] = ["upload", ...(headerNeeded ? (["header"] as const) : []), "columns", "questions", "preview", "approve"];
   const current = order.indexOf(step);
   const steps: StepItem[] = order.map((id, position) => ({
     id,
@@ -498,6 +512,32 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   const previousStep = !queueDone
     ? steps.slice(0, current).reverse().find((item) => !item.locked) ?? null
     : null;
+
+  const confirmedFormat = savedFormat?.state === "confirmed" ? savedFormat : null;
+  const formatCount = confirmedFormat?.columns.length ?? 0;
+  const mastheadFormatLabel = confirmedFormat
+    ? t(formatCount === 1 ? "format.mastheadCustom.one" : "format.mastheadCustom", { n: formatCount })
+    : t("format.mastheadStandard");
+  const approveFormatSummary = confirmedFormat
+    ? t(formatCount === 1 ? "format.approveBarCustom.one" : "format.approveBarCustom", { n: formatCount })
+    : t("format.approveBarStandard");
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (!(event.ctrlKey || event.metaKey) || event.key !== "Enter") return;
+      const tag = (event.target as HTMLElement | null)?.tagName;
+      if (tag === "TEXTAREA") return;
+      if (step === "preview" && preview.page && !busy) {
+        event.preventDefault();
+        setStep("approve");
+      } else if (step === "approve" && session && !session.approved && preview.page && !busy) {
+        event.preventDefault();
+        void approve();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
 
   const links = (id: string) => ({
     products: { csv: api.exportUrl(id, "csv"), xlsx: api.exportUrl(id, "xlsx") },
@@ -518,6 +558,11 @@ export function ImportWizard({ api }: { api: ApiClient }) {
           <span className="masthead__promise">{t("app.promise")}</span>
         </div>
         <div className="masthead__tools">
+          {formatApi && (
+            <Button variant="quiet" onClick={() => setFormatOpen(true)}>
+              {mastheadFormatLabel}
+            </Button>
+          )}
           {memoryApi && (
             <Button variant="quiet" onClick={() => setMemoryOpen(true)}>
               {memories.length > 0 ? t("memory.openCount", { count: memories.length }) : t("memory.open")}
@@ -526,6 +571,17 @@ export function ImportWizard({ api }: { api: ApiClient }) {
           <LanguageToggle />
         </div>
       </header>
+      {formatApi && dataReady && (
+        <SideDrawer
+          open={formatOpen}
+          label={t("format.drawerTitle")}
+          closeLabel={t("format.drawerClose")}
+          onClose={() => setFormatOpen(false)}
+          className="format-drawer"
+        >
+          <OutputFormatContainer api={formatApi} onChange={setSavedFormat} />
+        </SideDrawer>
+      )}
       {memoryApi && dataReady && (
         <MemoryPanelContainer
           api={memoryApi}
@@ -681,7 +737,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
                   <RejectedList rows={preview.page.totals.rejected_rows} />
                 </section>
                 <div className="actions">
-                  <Button variant="primary" onClick={() => setStep(formatApi ? "format" : "approve")}>
+                  <Button variant="primary" onClick={() => setStep("approve")}>
                     {t("preview.continue")}
                   </Button>
                 </div>
@@ -689,13 +745,32 @@ export function ImportWizard({ api }: { api: ApiClient }) {
             ) : (
               loadingPreview
             ))}
-          {step === "format" && session && formatApi && (
-            <OutputFormatStep api={formatApi} onContinue={() => setStep("approve")} />
-          )}
           {step === "approve" &&
             session &&
             (preview.page ? (
               <div className="stack">
+                {session.approved && (
+                  <div className="approve-tabs" role="tablist" aria-label={t("approve.tabs")}>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={approveTab === "files"}
+                      className={`button approve-tab${approveTab === "files" ? " approve-tab--active" : ""}`}
+                      onClick={() => setApproveTab("files")}
+                    >
+                      {t("approve.tab.files")}
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={approveTab === "report"}
+                      className={`button approve-tab${approveTab === "report" ? " approve-tab--active" : ""}`}
+                      onClick={() => setApproveTab("report")}
+                    >
+                      {t("approve.tab.report")}
+                    </button>
+                  </div>
+                )}
                 <ApprovePanel
                   totals={preview.page.totals}
                   approved={session.approved}
@@ -704,6 +779,9 @@ export function ImportWizard({ api }: { api: ApiClient }) {
                   supplier={session.supplier_name}
                   file={session.file_name}
                   sheets={sheets}
+                  showSheets={approveTab === "files"}
+                  formatSummary={formatApi ? approveFormatSummary : undefined}
+                  onOpenFormat={formatApi ? () => setFormatOpen(true) : undefined}
                   onApprove={approve}
                 />
                 {session.approved && queue && (
@@ -718,7 +796,9 @@ export function ImportWizard({ api }: { api: ApiClient }) {
                   </div>
                 )}
                 {session.approved && (
-                  <PriceChanges api={api} sessionId={session.id} supplierName={session.supplier_name} />
+                  <div role="tabpanel" hidden={approveTab !== "report"}>
+                    <PriceChanges api={api} sessionId={session.id} supplierName={session.supplier_name} />
+                  </div>
                 )}
               </div>
             ) : (

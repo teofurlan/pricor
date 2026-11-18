@@ -315,6 +315,17 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
 .lang__option[aria-pressed="true"]:hover:not(:disabled) { background: var(--ink); color: var(--paper); }
 
 .upload { max-width: 52rem; min-width: 0; }
+.upload.workbench--upload { max-width: none; }
+.upload__advanced { border-top: 1px dashed var(--rule); padding-top: 12px; }
+.upload__advanced summary { cursor: pointer; font-size: 0.875rem; font-weight: 600; color: var(--muted); }
+.upload__advanced summary:hover { color: var(--ink); }
+.upload__advanced-body { display: grid; gap: 16px; padding-top: 14px; }
+.output-format__field { display: grid; gap: 4px; }
+.output-format__field-label { font-size: 0.8125rem; font-weight: 600; color: var(--muted); }
+.approve-format-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 10px 14px; background: var(--surface-subtle); border: 1px solid var(--rule); border-radius: 4px; font-size: 0.875rem; color: var(--muted); }
+.approve-tabs { display: flex; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid var(--rule); padding-bottom: 12px; }
+.approve-tab { min-height: 38px; padding: 8px 14px; }
+.approve-tab--active, .approve-tab--active:hover:not(:disabled) { background: var(--ink); border-color: var(--ink); color: var(--paper); box-shadow: none; }
 .workbench { display: grid; grid-template-columns: minmax(0, 1fr) 21rem; gap: 2rem; align-items: start; min-width: 0; }
 .form { display: grid; gap: 20px; min-width: 0; padding: 22px 24px 24px; background: var(--paper); border: 1px solid var(--rule); border-radius: 4px; }
 .form__row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
@@ -475,10 +486,10 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
    Between 640 and about 820 px it scrolls inside its frame; below 640 px each column becomes a stacked block. */
 .table--columns { table-layout: fixed; min-width: 50rem; }
 .table--columns .col--column { width: 22%; }
+.table--columns .col--suggestion { width: 23%; }
 .table--columns .col--role { width: 12%; }
 .table--columns .col--actions { width: 28%; }
 .table--columns .col--status { width: 15%; }
-.table--columns .col--suggestion { width: 23%; }
 .table--columns .cell--status { white-space: normal; }
 .table--columns .cell--suggestion { white-space: normal; }
 .table--columns .suggestion__label { overflow-wrap: anywhere; }

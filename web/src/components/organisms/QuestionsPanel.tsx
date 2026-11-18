@@ -1,14 +1,31 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ApiError } from "../../api/client";
 import type { AskReply, AskTurn, ColumnState, Memory, Question } from "../../api/types";
 import { useI18n } from "../../i18n";
 import { formatTypedValue } from "../../i18n/serverText";
 import { Button } from "../atoms/Button";
+import { TapeFigure } from "../atoms/TapeFigure";
 import { usePendingAction } from "../atoms/usePendingAction";
 import { AskGemma } from "../molecules/AskGemma";
 import { QuestionCard } from "../molecules/QuestionCard";
 import { acceptedModelSuggestion, RememberSuggestion } from "../molecules/RememberSuggestion";
 import { SamplePreview, type SampleData } from "../molecules/SamplePreview";
+
+/** Parses a plain decimal string from a sample cell for an illustrative live preview only. */
+function parseSampleNumber(raw: string): number | null {
+  const cleaned = raw.replace(/[^0-9.,-]/g, "").trim();
+  if (!cleaned) return null;
+  const lastComma = cleaned.lastIndexOf(",");
+  const lastDot = cleaned.lastIndexOf(".");
+  let normalized = cleaned;
+  if (lastComma > lastDot) {
+    normalized = cleaned.replace(/\./g, "").replace(",", ".");
+  } else if (lastDot > lastComma) {
+    normalized = cleaned.replace(/,/g, "");
+  }
+  const value = Number(normalized);
+  return Number.isFinite(value) ? value : null;
+}
 
 interface Props {
   questions: Question[];
@@ -57,6 +74,61 @@ export function QuestionsPanel({
   const answered = questions.filter((item) => answers[item.id] !== undefined && item.id !== reopened);
   const current = questions.find((item) => item.id === reopened) ?? open[0] ?? null;
 
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && !busy && !blocked && open.length === 0) {
+        const tag = (event.target as HTMLElement | null)?.tagName;
+        if (tag === "TEXTAREA" || tag === "INPUT") return;
+        event.preventDefault();
+        pending.mark("continue");
+        onContinue();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [busy, blocked, open.length, onContinue, pending]);
+
+  const firstRow = sample && sample.rows.length > 0 ? sample.rows[0] : null;
+  const findCol = (role: string) => columns.find((col) => col.role === role);
+  const codeCol = findCol("code");
+  const descCol = findCol("description");
+  const priceCol = findCol("cost_price");
+  const rawPrice = firstRow && priceCol ? (firstRow[priceCol.index] ?? "") : "";
+  const liveFinal = finalCosts?.[0] ?? null;
+
+  // Build an illustrative live estimate as the merchant answers VAT, pack, or currency rules.
+  const liveSteps: Array<{ op: string; label: string; value: string }> = [];
+  let estimatedTotal: string | null = liveFinal;
+  if (rawPrice && !liveFinal) {
+    const parsed = parseSampleNumber(rawPrice);
+    if (parsed !== null) {
+      let running = parsed;
+      const vatIncluded = answers["price_includes_vat"];
+      const vatRateToken = answers["vat_rate"];
+      if (vatIncluded === "yes" || vatIncluded === "yes_strip") {
+        const rate = vatRateToken?.startsWith("constant:") ? Number(vatRateToken.slice("constant:".length)) : 21;
+        if (Number.isFinite(rate) && rate > 0) {
+          running = running / (1 + rate / 100);
+          liveSteps.push({ op: "÷", label: t("trace.strip_vat"), value: running.toFixed(2) });
+        }
+      }
+      const perPack = answers["price_is_per_pack"];
+      const packToken = answers["units_per_pack"];
+      if (perPack === "yes" && packToken?.startsWith("constant:")) {
+        const units = Number(packToken.slice("constant:".length));
+        if (Number.isFinite(units) && units > 0) {
+          running = running / units;
+          liveSteps.push({ op: "÷", label: t("trace.per_unit"), value: running.toFixed(2) });
+        }
+      }
+      const currency = answers["currency"] && !answers["currency"].startsWith("constant:") ? ` ${answers["currency"]}` : "";
+      if (liveSteps.length > 0 || currency) {
+        estimatedTotal = `${running.toFixed(2)}${currency}`;
+      }
+    }
+  }
+  const showLiveTape = Boolean(firstRow && priceCol && rawPrice.trim() !== "");
+
   function answerLabel(item: Question): string {
     const token = answers[item.id];
     const option = item.options.find((candidate) => candidate.token === token);
@@ -87,24 +159,10 @@ export function QuestionsPanel({
     }
   }
 
-  return (
+  const questionColumn = (
     <div className="stack">
       {questions.length === 0 && <p className="empty-state">{t("questions.none")}</p>}
       {questions.some((question) => question.suggestion && !question.suggestion.calibrated) && <p className="hint">{t("suggestion.legend")}</p>}
-      {answered.length > 0 && (
-        <ol className="exchanges" aria-label={t("questions.history")}>
-          {answered.map((item) => (
-            <li key={item.id} className="exchange">
-              <span className="exchange__question">{item.text[language]}</span>
-              <span className="exchange__answer">{answerLabel(item)}</span>
-              <Button variant="link" className="exchange__change" onClick={() => setReopened(item.id)}>{t("questions.change")}</Button>
-              {onRemember && acceptedModelSuggestion(item, answers[item.id]) && (
-                <div className="exchange__remember"><RememberSuggestion questionId={item.id} onRemember={onRemember} /></div>
-              )}
-            </li>
-          ))}
-        </ol>
-      )}
       {current && (
         <div className="exchange-current">
           <QuestionCard
@@ -126,6 +184,20 @@ export function QuestionsPanel({
           )}
         </div>
       )}
+      {answered.length > 0 && (
+        <ol className="exchanges" aria-label={t("questions.history")}>
+          {answered.map((item) => (
+            <li key={item.id} className="exchange">
+              <span className="exchange__question">{item.text[language]}</span>
+              <span className="exchange__answer">{answerLabel(item)}</span>
+              <Button variant="link" className="exchange__change" onClick={() => setReopened(item.id)}>{t("questions.change")}</Button>
+              {onRemember && acceptedModelSuggestion(item, answers[item.id]) && (
+                <div className="exchange__remember"><RememberSuggestion questionId={item.id} onRemember={onRemember} /></div>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
       <div className="actions">
         <Button variant="primary" disabled={busy || blocked || open.length > 0} loading={pending.isLoading("continue")} onClick={() => { pending.mark("continue"); onContinue(); }}>
           {t("questions.continue")}
@@ -136,6 +208,55 @@ export function QuestionsPanel({
           </span>
         )}
       </div>
+    </div>
+  );
+
+  return (
+    <div className="stack">
+      {showLiveTape ? (
+        <div className="workbench workbench--questions">
+          {questionColumn}
+          <section className="tape tape--sticky tape--live-sample" aria-label={t("questions.liveTitle")}>
+            <h2 className="tape__heading">{t("questions.liveTitle")}</h2>
+            {codeCol && firstRow?.[codeCol.index] && <p className="tape__reference"># {firstRow[codeCol.index]}</p>}
+            {descCol && firstRow?.[descCol.index] && <p className="tape__description">{firstRow[descCol.index]}</p>}
+            <ol className="trace">
+              <li className="trace__step">
+                <span className="trace__operator" aria-hidden="true">#</span>
+                <span className="trace__label">{t("questions.liveOriginal")}</span>
+                <TapeFigure className="trace__value" language={language} value={rawPrice} fracWidth={3} />
+                <span className="trace__mark" aria-hidden="true" />
+              </li>
+              {liveSteps.map((step) => (
+                <li key={step.label} className="trace__step">
+                  <span className="trace__operator" aria-hidden="true">{step.op}</span>
+                  <span className="trace__label">{step.label}</span>
+                  <TapeFigure className="trace__value" language={language} value={step.value} fracWidth={3} />
+                  <span className="trace__mark" aria-hidden="true" />
+                </li>
+              ))}
+              {estimatedTotal ? (
+                <li className="trace__step trace__step--final">
+                  <span className="trace__operator" aria-hidden="true">=</span>
+                  <span className="trace__label">{t(liveFinal ? "questions.liveExact" : "questions.liveEstimate")}</span>
+                  <TapeFigure className="trace__value" language={language} value={estimatedTotal} fracWidth={3} />
+                  <span className="trace__mark" aria-hidden="true">✱</span>
+                </li>
+              ) : (
+                <li className="trace__step">
+                  <span className="trace__operator" aria-hidden="true">=</span>
+                  <span className="trace__label">{t("questions.livePending")}</span>
+                  <span className="trace__value">—</span>
+                  <span className="trace__mark" aria-hidden="true" />
+                </li>
+              )}
+            </ol>
+            <div className="tape__tear" aria-hidden="true" />
+          </section>
+        </div>
+      ) : (
+        questionColumn
+      )}
       {sample && sample.rows.length > 0 && (
         <SamplePreview
           sample={sample}

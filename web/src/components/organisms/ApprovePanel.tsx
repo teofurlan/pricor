@@ -21,11 +21,16 @@ interface Props {
   file?: string;
   /** The approved files as written; shown only after approval. */
   sheets?: Partial<Record<ExportFile, ExportSheet | null>>;
+  /** Controls whether the exported sheet previews render inline (used by post-approval tabs). */
+  showSheets?: boolean;
+  /** Optional summary of the active export format shown before approval. */
+  formatSummary?: string;
+  onOpenFormat?(): void;
   onApprove(): void;
 }
 
 /** The signature and its receipts share the exact counts that were previewed. */
-export function ApprovePanel({ totals, approved, busy, links, supplier, file, sheets = {}, onApprove }: Props) {
+export function ApprovePanel({ totals, approved, busy, links, supplier, file, sheets = {}, showSheets = true, formatSummary, onOpenFormat, onApprove }: Props) {
   const { t, language } = useI18n();
   const pending = usePendingAction<"approve">(busy);
   return (
@@ -38,6 +43,12 @@ export function ApprovePanel({ totals, approved, busy, links, supplier, file, sh
               {t(totals.rejected === 1 ? "approve.rejected.one" : "approve.rejected.other", { count: formatInteger(totals.rejected, language) })}
             </>}
           </p>
+          {!approved && formatSummary && onOpenFormat && (
+            <div className="approve-format-bar">
+              <span>{t("format.approveBar", { summary: formatSummary })}</span>
+              <Button variant="link" disabled={busy} onClick={onOpenFormat}>{t("formatStep.change")}</Button>
+            </div>
+          )}
           {approved && <ul className="downloads" aria-label={t("approve.downloads")}>
             <li className="download">
               <span className="download__name">{t("approve.products")}</span>
@@ -60,8 +71,8 @@ export function ApprovePanel({ totals, approved, busy, links, supplier, file, sh
           <div className="tape__tear" aria-hidden="true" />
         </section>
       </div>
-      {approved && sheets.products && sheets.products.header.length > 0 && <SheetPreview sheet={sheets.products} file="products" />}
-      {approved && sheets.rejected && sheets.rejected.header.length > 0 && <SheetPreview sheet={sheets.rejected} file="rejected" />}
+      {approved && showSheets && sheets.products && sheets.products.header.length > 0 && <SheetPreview sheet={sheets.products} file="products" />}
+      {approved && showSheets && sheets.rejected && sheets.rejected.header.length > 0 && <SheetPreview sheet={sheets.rejected} file="rejected" />}
     </div>
   );
 }

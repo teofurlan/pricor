@@ -544,6 +544,7 @@ describe("ImportWizard", () => {
     expect(api.report).not.toHaveBeenCalled(); // nothing to compare before the user signs
 
     await userEvent.click(await screen.findByRole("button", { name: "Approve and generate file" }));
+    await userEvent.click(await screen.findByRole("tab", { name: "Price changes" }));
 
     expect(await screen.findByRole("heading", { level: 2, name: "Price comparison" })).toBeInTheDocument();
     const summary = screen.getByRole("region", { name: "Price comparison" });
@@ -587,6 +588,7 @@ describe("ImportWizard", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
     await userEvent.click(await screen.findByRole("button", { name: "Continue to approval" }));
     await userEvent.click(await screen.findByRole("button", { name: "Approve and generate file" }));
+    await userEvent.click(await screen.findByRole("tab", { name: "Price changes" }));
 
     expect(await screen.findByText(/This is the first approved list from Ferreteria Ejemplo/)).toBeInTheDocument();
   });

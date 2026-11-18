@@ -440,7 +440,7 @@ describe("ColumnsTable", () => {
     const row = screen.getByRole("row", { name: /codart/ });
 
     // Suggestion header
-    expect(screen.getByRole("columnheader", { name: "Suggestion (model confidence)" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Suggestion" })).toBeInTheDocument();
 
     // Suggested role uses role.* label: "Product code" (not raw "CODE")
     const suggestionCell = row.querySelector(".cell--suggestion") as HTMLElement;
