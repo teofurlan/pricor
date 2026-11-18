@@ -414,7 +414,7 @@ describe("ColumnsTable", () => {
     expect(screen.queryByRole("columnheader", { name: "Decided by" })).not.toBeInTheDocument();
 
     const rowCodigo = screen.getByRole("row", { name: /Codigo/ });
-    expect(within(rowCodigo).getByText("✓ Set by the model (confident)")).toBeInTheDocument();
+    expect(within(rowCodigo).getByText("✓ Automatically detected")).toBeInTheDocument();
 
     const rowMisterio = screen.getByRole("row", { name: /Misterio/ });
     expect(within(rowMisterio).getByText("Needs your confirmation")).toBeInTheDocument();
@@ -765,7 +765,7 @@ describe("QuestionsPanel", () => {
     const onAsk = vi.fn(() => new Promise<{ reply: string; suggested_option: string | null }>((done) => { resolve = done; }));
     const onAnswer = vi.fn();
     renderWithI18n(<QuestionsPanel questions={[question()]} answers={{}} busy={false} onAnswer={onAnswer} onContinue={vi.fn()} onAsk={onAsk} />);
-    await userEvent.type(screen.getByLabelText("Ask Gemma about this question"), "The list says $ only");
+    await userEvent.type(screen.getByLabelText("Ask the assistant about this question"), "The list says $ only");
     await userEvent.click(screen.getByRole("button", { name: "Ask" }));
     expect(onAsk).toHaveBeenCalledWith("currency", "The list says $ only", []);
     expect(screen.getByRole("button", { name: /Ask/ })).toHaveAttribute("aria-busy", "true");
@@ -778,12 +778,12 @@ describe("QuestionsPanel", () => {
     expect(onAnswer).not.toHaveBeenCalled();
   });
 
-  it("keeps the question answerable when Gemma cannot be reached", async () => {
+  it("keeps the question answerable when the assistant cannot be reached", async () => {
     const onAsk = vi.fn().mockRejectedValue(new ApiError(503, "model_unavailable", "down"));
     renderWithI18n(<QuestionsPanel questions={[question()]} answers={{}} busy={false} onAnswer={vi.fn()} onContinue={vi.fn()} onAsk={onAsk} />);
-    await userEvent.type(screen.getByLabelText("Ask Gemma about this question"), "Which one?");
+    await userEvent.type(screen.getByLabelText("Ask the assistant about this question"), "Which one?");
     await userEvent.click(screen.getByRole("button", { name: "Ask" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Gemma is not available right now. You can still answer with the keys.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("The assistant is unavailable right now. You can still answer with the buttons.");
     expect(screen.getByRole("button", { name: /Argentine pesos/ })).toBeEnabled();
   });
 
@@ -928,13 +928,13 @@ describe("ApprovePanel", () => {
     expect(screen.getByText(/5 products will be saved/)).toBeInTheDocument();
     expect(screen.getByText(/1 rejected row stays out/)).toBeInTheDocument();
     expect(screen.queryByRole("link")).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "Approve import" }));
+    await userEvent.click(screen.getByRole("button", { name: "Approve and generate file" }));
     expect(onApprove).toHaveBeenCalled();
   });
 
   it("offers every download once approved", () => {
     renderWithI18n(<ApprovePanel totals={previewPage().totals} approved busy={false} links={links} onApprove={vi.fn()} />);
-    expect(screen.queryByRole("button", { name: "Approve import" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Approve and generate file" })).toBeNull();
     expect(screen.getByRole("link", { name: "Products (CSV)" })).toHaveAttribute("href", links.products.csv);
     expect(screen.getByRole("link", { name: "Products (XLSX)" })).toHaveAttribute("href", links.products.xlsx);
     expect(screen.getByRole("link", { name: "Rejected rows (CSV)" })).toHaveAttribute("href", links.rejected.csv);
@@ -996,9 +996,9 @@ describe("waiting keys", () => {
   it("animates the signature key while the import is being approved", async () => {
     const links = { products: { csv: "", xlsx: "" }, rejected: { csv: "", xlsx: "" } };
     const { rerender } = renderWithI18n(<ApprovePanel totals={previewPage().totals} approved={false} busy={false} links={links} onApprove={vi.fn()} />);
-    await userEvent.click(screen.getByRole("button", { name: "Approve import" }));
+    await userEvent.click(screen.getByRole("button", { name: "Approve and generate file" }));
     rerender(<ApprovePanel totals={previewPage().totals} approved={false} busy links={links} onApprove={vi.fn()} />);
-    expect(screen.getByRole("button", { name: "Approve import" })).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("button", { name: "Approve and generate file" })).toHaveAttribute("aria-busy", "true");
   });
 });
 

@@ -50,7 +50,7 @@ const pickAndStart = () => startWith([new File(["a"], "Ferreteria_lista.csv")]);
 async function reviewAndApprove() {
   await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
   await userEvent.click(await screen.findByRole("button", { name: "Continue to approval" }));
-  await userEvent.click(await screen.findByRole("button", { name: "Approve import" }));
+  await userEvent.click(await screen.findByRole("button", { name: "Approve and generate file" }));
 }
 
 beforeEach(() => {

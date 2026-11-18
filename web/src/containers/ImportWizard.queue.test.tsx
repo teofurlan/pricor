@@ -46,7 +46,7 @@ async function pick(lang: "en" | "es" = "en", list: File[] = files()) {
 async function reviewAndApprove(lang: "en" | "es" = "en") {
   await userEvent.click(await screen.findByRole("button", { name: lang === "es" ? "Confirmar columnas" : "Confirm columns" }));
   await userEvent.click(await screen.findByRole("button", { name: lang === "es" ? "Continuar a la aprobación" : "Continue to approval" }));
-  await userEvent.click(await screen.findByRole("button", { name: lang === "es" ? "Firmar" : "Approve import" }));
+  await userEvent.click(await screen.findByRole("button", { name: lang === "es" ? "Aprobar y generar archivo" : "Approve and generate file" }));
 }
 
 describe("ImportWizard with several files", () => {

@@ -74,9 +74,9 @@ describe("MemoryCitation", () => {
 
   it("shows cited text and a deleted-memory fallback", () => {
     renderWithI18n(<MemoryCitation memoryIds={["m1", "gone"]} memories={memories} />);
-    expect(screen.getByText("Based on your memory:")).toBeInTheDocument();
+    expect(screen.getByText("Based on your saved notes:")).toBeInTheDocument();
     expect(screen.getByText("Prices include VAT")).toBeInTheDocument();
-    expect(screen.getByText("a memory that was deleted")).toBeInTheDocument();
+    expect(screen.getByText("a note that was deleted")).toBeInTheDocument();
   });
 
   it("renders nothing for an old suggestion without memory ids", () => {
@@ -248,12 +248,13 @@ describe("NoticeList", () => {
     expect(container.querySelector("[role=status]")).toBeNull();
   });
 
-  it("explains model_unavailable in plain words and keeps the server detail", () => {
+  it("explains model_unavailable in plain words and keeps the server detail collapsed", () => {
     renderWithI18n(
       <NoticeList notices={[{ code: "model_unavailable", message: "connection refused", stage: "gemma" }]} />,
     );
     const notice = screen.getByRole("status");
-    expect(notice).toHaveTextContent("Gemma was not available");
+    expect(notice).toHaveTextContent("Automatic assistant unavailable");
+    expect(notice).toHaveTextContent("Show technical details");
     expect(notice).toHaveTextContent("connection refused");
   });
 
@@ -265,9 +266,10 @@ describe("NoticeList", () => {
       "es",
     );
     const notice = screen.getByRole("status");
-    expect(notice).toHaveTextContent("Gemma no estaba disponible");
-    expect(notice).toHaveTextContent("La etapa 'gemma' no pudo clasificar las columnas.");
-    expect(notice).toHaveTextContent("Detalle técnico: ModelUnavailableError: connection refused");
+    expect(notice).toHaveTextContent("Sin asistencia automática");
+    expect(notice).toHaveTextContent("Ver detalle técnico");
+    expect(notice).toHaveTextContent("La detección automática no pudo clasificar todas las columnas.");
+    expect(notice).toHaveTextContent("Detalle técnico: gemma (ModelUnavailableError): connection refused");
     expect(notice).not.toHaveTextContent("could not classify columns");
   });
 
@@ -285,13 +287,13 @@ describe("NoticeList", () => {
       "es",
     );
     const notice = screen.getByRole("status");
-    expect(notice).toHaveTextContent("Gemma no estaba disponible");
-    expect(notice).not.toHaveTextContent("La etapa 'gemma' no pudo clasificar las columnas.");
+    expect(notice).toHaveTextContent("Sin asistencia automática");
+    expect(notice).not.toHaveTextContent("La detección automática no pudo clasificar todas las columnas.");
     expect(notice).not.toHaveTextContent("Detalle técnico");
-    expect(notice).not.toHaveTextContent("La importación sigue solo con detección automática");
+    expect(notice).not.toHaveTextContent("Puede continuar normalmente");
   });
 
-  it("does not blame Gemma for another stage that was skipped or failed", () => {
+  it("uses stage-level title for another stage that was skipped or failed", () => {
     renderWithI18n(
       <ServerConfigProvider hosted={true}>
         <NoticeList
@@ -302,11 +304,11 @@ describe("NoticeList", () => {
       "es",
     );
     const notice = screen.getByRole("status");
-    expect(notice).toHaveTextContent("Un paso automático no estaba disponible");
+    expect(notice).toHaveTextContent("Un paso automático no estuvo disponible");
     expect(notice).not.toHaveTextContent("Gemma");
   });
 
-  it("names Gemma when the plan advisor is the one that failed", () => {
+  it("uses assistant title when the plan advisor is the one that failed", () => {
     renderWithI18n(
       <ServerConfigProvider hosted={true}>
         <NoticeList
@@ -316,7 +318,7 @@ describe("NoticeList", () => {
       </ServerConfigProvider>,
       "es",
     );
-    expect(screen.getByRole("status")).toHaveTextContent("Gemma no respondió");
+    expect(screen.getByRole("status")).toHaveTextContent("Sin asistencia automática");
   });
 
   it("shows hosted-aware title when hosted is true", () => {
@@ -325,7 +327,7 @@ describe("NoticeList", () => {
         <NoticeList notices={[{ code: "model_unavailable", message: "connection refused", stage: "gemma" }]} />
       </ServerConfigProvider>,
     );
-    expect(screen.getByRole("status")).toHaveTextContent("Gemma did not answer");
+    expect(screen.getByRole("status")).toHaveTextContent("Automatic assistant did not respond");
   });
 
   it("shows hosted-aware title in Spanish when hosted is true", () => {
@@ -335,19 +337,19 @@ describe("NoticeList", () => {
       </ServerConfigProvider>,
       "es",
     );
-    expect(screen.getByRole("status")).toHaveTextContent("Gemma no respondió");
+    expect(screen.getByRole("status")).toHaveTextContent("Sin asistencia automática");
   });
 });
 
 describe("AskGemma", () => {
   it("shows local waiting text while pending by default", () => {
     renderWithI18n(<AskGemma thread={[]} pending={true} error={null} onAsk={vi.fn()} />);
-    expect(screen.getByText("Gemma is thinking. Local models can take up to a minute.")).toBeInTheDocument();
+    expect(screen.getByText("The assistant is checking the list. This can take up to a minute.")).toBeInTheDocument();
   });
 
   it("shows local waiting text in Spanish while pending by default", () => {
     renderWithI18n(<AskGemma thread={[]} pending={true} error={null} onAsk={vi.fn()} />, "es");
-    expect(screen.getByText("Gemma está pensando. Los modelos locales pueden tardar hasta un minuto.")).toBeInTheDocument();
+    expect(screen.getByText("El asistente está analizando la lista. Puede demorar hasta un minuto.")).toBeInTheDocument();
   });
 
   it("shows hosted waiting text while pending in hosted mode", () => {
@@ -356,7 +358,7 @@ describe("AskGemma", () => {
         <AskGemma thread={[]} pending={true} error={null} onAsk={vi.fn()} />
       </ServerConfigProvider>,
     );
-    expect(screen.getByText("Gemma is thinking. This can take up to a minute.")).toBeInTheDocument();
+    expect(screen.getByText("The assistant is checking the list. This can take up to a minute.")).toBeInTheDocument();
   });
 
   it("shows hosted waiting text in Spanish while pending in hosted mode", () => {
@@ -366,7 +368,7 @@ describe("AskGemma", () => {
       </ServerConfigProvider>,
       "es",
     );
-    expect(screen.getByText("Gemma está pensando. Puede demorar hasta un minuto.")).toBeInTheDocument();
+    expect(screen.getByText("El asistente está analizando la lista. Puede demorar hasta un minuto.")).toBeInTheDocument();
   });
 });
 

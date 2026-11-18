@@ -381,7 +381,9 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
 .notice, .error, .reuse, .issues, .counts__alert { border: 1px solid var(--rule); border-radius: 4px; padding: 14px 16px; max-width: 78ch; background: var(--paper); }
 .notice { display: grid; gap: 6px; background: var(--amber-bg); border-color: var(--amber-border); }
 .notice__title { font-weight: 650; color: var(--amber); }
-.notice__detail { font-size: 0.8125rem; color: var(--muted); overflow-wrap: anywhere; }
+.notice__tech { margin-top: 2px; font-size: 0.8125rem; color: var(--muted); }
+.notice__tech summary { cursor: pointer; text-decoration: underline; text-underline-offset: 3px; font-weight: 560; }
+.notice__detail { font-size: 0.8125rem; color: var(--muted); overflow-wrap: anywhere; margin-top: 6px; }
 .error, .counts__alert { font-weight: 600; background: var(--red-bg); border-color: var(--red-border); color: var(--red); }
 .issues { margin: 0; padding: 14px 16px 14px 32px; background: var(--amber-bg); border-color: var(--amber-border); color: var(--ink); }
 .reuse { display: grid; gap: 8px; background: var(--green-bg); border-color: var(--green-border); }

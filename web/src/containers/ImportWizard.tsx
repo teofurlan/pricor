@@ -518,7 +518,11 @@ export function ImportWizard({ api }: { api: ApiClient }) {
           <span className="masthead__promise">{t("app.promise")}</span>
         </div>
         <div className="masthead__tools">
-          {memoryApi && <Button variant="quiet" onClick={() => setMemoryOpen(true)}>{t("memory.open")}</Button>}
+          {memoryApi && (
+            <Button variant="quiet" onClick={() => setMemoryOpen(true)}>
+              {memories.length > 0 ? t("memory.openCount", { count: memories.length }) : t("memory.open")}
+            </Button>
+          )}
           <LanguageToggle />
         </div>
       </header>
