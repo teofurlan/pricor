@@ -627,7 +627,15 @@ export function ImportWizard({ api }: { api: ApiClient }) {
           {queue && !queueDone && session && !session.approved && (
             <div className="actions"><Button variant="quiet" disabled={busy} onClick={skipCurrent}>{t("queue.skip")}</Button></div>
           )}
-          {busy && <div className="working"><TapeLoader size="small" text={t(slowStart ? "common.working.slowStart" : hosted ? "common.working.hosted" : "common.working")} /></div>}
+          {busy && (
+            <div className="working" role="status">
+              {step === "upload" ? (
+                <span>{t(slowStart ? "common.working.slowStart" : hosted ? "common.working.hosted" : "common.working")}</span>
+              ) : (
+                <TapeLoader size="small" text={t(slowStart ? "common.working.slowStart" : hosted ? "common.working.hosted" : "common.working")} />
+              )}
+            </div>
+          )}
 
           {switchPrompt && (
             <div

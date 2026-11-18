@@ -7,6 +7,8 @@ import { Button } from "../atoms/Button";
 import { TapeFigure } from "../atoms/TapeFigure";
 
 const ROW_LIMIT = 50;
+const BATCH_STEP = 100;
+const SHOW_ALL_CAP = 200;
 
 function foldText(text: string): string {
   return text.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -41,8 +43,10 @@ function Section({
 }) {
   const { t, language } = useI18n();
   const headingId = useId();
-  const [expanded, setExpanded] = useState(false);
-  const visible = expanded ? count : Math.min(count, ROW_LIMIT);
+  const [limit, setLimit] = useState(ROW_LIMIT);
+  const visible = Math.min(count, limit);
+  const remaining = count - visible;
+  const nextStep = count <= SHOW_ALL_CAP ? remaining : Math.min(BATCH_STEP, remaining);
   return (
     <section className="stack report__section" aria-labelledby={headingId}>
       <h3 id={headingId} className="subtitle">
@@ -50,9 +54,13 @@ function Section({
       </h3>
       {lede && <p className="hint">{lede}</p>}
       <div className="table-wrap">{children(visible)}</div>
-      {visible < count && (
+      {remaining > 0 && (
         <div className="actions">
-          <Button onClick={() => setExpanded(true)}>{t("report.showAll", { count: formatInteger(count, language) })}</Button>
+          <Button onClick={() => setLimit((current) => current + nextStep)}>
+            {count <= SHOW_ALL_CAP
+              ? t("report.showAll", { count: formatInteger(count, language) })
+              : t("report.showMore", { count: formatInteger(nextStep, language), remaining: formatInteger(remaining, language) })}
+          </Button>
         </div>
       )}
     </section>
@@ -65,13 +73,13 @@ function ChangeTable({ rows, showPercent = true }: { rows: ReportChange[]; showP
     <table className="table table--report">
       <thead>
         <tr>
-          <th>{t("report.col.code")}</th>
-          <th>{t("report.col.description")}</th>
-          <th className="num">{t("report.col.before")}</th>
-          <th className="num">{t("report.col.now")}</th>
-          <th className="num">{t("report.col.change")}</th>
-          {showPercent && <th className="num">{t("report.col.percent")}</th>}
-          <th />
+          <th scope="col">{t("report.col.code")}</th>
+          <th scope="col">{t("report.col.description")}</th>
+          <th scope="col" className="num">{t("report.col.before")}</th>
+          <th scope="col" className="num">{t("report.col.now")}</th>
+          <th scope="col" className="num">{t("report.col.change")}</th>
+          {showPercent && <th scope="col" className="num">{t("report.col.percent")}</th>}
+          <th scope="col"><span className="sr-only">{t("report.review")}</span></th>
         </tr>
       </thead>
       <tbody>
@@ -97,9 +105,9 @@ function ProductTable({ rows }: { rows: ReportProduct[] }) {
     <table className="table table--report">
       <thead>
         <tr>
-          <th>{t("report.col.code")}</th>
-          <th>{t("report.col.description")}</th>
-          <th className="num">{t("report.col.cost")}</th>
+          <th scope="col">{t("report.col.code")}</th>
+          <th scope="col">{t("report.col.description")}</th>
+          <th scope="col" className="num">{t("report.col.cost")}</th>
         </tr>
       </thead>
       <tbody>
@@ -300,10 +308,10 @@ export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
             <table className="table table--report">
               <thead>
                 <tr>
-                  <th>{t("report.col.code")}</th>
-                  <th>{t("report.col.description")}</th>
-                  <th className="num">{t("report.col.before")}</th>
-                  <th className="num">{t("report.col.now")}</th>
+                  <th scope="col">{t("report.col.code")}</th>
+                  <th scope="col">{t("report.col.description")}</th>
+                  <th scope="col" className="num">{t("report.col.before")}</th>
+                  <th scope="col" className="num">{t("report.col.now")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -321,23 +329,25 @@ export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
         </Section>
       )}
       {ambiguousCodes.length > 0 && (
-        <section className="stack report__section" aria-labelledby="report-ambiguous">
-          <h3 id="report-ambiguous" className="subtitle">
-            {t("report.ambiguous", { count: formatInteger(ambiguousCodes.length, language) })}
-          </h3>
-          <p className="hint">{t("report.ambiguous.lede")}</p>
-          <ul className="report__left-out">
-            {ambiguousCodes.map((item, position) => (
-              <li key={`${item.supplier_code}-${position}`}>
-                {t("report.ambiguous.item", {
-                  code: item.supplier_code,
-                  before: times(item.previous_count),
-                  after: times(item.current_count),
-                })}
-              </li>
-            ))}
-          </ul>
-        </section>
+        <Section
+          title={t("report.ambiguous", { count: formatInteger(ambiguousCodes.length, language) })}
+          lede={t("report.ambiguous.lede")}
+          count={ambiguousCodes.length}
+        >
+          {(visible) => (
+            <ul className="report__left-out">
+              {ambiguousCodes.slice(0, visible).map((item, position) => (
+                <li key={`${item.supplier_code}-${position}`}>
+                  {t("report.ambiguous.item", {
+                    code: item.supplier_code,
+                    before: times(item.previous_count),
+                    after: times(item.current_count),
+                  })}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
       )}
         </>
       )}

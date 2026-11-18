@@ -863,12 +863,13 @@ describe("QuestionsPanel", () => {
 });
 
 describe("PreviewTable", () => {
-  it("shows the file row and original cells in the journal, with every step and final cost on the selected tape", async () => {
+  it("shows the file row in the journal, with original cells, every step and final cost on the selected tape", async () => {
     renderWithI18n(<PreviewTable page={previewPage()} busy={false} onPage={vi.fn()} />);
     const row = screen.getByRole("button", { name: "Row 3" }).closest("tr")!;
-    await userEvent.click(within(row).getByText("In your file"));
-    expect(within(row).getByText("A1, Tornillo, 1.210,00, 21%")).toBeVisible();
+    expect(within(row).queryByText("In your file")).toBeNull();
     const tape = screen.getByRole("region", { name: "From file to cost" });
+    await userEvent.click(within(tape).getByText("In your file"));
+    expect(within(tape).getByText("A1, Tornillo, 1.210,00, 21%")).toBeVisible();
     expect(await within(tape).findByText("VAT removed")).toBeInTheDocument();
     expect(
       await within(tape).findByText((_, el) => Boolean(el?.classList.contains("trace__value") && el?.textContent === "1,000.00 ARS")),
@@ -913,6 +914,14 @@ describe("RejectedList", () => {
   it("says plainly when nothing was rejected", () => {
     renderWithI18n(<RejectedList rows={[]} />);
     expect(screen.getByText("No rows were rejected.")).toBeInTheDocument();
+  });
+
+  it("paginates very long rejected lists in batches of 50", async () => {
+    const many = Array.from({ length: 65 }, (_, index) => ({ row_number: index + 2, reasons: [`bad row ${index + 2}`] }));
+    renderWithI18n(<RejectedList rows={many} />);
+    expect(screen.getAllByRole("listitem")).toHaveLength(50);
+    await userEvent.click(screen.getByRole("button", { name: "Show more (15 left)" }));
+    expect(screen.getAllByRole("listitem")).toHaveLength(65);
   });
 });
 
