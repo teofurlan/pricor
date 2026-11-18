@@ -81,8 +81,8 @@ function ChangeTable({ rows, showPercent = true }: { rows: ReportChange[]; showP
             <td>{row.description}</td>
             <td className="num">{money(row.previous_cost, row.currency, language)}</td>
             <td className="num">{money(row.current_cost, row.currency, language)}</td>
-            <td className={`num${row.change.startsWith("-") ? " num--negative" : ""}`}>{signedMoney(row.change, row.currency, language)}</td>
-            {showPercent && <td className={`num${row.change_pct?.startsWith("-") ? " num--negative" : ""}`}>{row.change_pct === null ? "" : formatFigure(signedPercent(row.change_pct), language)}</td>}
+            <td className={`num${row.change.startsWith("-") ? " num--negative" : " num--increase"}`}>{signedMoney(row.change, row.currency, language)}</td>
+            {showPercent && <td className={`num${row.change_pct?.startsWith("-") ? " num--negative" : row.change_pct ? " num--increase" : ""}`}>{row.change_pct === null ? "" : formatFigure(signedPercent(row.change_pct), language)}</td>}
             <td>{row.anomaly && <span className="anomaly-mark">✱ {t("report.review")}</span>}</td>
           </tr>
         ))}
@@ -178,7 +178,7 @@ export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
 
   const summaryLines = [
     { mark: "◇", value: summary.unchanged, label: t("report.unchanged", { count: "" }).trim() },
-    { mark: "↑", value: summary.increases, label: t("report.up", { count: "" }).trim() },
+    { mark: "↑", value: summary.increases, label: t("report.up", { count: "" }).trim(), increase: true },
     { mark: "↓", value: summary.decreases, label: t("report.down", { count: "" }).trim(), negative: true },
     { mark: "+", value: summary.new_products, label: plural("report.new", summary.new_products).replace(formatInteger(summary.new_products, language), "").trim() },
     { mark: "−", value: summary.discontinued, label: t("report.gone", { count: "" }).trim() },
@@ -191,7 +191,7 @@ export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
         <section className="tape report__summary" aria-label={t("report.summary")}>
           <h2 className="report__headline">{t("report.summary")}</h2>
           <ol className="report__summary-list">
-            {summaryLines.map((line) => <li key={line.label} className={`report__summary-line${line.negative ? " report__summary-line--negative" : ""}${line.total ? " report__summary-line--total" : ""}`}>
+            {summaryLines.map((line) => <li key={line.label} className={`report__summary-line${line.increase ? " report__summary-line--increase" : ""}${line.negative ? " report__summary-line--negative" : ""}${line.total ? " report__summary-line--total" : ""}`}>
               <span aria-hidden="true">{line.mark}</span><span className="report__summary-label">{line.label}</span><TapeFigure className="report__summary-value" language={language} value={line.value} fracWidth={0} />
             </li>)}
           </ol>

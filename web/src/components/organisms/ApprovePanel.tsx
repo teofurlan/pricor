@@ -32,7 +32,7 @@ export function ApprovePanel({ totals, approved, busy, links, supplier, file, sh
     <div className="stack">
       <div className="workbench workbench--approval">
         <div className="sign">
-          <p className="sign__statement">
+          <p className={`sign__statement${approved ? " sign__statement--done" : ""}`}>
             {approved ? t("approve.done", { count: formatInteger(totals.accepted, language) }) : <>
               {t(totals.accepted === 1 ? "approve.statement.one" : "approve.statement.other", { count: formatInteger(totals.accepted, language) })}{" "}
               {t(totals.rejected === 1 ? "approve.rejected.one" : "approve.rejected.other", { count: formatInteger(totals.rejected, language) })}
@@ -41,7 +41,7 @@ export function ApprovePanel({ totals, approved, busy, links, supplier, file, sh
           {approved && <ul className="downloads" aria-label={t("approve.downloads")}>
             <li className="download">
               <span className="download__name">{t("approve.products")}</span>
-              <a className="download__format" href={links.products.xlsx} download aria-label={t("approve.productsXlsx")}>XLSX</a>
+              <a className="download__format download__format--primary" href={links.products.xlsx} download aria-label={t("approve.productsXlsx")}>XLSX</a>
               <a className="download__format" href={links.products.csv} download aria-label={t("approve.productsCsv")}>CSV</a>
             </li>
             <li className="download">
