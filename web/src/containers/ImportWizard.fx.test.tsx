@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { ApiClient } from "../api/client";
@@ -81,8 +81,9 @@ describe("ImportWizard: currency conversion", () => {
     await startImport();
 
     expect(await screen.findByText("YOUR DEFAULT")).toBeInTheDocument();
-    for (const radio of screen.getAllByRole("radio")) expect(radio).not.toBeChecked(); // never auto-applied
-    await userEvent.click(screen.getByRole("radio", { name: /Official, sell rate/ }));
+    const fxGroup = screen.getByRole("group", { name: "Convert to ARS, and with which rate?" });
+    for (const button of within(fxGroup).getAllByRole("button")) expect(button).toHaveAttribute("aria-pressed", "false"); // never auto-applied
+    await userEvent.click(screen.getByRole("button", { name: /Official, sell rate/ }));
     expect(api.answer).toHaveBeenCalledWith("s1", "fx_conversion", "oficial:venta");
 
     expect(await screen.findByText("Could not get a live rate: cannot reach DolarAPI")).toBeInTheDocument();

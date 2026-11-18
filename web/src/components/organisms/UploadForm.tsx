@@ -155,21 +155,22 @@ export function UploadForm({ busy, onSubmit, onSubmitMany, onInspectSheets, onLi
         <label className="field__label" htmlFor={fileId}>
           {t("upload.file")}
         </label>
-        <input
-          id={fileId}
-          ref={fileInputRef}
-          type="file"
-          className="sr-only"
-          accept=".csv,.xlsx,.xlsm,.xls"
-          multiple={many}
-          aria-describedby={hintId}
-          onChange={(event) => {
-            add(Array.from(event.target.files ?? []));
-            event.target.value = "";
-          }}
-        />
         {chosen.length === 0 ? (
           <div className={`dropzone${dragOver ? " dropzone--active" : ""}`} onClick={pick} {...dropTarget}>
+            <input
+              id={fileId}
+              ref={fileInputRef}
+              type="file"
+              className="sr-only"
+              accept=".csv,.xlsx,.xlsm,.xls"
+              multiple={many}
+              aria-describedby={hintId}
+              onClick={(event) => event.stopPropagation()}
+              onChange={(event) => {
+                add(Array.from(event.target.files ?? []));
+                event.target.value = "";
+              }}
+            />
             {dragOver ? (
               <p className="dropzone__main dropzone__main--active">{t("upload.dropActive")}</p>
             ) : (
@@ -215,6 +216,20 @@ export function UploadForm({ busy, onSubmit, onSubmitMany, onInspectSheets, onLi
               );
             })}
             <li className="file-tile file-tile--add">
+              <input
+                id={fileId}
+                ref={fileInputRef}
+                type="file"
+                className="sr-only"
+                tabIndex={-1}
+                accept=".csv,.xlsx,.xlsm,.xls"
+                multiple={many}
+                aria-describedby={hintId}
+                onChange={(event) => {
+                  add(Array.from(event.target.files ?? []));
+                  event.target.value = "";
+                }}
+              />
               <button ref={addKeyRef} type="button" className="file-tile__add" aria-describedby={hintId} onClick={pick}>
                 <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
                   <path d="M14 5v18M5 14h18" />

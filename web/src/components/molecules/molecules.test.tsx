@@ -376,16 +376,25 @@ describe("QuestionCard", () => {
   it("never preselects an option, even when the model made a suggestion", () => {
     renderWithI18n(<QuestionCard question={question({ suggestion })} answer={undefined} onAnswer={vi.fn()} />);
 
-    const radios = screen.getAllByRole("radio");
-    expect(radios).toHaveLength(2);
-    expect(radios.every((radio) => !(radio as HTMLInputElement).checked)).toBe(true);
+    const buttons = screen.getAllByRole("button");
+    expect(buttons).toHaveLength(2);
+    expect(buttons.every((button) => button.getAttribute("aria-pressed") === "false")).toBe(true);
     expect(screen.getByText("Automatic suggestion · medium confidence")).toHaveAttribute("title", "Suggested automatically, medium confidence (60%). Check it before accepting.");
+  });
+
+  it("does not commit an option when navigating with keyboard arrow keys", async () => {
+    const onAnswer = vi.fn();
+    renderWithI18n(<QuestionCard question={question()} answer={undefined} onAnswer={onAnswer} />);
+    const first = screen.getByRole("button", { name: /Argentine pesos/ });
+    first.focus();
+    await userEvent.keyboard("{ArrowDown}{ArrowRight}");
+    expect(onAnswer).not.toHaveBeenCalled();
   });
 
   it("puts the suggestion badge on the suggested option only", () => {
     renderWithI18n(<QuestionCard question={question({ suggestion })} answer={undefined} onAnswer={vi.fn()} />);
-    const usd = screen.getByRole("radio", { name: /US dollars/ }).closest("label")!;
-    const ars = screen.getByRole("radio", { name: /Argentine pesos/ }).closest("label")!;
+    const usd = screen.getByRole("button", { name: /US dollars/ });
+    const ars = screen.getByRole("button", { name: /Argentine pesos/ });
     expect(within(usd).getByText("Automatic suggestion · medium confidence")).toHaveAttribute("title", "Suggested automatically, medium confidence (60%). Check it before accepting.");
     expect(within(ars).queryByText(/Automatic suggestion/)).toBeNull();
   });
@@ -393,13 +402,13 @@ describe("QuestionCard", () => {
   it("reports the token the user picks", async () => {
     const onAnswer = vi.fn();
     renderWithI18n(<QuestionCard question={question()} answer={undefined} onAnswer={onAnswer} />);
-    await userEvent.click(screen.getByRole("radio", { name: /Argentine pesos/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Argentine pesos/ }));
     expect(onAnswer).toHaveBeenCalledWith("currency", "ARS");
   });
 
   it("marks the stored answer as chosen", () => {
     renderWithI18n(<QuestionCard question={question()} answer="USD" onAnswer={vi.fn()} />);
-    expect(screen.getByRole("radio", { name: /US dollars/ })).toBeChecked();
+    expect(screen.getByRole("button", { name: /US dollars/ })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("explains why it asks in Spanish", () => {
@@ -419,7 +428,7 @@ describe("QuestionCard", () => {
   it("asks in the interface language", () => {
     renderWithI18n(<QuestionCard question={question()} answer={undefined} onAnswer={vi.fn()} />, "es");
     expect(screen.getByText("¿En qué moneda están los precios?")).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /Pesos argentinos/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Pesos argentinos/ })).toBeInTheDocument();
   });
 
   it("accepts a custom constant when the question allows it", async () => {
@@ -486,7 +495,7 @@ describe("QuestionCard with grouped options", () => {
   it("keeps the primary options as buttons and puts the rest in one labeled select", () => {
     renderWithI18n(<QuestionCard question={grouped} answer={undefined} onAnswer={vi.fn()} />);
 
-    expect(screen.getAllByRole("radio").map((radio) => (radio as HTMLInputElement).value)).toEqual(["keep", "oficial:venta", "manual"]);
+    expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual(["Keep", "Official, sell", "Type a rate"]);
     const select = screen.getByRole("combobox", { name: "Another rate…" });
     expect(within(select).getAllByRole("option").map((option) => option.textContent)).toEqual(["Another rate…", "Blue, sell", "MEP, buy"]);
     expect(select).toHaveValue("");
@@ -505,7 +514,7 @@ describe("QuestionCard with grouped options", () => {
     renderWithI18n(<QuestionCard question={grouped} answer="blue:venta" onAnswer={vi.fn()} />);
 
     expect(screen.getByRole("combobox", { name: "Another rate…" })).toHaveValue("blue:venta");
-    expect(screen.getAllByRole("radio").every((radio) => !(radio as HTMLInputElement).checked)).toBe(true);
+    expect(screen.getAllByRole("button").every((button) => button.getAttribute("aria-pressed") === "false")).toBe(true);
   });
 
   it("marks a suggestion that lives in the select without choosing it", () => {
@@ -527,7 +536,7 @@ describe("QuestionCard with grouped options", () => {
     renderWithI18n(<QuestionCard question={question()} answer={undefined} onAnswer={vi.fn()} />);
 
     expect(screen.queryByRole("combobox")).toBeNull();
-    expect(screen.getAllByRole("radio")).toHaveLength(2);
+    expect(screen.getAllByRole("button")).toHaveLength(2);
   });
 });
 

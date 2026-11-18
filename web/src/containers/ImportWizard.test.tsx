@@ -80,14 +80,14 @@ describe("ImportWizard", () => {
     await userEvent.click(await screen.findByRole("radio", { name: /Row 2/ }));
     await userEvent.click(screen.getByRole("button", { name: "Use this row" }));
     await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
-    await userEvent.click(await screen.findByRole("radio", { name: /Argentine pesos/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /Argentine pesos/ }));
     expect(await screen.findByRole("button", { name: "See the preview" })).toBeEnabled();
 
     await userEvent.click(screen.getByRole("button", { name: /Header/ }));
     await userEvent.click(await screen.findByRole("radio", { name: /Row 1/ }));
     await userEvent.click(screen.getByRole("button", { name: "Use this row" }));
     await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
-    expect(await screen.findByRole("radio", { name: /Argentine pesos/ })).not.toBeChecked();
+    expect(await screen.findByRole("button", { name: /Argentine pesos/ })).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByRole("button", { name: "See the preview" })).toBeDisabled();
   });
 
@@ -102,9 +102,10 @@ describe("ImportWizard", () => {
     renderWithI18n(<ImportWizard api={api} />);
     await startImport();
     await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
-    await userEvent.click(await screen.findByRole("radio", { name: /Argentine pesos/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /Argentine pesos/ }));
 
     await userEvent.click(screen.getByRole("button", { name: /Upload/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "Yes, start over" }));
     await startImport();
     await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
     expect(await screen.findByText("Otro proveedor")).toBeInTheDocument();
@@ -112,7 +113,26 @@ describe("ImportWizard", () => {
     finishOld(session({ status: "ready_for_preview", answers: { currency: "ARS" } }));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(screen.getByText("Otro proveedor")).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /Argentine pesos/ })).not.toBeChecked();
+    expect(screen.getByRole("button", { name: /Argentine pesos/ })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("guards against discarding an active import when clicking Upload and supports Previous step navigation", async () => {
+    const api = fakeApi({
+      createImport: vi.fn().mockResolvedValue(withQuestion),
+    });
+    renderWithI18n(<ImportWizard api={api} />);
+    await startImport();
+    await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
+
+    await userEvent.click(screen.getByRole("button", { name: "← Previous step" }));
+    expect(await screen.findByRole("button", { name: "Confirm columns" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Upload" }));
+    const guard = await screen.findByRole("alertdialog");
+    expect(guard).toHaveTextContent("Leave this import?");
+    await userEvent.click(within(guard).getByRole("button", { name: "Keep working" }));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(screen.getByRole("button", { name: "Confirm columns" })).toBeInTheDocument();
   });
 
   it("goes where the server says when Continue finds the import not ready", async () => {
@@ -127,7 +147,7 @@ describe("ImportWizard", () => {
     renderWithI18n(<ImportWizard api={api} />);
     await startImport();
     await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
-    await userEvent.click(await screen.findByRole("radio", { name: /Argentine pesos/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /Argentine pesos/ }));
     await userEvent.click(await screen.findByRole("button", { name: "See the preview" }));
     expect(await screen.findByRole("button", { name: "Confirm columns" })).toBeInTheDocument();
     expect(api.preview).not.toHaveBeenCalled();
@@ -152,7 +172,7 @@ describe("ImportWizard", () => {
     await userEvent.click(screen.getByRole("button", { name: /Questions/ })); // back from the preview
     await userEvent.click(await screen.findByRole("button", { name: "Change" }));
 
-    await userEvent.click(await screen.findByRole("radio", { name: "10.5%" }));
+    await userEvent.click(await screen.findByRole("button", { name: "10.5%" }));
     await waitFor(() => expect(api.preview).toHaveBeenCalledTimes(2));
   });
 
@@ -167,10 +187,10 @@ describe("ImportWizard", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
 
     // The card only lets numbers through; this stands in for any value the server still refuses.
-    await userEvent.click(await screen.findByRole("radio", { name: "21%" }));
+    await userEvent.click(await screen.findByRole("button", { name: "21%" }));
     await waitFor(() => expect(api.answer).toHaveBeenCalledWith("s1", "vat_rate", "constant:21"));
     expect(await screen.findByRole("alert")).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole("radio", { name: "21%" })).not.toBeChecked());
+    await waitFor(() => expect(screen.getByRole("button", { name: "21%" })).toHaveAttribute("aria-pressed", "false"));
   });
 
   it("walks a first import from upload to approved exports", async () => {
@@ -194,8 +214,9 @@ describe("ImportWizard", () => {
 
     // The suggestion is visible and nothing is preselected.
     expect(await screen.findByText("Automatic suggestion · medium confidence")).toBeInTheDocument();
-    for (const radio of screen.getAllByRole("radio")) expect(radio).not.toBeChecked();
-    await userEvent.click(screen.getByRole("radio", { name: /Argentine pesos/ }));
+    const qGroup = screen.getByRole("group", { name: "Which currency are the prices in?" });
+    for (const button of within(qGroup).getAllByRole("button")) expect(button).toHaveAttribute("aria-pressed", "false");
+    await userEvent.click(screen.getByRole("button", { name: /Argentine pesos/ }));
     expect(api.answer).toHaveBeenCalledWith("s1", "currency", "ARS");
     // An answered question moves to the history above with its answer, where it can be changed.
     const history = await screen.findByRole("list", { name: "Answered questions" });
@@ -234,7 +255,7 @@ describe("ImportWizard", () => {
     renderWithI18n(<ImportWizard api={api} />);
     await startImport();
     await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
-    await userEvent.click(await screen.findByRole("radio", { name: /Argentine pesos/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /Argentine pesos/ }));
     await userEvent.click(await screen.findByRole("button", { name: "See the preview" }));
     await userEvent.click(await screen.findByRole("button", { name: "Continue to approval" }));
     const steps = screen.getByRole("navigation", { name: "Import steps" });
@@ -653,15 +674,15 @@ describe("ImportWizard", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
 
     // Questions come one at a time; the next appears as soon as the first is answered.
-    const arsOption = await screen.findByRole("radio", { name: /Argentine pesos/ });
-    expect(screen.queryByRole("radio", { name: /Yes/ })).toBeNull();
+    const arsOption = await screen.findByRole("button", { name: /Argentine pesos/ });
+    expect(screen.queryByRole("button", { name: /Yes/ })).toBeNull();
 
     // Click first question
     await userEvent.click(arsOption);
     expect(api.answer).toHaveBeenCalledWith("s1", "currency", "ARS");
 
     // Answer the second question back to back while the first API call is still pending
-    await userEvent.click(await screen.findByRole("radio", { name: /Yes/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /Yes/ }));
 
     // Resolve first answer
     resolveFirstAnswer(

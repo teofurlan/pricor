@@ -97,6 +97,11 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   const [linkToken] = useState(takeLinkToken);
   useEffect(() => { pendingLinkToken = null; }, []);
   const [switchPrompt, setSwitchPrompt] = useState(false);
+  const [resetPrompt, setResetPrompt] = useState(false);
+  const stageTitleRef = useRef<HTMLHeadingElement>(null);
+  const resetDialogRef = useRef<HTMLDivElement>(null);
+  const switchDialogRef = useRef<HTMLDivElement>(null);
+  const didMountRef = useRef(false);
   const continueWithWorkspace = useCallback(() => {
     if (!workspaceApi) {
       setWorkspaceSettled(true);
@@ -440,18 +445,48 @@ export function ImportWizard({ api }: { api: ApiClient }) {
     }
   }
 
+  function performResetToUpload() {
+    setResetPrompt(false);
+    setError(null);
+    resetQueue();
+    setSession(null);
+    sessionRef.current = null;
+    setHeaderNeeded(false);
+    resetAnswerQueue();
+    setSample(null);
+    setStep("upload");
+  }
+
   function select(id: StepId) {
     setError(null);
     if (id === "upload") {
-      resetQueue();
-      setSession(null);
-      sessionRef.current = null;
-      setHeaderNeeded(false);
-      resetAnswerQueue();
-      setSample(null);
+      const hasUnsavedWork = (session !== null && !session.approved) || (queue !== null && !queueDone);
+      if (hasUnsavedWork) {
+        setResetPrompt(true);
+        return;
+      }
+      performResetToUpload();
+      return;
     }
+    setResetPrompt(false);
     setStep(id);
   }
+
+  useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return;
+    }
+    stageTitleRef.current?.focus();
+  }, [step, queueDone]);
+
+  useEffect(() => {
+    if (resetPrompt) resetDialogRef.current?.focus();
+  }, [resetPrompt]);
+
+  useEffect(() => {
+    if (switchPrompt) switchDialogRef.current?.focus();
+  }, [switchPrompt]);
 
   const order: StepId[] = ["upload", ...(headerNeeded ? (["header"] as const) : []), "columns", "questions", "preview", ...(formatApi ? (["format"] as const) : []), "approve"];
   const current = order.indexOf(step);
@@ -460,6 +495,9 @@ export function ImportWizard({ api }: { api: ApiClient }) {
     state: position < current ? "done" : position === current ? "current" : "upcoming",
     locked: session?.approved === true && PLAN_STEPS.includes(id),
   }));
+  const previousStep = !queueDone
+    ? steps.slice(0, current).reverse().find((item) => !item.locked) ?? null
+    : null;
 
   const links = (id: string) => ({
     products: { csv: api.exportUrl(id, "csv"), xlsx: api.exportUrl(id, "xlsx") },
@@ -506,8 +544,24 @@ export function ImportWizard({ api }: { api: ApiClient }) {
           )}
         </aside>
         <main className="stage">
-          <h1 className="stage__title">{queueDone ? t("queue.title.done") : t(TITLES[step].title)}</h1>
+          <h1 ref={stageTitleRef} tabIndex={-1} className="stage__title">{queueDone ? t("queue.title.done") : t(TITLES[step].title)}</h1>
           <p className="stage__lede">{queueDone ? t("queue.lede.done") : t(step === "upload" && hosted ? "lede.upload.hosted" : TITLES[step].lede)}</p>
+          {resetPrompt && (
+            <div
+              ref={resetDialogRef}
+              tabIndex={-1}
+              className="workspace-switch reset-confirm"
+              role="alertdialog"
+              aria-labelledby="reset-confirm-body"
+              onKeyDown={(event) => { if (event.key === "Escape") setResetPrompt(false); }}
+            >
+              <p id="reset-confirm-body">{t("reset.confirm.body")}</p>
+              <div className="workspace-switch__actions">
+                <Button className="button--danger" onClick={performResetToUpload}>{t("reset.confirm.yes")}</Button>
+                <Button variant="quiet" onClick={() => setResetPrompt(false)}>{t("reset.confirm.cancel")}</Button>
+              </div>
+            </div>
+          )}
           {session && <NoticeList notices={session.notices} compact={step !== "columns"} />}
           <ErrorBanner error={error ?? preview.error} />
           {queue && !queueDone && session && !session.approved && (
@@ -516,7 +570,14 @@ export function ImportWizard({ api }: { api: ApiClient }) {
           {busy && <div className="working"><TapeLoader size="small" text={t(slowStart ? "common.working.slowStart" : hosted ? "common.working.hosted" : "common.working")} /></div>}
 
           {switchPrompt && (
-            <div className="workspace-switch" role="alertdialog" aria-labelledby="workspace-switch-body">
+            <div
+              ref={switchDialogRef}
+              tabIndex={-1}
+              className="workspace-switch"
+              role="alertdialog"
+              aria-labelledby="workspace-switch-body"
+              onKeyDown={(event) => { if (event.key === "Escape") { setSwitchPrompt(false); continueWithWorkspace(); } }}
+            >
               <p id="workspace-switch-body">{t("workspace.switch.body")}</p>
               <div className="workspace-switch__actions">
                 <Button variant="primary" onClick={() => { setSwitchPrompt(false); void claimThenContinue(); }}>{t("workspace.switch.confirm")}</Button>
@@ -659,6 +720,13 @@ export function ImportWizard({ api }: { api: ApiClient }) {
             ) : (
               loadingPreview
             ))}
+          {previousStep && (
+            <div className="step-nav">
+              <Button variant="quiet" disabled={busy} onClick={() => select(previousStep.id)}>
+                {t("step.back")}
+              </Button>
+            </div>
+          )}
         </main>
       </div>
     </div>

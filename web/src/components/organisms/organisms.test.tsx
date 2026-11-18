@@ -89,10 +89,11 @@ describe("UploadForm", () => {
     expect(onSubmit).toHaveBeenCalledWith({ file, supplierName: "lista", sheet: "", language: "en" });
   });
 
-  it("renders drop zone copy and changes text on dragover", () => {
+  it("renders drop zone copy, nests the file input for focus rings, and changes text on dragover", () => {
     renderWithI18n(<UploadForm busy={false} onSubmit={vi.fn()} />);
     const dropzone = document.querySelector(".dropzone");
     expect(dropzone).toBeInTheDocument();
+    expect(dropzone?.contains(screen.getByLabelText("Price list file"))).toBe(true);
     expect(within(dropzone as HTMLElement).getByText("Drag your price list here")).toBeInTheDocument();
     expect(within(dropzone as HTMLElement).getByText("or")).toBeInTheDocument();
     expect(within(dropzone as HTMLElement).getByText("Choose file")).toBeInTheDocument();
@@ -748,7 +749,7 @@ describe("QuestionsPanel", () => {
     expect(within(history).getByText("Argentine pesos (ARS)")).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "Include VAT?" })).toBeInTheDocument();
     await userEvent.click(within(history).getByRole("button", { name: "Change" }));
-    await userEvent.click(screen.getByRole("radio", { name: /US dollars/ }));
+    await userEvent.click(screen.getByRole("button", { name: /US dollars/ }));
     expect(onAnswer).toHaveBeenCalledWith("currency", "USD");
   });
 
@@ -771,9 +772,9 @@ describe("QuestionsPanel", () => {
     await act(async () => resolve({ reply: "A bare $ in an Argentine list usually means pesos.", suggested_option: "ARS" }));
     expect(screen.getByText("The list says $ only")).toBeInTheDocument();
     expect(screen.getByText("A bare $ in an Argentine list usually means pesos.")).toBeInTheDocument();
-    const ars = screen.getByRole("radio", { name: /Argentine pesos/ });
-    expect(ars).not.toBeChecked();
-    expect(ars.closest("label")).toHaveTextContent("Suggested in the conversation");
+    const ars = screen.getByRole("button", { name: /Argentine pesos/ });
+    expect(ars).toHaveAttribute("aria-pressed", "false");
+    expect(ars).toHaveTextContent("Suggested in the conversation");
     expect(onAnswer).not.toHaveBeenCalled();
   });
 
@@ -783,7 +784,7 @@ describe("QuestionsPanel", () => {
     await userEvent.type(screen.getByLabelText("Ask Gemma about this question"), "Which one?");
     await userEvent.click(screen.getByRole("button", { name: "Ask" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Gemma is not available right now. You can still answer with the keys.");
-    expect(screen.getByRole("radio", { name: /Argentine pesos/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Argentine pesos/ })).toBeEnabled();
   });
 
   it("says so when there is nothing to ask", () => {

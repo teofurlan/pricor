@@ -85,8 +85,8 @@ describe("MemoryPanelContainer", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
     expect(await screen.findByText("Prices exclude VAT")).toBeInTheDocument();
 
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     await userEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
+    await userEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
     await waitFor(() => expect(screen.queryByText("Prices exclude VAT")).toBeNull());
     expect(onMemoriesChange).toHaveBeenCalled();
   });

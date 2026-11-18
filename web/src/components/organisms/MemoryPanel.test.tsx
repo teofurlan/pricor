@@ -72,14 +72,17 @@ describe("MemoryPanel", () => {
     expect(props.onEdit).toHaveBeenCalledWith("m1", "Prices exclude VAT");
   });
 
-  it("asks for confirmation before deleting", async () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+  it("asks for inline confirmation before deleting and cancels cleanly", async () => {
     const props = renderPanel();
     const first = screen.getByRole("article", { name: /Prices include VAT/ });
     await userEvent.click(within(first).getByRole("button", { name: "Delete" }));
-    expect(confirm).toHaveBeenCalledWith("Delete this memory? This cannot be undone.");
+    expect(within(first).getByText("Delete this memory? This cannot be undone.")).toBeInTheDocument();
+    await userEvent.click(within(first).getByRole("button", { name: "Cancel" }));
+    expect(props.onDelete).not.toHaveBeenCalled();
+
+    await userEvent.click(within(first).getByRole("button", { name: "Delete" }));
+    await userEvent.click(within(first).getByRole("button", { name: "Confirm delete" }));
     expect(props.onDelete).toHaveBeenCalledWith("m1");
-    confirm.mockRestore();
   });
 
   it("shows an inviting empty state", () => {
