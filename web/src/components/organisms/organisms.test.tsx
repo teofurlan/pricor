@@ -15,6 +15,7 @@ import { QuestionsPanel } from "./QuestionsPanel";
 import { RejectedList } from "./RejectedList";
 import { Stepper, type StepItem } from "./Stepper";
 import { UploadForm } from "./UploadForm";
+import { WorkspacePanel } from "./WorkspacePanel";
 
 describe("UploadForm", () => {
   const supplierOf = (name: string) => screen.getByLabelText(`Supplier for ${name}`);
@@ -1086,5 +1087,78 @@ describe("LanguageToggle", () => {
     expect(localStorage.getItem("pricor.language")).toBe("es");
     await userEvent.click(screen.getByRole("button", { name: "EN" }));
     expect(localStorage.getItem("pricor.language")).toBe("en");
+  });
+});
+
+describe("WorkspacePanel", () => {
+  it("renders only the personal link when no Google client ID or account is provided", () => {
+    renderWithI18n(<WorkspacePanel link="https://pricor.test/#w=abc" />);
+    expect(screen.getByDisplayValue("https://pricor.test/#w=abc")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy link" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Continue with Google" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Unlink account" })).not.toBeInTheDocument();
+  });
+
+  it("renders Continue with Google when googleClientId and onGoogleCredential are set and invokes callback via prompt hook", async () => {
+    const onGoogleCredential = vi.fn();
+    (window as unknown as { __pricorGooglePrompt?: (cb: (cred: string) => void) => void }).__pricorGooglePrompt = (cb) => {
+      cb("mock-google-credential");
+    };
+    try {
+      renderWithI18n(
+        <WorkspacePanel
+          link="https://pricor.test/#w=abc"
+          googleClientId="client-123"
+          onGoogleCredential={onGoogleCredential}
+        />,
+      );
+      const signInBtn = screen.getByRole("button", { name: "Continue with Google" });
+      await userEvent.click(signInBtn);
+      expect(onGoogleCredential).toHaveBeenCalledWith("mock-google-credential");
+    } finally {
+      delete (window as unknown as { __pricorGooglePrompt?: unknown }).__pricorGooglePrompt;
+    }
+  });
+
+  it("renders linked account email and Unlink account button when account is set", async () => {
+    const onUnlinkGoogle = vi.fn();
+    renderWithI18n(
+      <WorkspacePanel
+        link="https://pricor.test/#w=abc"
+        account={{ email: "ana@example.com" }}
+        googleClientId="client-123"
+        onGoogleCredential={vi.fn()}
+        onUnlinkGoogle={onUnlinkGoogle}
+      />,
+    );
+    expect(screen.getByText("Space linked to ana@example.com")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Continue with Google" })).not.toBeInTheDocument();
+    const unlinkBtn = screen.getByRole("button", { name: "Unlink account" });
+    await userEvent.click(unlinkBtn);
+    expect(onUnlinkGoogle).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders Google Sign-In and linked account labels in Spanish", () => {
+    const { rerender } = renderWithI18n(
+      <WorkspacePanel
+        link="https://pricor.test/#w=abc"
+        googleClientId="client-123"
+        onGoogleCredential={vi.fn()}
+      />,
+      "es",
+    );
+    expect(screen.getByRole("button", { name: "Continuar con Google" })).toBeInTheDocument();
+
+    rerender(
+      <WorkspacePanel
+        link="https://pricor.test/#w=abc"
+        account={{ email: "ana@example.com" }}
+        googleClientId="client-123"
+        onUnlinkGoogle={vi.fn()}
+      />,
+      "es",
+    );
+    expect(screen.getByText("Espacio vinculado a ana@example.com")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Desvincular cuenta" })).toBeInTheDocument();
   });
 });

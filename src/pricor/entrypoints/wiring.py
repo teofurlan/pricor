@@ -26,6 +26,8 @@ Environment variables:
                            files across restarts                       (default: off, local disk only)
     PRICOR_WORKSPACES_MAX_OPEN workspaces kept open in memory, least recently used closed first
                            (default 16)
+    PRICOR_GOOGLE_CLIENT_ID OAuth client ID for optional "Continue with Google" workspace linking
+                           (default: off)
     PRICOR_RATE_LIMIT_RPM  per-IP requests/min for general API and public endpoints
                            (default 120 in hosted mode, 0 = off locally)
     PRICOR_RATE_LIMIT_HEAVY_RPM per-IP requests/min for model/upload/warm-up/workspace creation
@@ -59,6 +61,7 @@ from pricor.adapters.gemma_advisor import GemmaPlanAdvisor
 from pricor.adapters.gemma_classifier import GemmaColumnClassifier
 from pricor.adapters.gemma_output_format import GemmaOutputFormat
 from pricor.adapters.gemma_question_helper import GemmaQuestionHelper
+from pricor.adapters.google_auth import GoogleOidcVerifier
 from pricor.adapters.heuristic_classifier import HeuristicColumnClassifier
 from pricor.adapters.heuristic_output_format import HeuristicOutputFormat
 from pricor.adapters.pdf_table_reader import PdfTableReader
@@ -103,6 +106,7 @@ from pricor.entrypoints.rate_limit import (
     RateLimitMiddleware,
 )
 from pricor.entrypoints.web_app import DEFAULT_WEB_DIST
+from pricor.entrypoints.workspace_accounts import WorkspaceAccountStore
 from pricor.entrypoints.workspaces import (
     DEFAULT_MAX_OPEN,
     OpenWorkspace,
@@ -418,6 +422,11 @@ def workspace_backup_from_env(env: Mapping[str, str]) -> WorkspaceBackup:
     return NoWorkspaceBackup()
 
 
+def google_client_id_from_env(env: Mapping[str, str]) -> str | None:
+    value = env.get("PRICOR_GOOGLE_CLIENT_ID", "").strip()
+    return value or None
+
+
 def workspace_app_from_env(env: Mapping[str, str], directory: Path) -> ASGIApp:
     """Hosted demo: a private database per visitor, the models built once and shared."""
     shared = shared_services_from_env(env)
@@ -426,17 +435,22 @@ def workspace_app_from_env(env: Mapping[str, str], directory: Path) -> ASGIApp:
         database = SqliteDatabase(path)
         return OpenWorkspace(create_app(database_dependencies(database, shared)), database.close)
 
+    backup = workspace_backup_from_env(env)
     registry = WorkspaceRegistry(
-        directory, open_workspace, workspace_backup_from_env(env), workspaces_max_open_from_env(env)
+        directory, open_workspace, backup, workspaces_max_open_from_env(env)
     )
+    google_client_id = google_client_id_from_env(env)
+    accounts = WorkspaceAccountStore(directory, backup) if google_client_id else None
+    google_verifier = GoogleOidcVerifier(google_client_id) if google_client_id else None
     public = ApiDependencies(
         ImportFirstTime(FileSpreadsheetReader(), InMemoryImportSessionRepository(), []),
         web_dist=DEFAULT_WEB_DIST,
         model_provider=shared.provider,
         demo=shared.demo,
         warm_up=shared.warm_up,
+        google_client_id=google_client_id,
     )
-    return create_workspace_app(public, registry)
+    return create_workspace_app(public, registry, accounts=accounts, google_verifier=google_verifier)
 
 
 def _parse_int_env(env: Mapping[str, str], name: str, *, minimum: int, label: str) -> int | None:

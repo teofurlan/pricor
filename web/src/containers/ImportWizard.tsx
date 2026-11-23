@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ApiClient, ApiError, CombinedExportApiClient, EventsApiClient, ExportFile, ExportSheet, MemoryApiClient, OutputFormatApiClient, SampleApiClient, WorkspaceApiClient } from "../api/client";
 import { useServerConfig } from "../api/serverConfig";
-import type { ColumnRole, CreateImportInput, FunnelEvent, Memory, OutputFormat, Question, SessionState } from "../api/types";
+import type { ColumnRole, CreateImportInput, FunnelEvent, GoogleResolution, Memory, OutputFormat, Question, SessionState, WorkspaceAccount } from "../api/types";
 import { Button } from "../components/atoms/Button";
 import { TapeLoader } from "../components/atoms/TapeLoader";
 import { CountsSummary } from "../components/molecules/CountsSummary";
@@ -92,16 +92,20 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   const workspaceApi = typeof (api as Partial<WorkspaceApiClient>).workspace === "function" ? (api as ApiClient & WorkspaceApiClient) : null;
   const workspaceOn = config?.workspaces === true;
   const [workspaceLink, setWorkspaceLink] = useState<string | null>(null);
+  const [workspaceAccount, setWorkspaceAccount] = useState<WorkspaceAccount | null>(null);
   const [workspaceSettled, setWorkspaceSettled] = useState(false);
   const workspaceRequested = useRef(false);
   // The token of a personal link (`/#w=<token>`), read once and removed from the URL at once.
   const [linkToken] = useState(takeLinkToken);
   useEffect(() => { pendingLinkToken = null; }, []);
   const [switchPrompt, setSwitchPrompt] = useState(false);
+  const [googleConflict, setGoogleConflict] = useState<{ credential: string; email: string } | null>(null);
+  const [googleError, setGoogleError] = useState(false);
   const [resetPrompt, setResetPrompt] = useState(false);
   const stageTitleRef = useRef<HTMLHeadingElement>(null);
   const resetDialogRef = useRef<HTMLDivElement>(null);
   const switchDialogRef = useRef<HTMLDivElement>(null);
+  const googleConflictDialogRef = useRef<HTMLDivElement>(null);
   const didMountRef = useRef(false);
   const continueWithWorkspace = useCallback(() => {
     if (!workspaceApi) {
@@ -109,7 +113,10 @@ export function ImportWizard({ api }: { api: ApiClient }) {
       return;
     }
     workspaceApi.workspace()
-      .then((result) => setWorkspaceLink(result.link))
+      .then((result) => {
+        setWorkspaceLink(result.link);
+        setWorkspaceAccount(result.account ?? null);
+      })
       .catch(() => {})
       .finally(() => setWorkspaceSettled(true));
   }, [workspaceApi]);
@@ -117,7 +124,9 @@ export function ImportWizard({ api }: { api: ApiClient }) {
     const token = linkToken;
     if (token && workspaceApi) {
       try {
-        await workspaceApi.claimWorkspace(token);
+        const claimed = await workspaceApi.claimWorkspace(token);
+        setWorkspaceLink(claimed.link);
+        setWorkspaceAccount(claimed.account ?? null);
       } catch {
         // A refused link leaves the cookie untouched; the normal flow below still gives a workspace.
       }
@@ -462,6 +471,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   function performResetToUpload() {
     setResetPrompt(false);
     setError(null);
+    setGoogleError(false);
     resetQueue();
     setSession(null);
     sessionRef.current = null;
@@ -469,6 +479,42 @@ export function ImportWizard({ api }: { api: ApiClient }) {
     resetAnswerQueue();
     setSample(null);
     setStep("upload");
+  }
+
+  async function handleGoogleCredential(credential: string, resolution: GoogleResolution = "auto") {
+    if (!workspaceApi?.googleSignIn) return;
+    setBusy(true);
+    setError(null);
+    setGoogleError(false);
+    try {
+      const reply = await workspaceApi.googleSignIn(credential, resolution);
+      if (reply.status === "conflict") {
+        setGoogleConflict({ credential, email: reply.account?.email ?? "" });
+        return;
+      }
+      setGoogleConflict(null);
+      setWorkspaceLink(reply.link);
+      setWorkspaceAccount(reply.account ?? null);
+      if (reply.status === "switched") {
+        performResetToUpload();
+        formatApi?.getOutputFormat().then(setSavedFormat).catch(() => undefined);
+        memoryApi?.listMemories().then(setMemories).catch(() => undefined);
+      }
+    } catch {
+      setGoogleError(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleUnlinkGoogle() {
+    if (!workspaceApi?.unlinkGoogleAccount) return;
+    setGoogleError(false);
+    await run(async () => {
+      const res = await workspaceApi.unlinkGoogleAccount!();
+      setWorkspaceLink(res.link);
+      setWorkspaceAccount(res.account ?? null);
+    });
   }
 
   function select(id: StepId) {
@@ -501,6 +547,10 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   useEffect(() => {
     if (switchPrompt) switchDialogRef.current?.focus();
   }, [switchPrompt]);
+
+  useEffect(() => {
+    if (googleConflict) googleConflictDialogRef.current?.focus();
+  }, [googleConflict]);
 
   const order: StepId[] = ["upload", ...(headerNeeded ? (["header"] as const) : []), "columns", "questions", "preview", "approve"];
   const current = order.indexOf(step);
@@ -624,6 +674,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
           )}
           {session && <NoticeList notices={session.notices} compact={step !== "columns"} />}
           <ErrorBanner error={error ?? preview.error} />
+          {googleError && <div role="alert" className="error">{t("workspace.google.error")}</div>}
           {queue && !queueDone && session && !session.approved && (
             <div className="actions"><Button variant="quiet" disabled={busy} onClick={skipCurrent}>{t("queue.skip")}</Button></div>
           )}
@@ -653,7 +704,53 @@ export function ImportWizard({ api }: { api: ApiClient }) {
               </div>
             </div>
           )}
-          {step === "upload" && workspaceLink && <WorkspacePanel link={workspaceLink} />}
+          {googleConflict && (
+            <div
+              ref={googleConflictDialogRef}
+              tabIndex={-1}
+              className="workspace-switch"
+              role="alertdialog"
+              aria-labelledby="workspace-google-conflict-body"
+              onKeyDown={(event) => { if (event.key === "Escape") setGoogleConflict(null); }}
+            >
+              <p id="workspace-google-conflict-body">
+                {t("workspace.google.conflict.body", { email: googleConflict.email })}
+              </p>
+              <div className="workspace-switch__actions">
+                <Button
+                  variant="primary"
+                  disabled={busy}
+                  onClick={() => void handleGoogleCredential(googleConflict.credential, "use_account")}
+                >
+                  {t("workspace.google.conflict.useAccount")}
+                </Button>
+                <Button
+                  variant="quiet"
+                  disabled={busy}
+                  onClick={() => void handleGoogleCredential(googleConflict.credential, "link_current")}
+                >
+                  {t("workspace.google.conflict.linkCurrent")}
+                </Button>
+                <Button
+                  variant="quiet"
+                  disabled={busy}
+                  onClick={() => setGoogleConflict(null)}
+                >
+                  {t("workspace.google.conflict.cancel")}
+                </Button>
+              </div>
+            </div>
+          )}
+          {step === "upload" && workspaceLink && (
+            <WorkspacePanel
+              link={workspaceLink}
+              account={workspaceAccount}
+              googleClientId={config?.google_client_id ?? null}
+              busy={busy}
+              onGoogleCredential={(cred) => void handleGoogleCredential(cred, "auto")}
+              onUnlinkGoogle={() => void handleUnlinkGoogle()}
+            />
+          )}
           {queueDone && queue && (
             <QueueSummary
               items={queue}

@@ -151,6 +151,8 @@ def make_app(
         ("POST", "/warm-up", "heavy"),
         ("GET", "/workspace", "heavy"),
         ("POST", "/workspace/claim", "heavy"),
+        ("POST", "/workspace/google", "heavy"),
+        ("DELETE", "/workspace/google", "heavy"),
         ("POST", "/events", "general"),
         ("POST", "/events/", "general"),
         ("POST", "//events/", "general"),

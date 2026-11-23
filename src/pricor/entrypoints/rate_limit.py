@@ -75,8 +75,10 @@ def classify_request(method: str, path: str) -> Bucket | None:
             return "heavy"
         if first in _HEAVY_POST_ROOTS and len(segments) == 1:
             return "heavy"
-        if segments == ["workspace", "claim"]:
+        if segments in (["workspace", "claim"], ["workspace", "google"]):
             return "heavy"
+    elif verb == "DELETE" and segments == ["workspace", "google"]:
+        return "heavy"
     elif verb == "PUT" and first == "imports" and len(segments) == 3 and segments[2] == "header":
         return "heavy"
     elif verb == "PATCH" and first == "memories" and len(segments) == 2:
