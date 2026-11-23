@@ -89,6 +89,7 @@ class WorkspaceRegistry:
         self._max_open = max_open
         self._lock = threading.Lock()
         self._open: OrderedDict[str, _Entry] = OrderedDict()
+        self._restoring: dict[str, threading.Lock] = {}
 
     def _path(self, key: str) -> Path:
         return self._directory / f"{key}.sqlite"
@@ -131,17 +132,43 @@ class WorkspaceRegistry:
         key = workspace_key(token)
         with self._lock:
             entry = self._open.get(key)
-            if entry is None:
-                path = self._path(key)
-                self._directory.mkdir(parents=True, exist_ok=True)
-                if not create and not path.is_file() and not self._restore(key, path):
-                    return None
+            if entry is not None:
+                self._open.move_to_end(key)
+                entry.users += 1
+                self._evict_idle()
+                return Lease(key, entry.workspace)
+            path = self._path(key)
+            self._directory.mkdir(parents=True, exist_ok=True)
+            if create or path.is_file():
                 entry = _Entry(self._open_workspace(path))
                 self._open[key] = entry
-            self._open.move_to_end(key)
-            entry.users += 1
-            self._evict_idle()
-            return Lease(key, entry.workspace)
+                self._open.move_to_end(key)
+                entry.users += 1
+                self._evict_idle()
+                return Lease(key, entry.workspace)
+            restore_lock = self._restoring.setdefault(key, threading.Lock())
+
+        with restore_lock:
+            with self._lock:
+                entry = self._open.get(key)
+                if entry is not None:
+                    self._open.move_to_end(key)
+                    entry.users += 1
+                    self._evict_idle()
+                    return Lease(key, entry.workspace)
+            restored = path.is_file() or self._restore(key, path)
+            with self._lock:
+                self._restoring.pop(key, None)
+                if not restored:
+                    return None
+                entry = self._open.get(key)
+                if entry is None:
+                    entry = _Entry(self._open_workspace(path))
+                    self._open[key] = entry
+                self._open.move_to_end(key)
+                entry.users += 1
+                self._evict_idle()
+                return Lease(key, entry.workspace)
 
     def _restore(self, key: str, path: Path) -> bool:
         try:
