@@ -80,14 +80,14 @@ describe("ImportWizard", () => {
     await userEvent.click(await screen.findByRole("radio", { name: /Row 2/ }));
     await userEvent.click(screen.getByRole("button", { name: "Use this row" }));
     await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
-    await userEvent.click(await screen.findByRole("radio", { name: /Argentine pesos/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /Argentine pesos/ }));
     expect(await screen.findByRole("button", { name: "See the preview" })).toBeEnabled();
 
     await userEvent.click(screen.getByRole("button", { name: /Header/ }));
     await userEvent.click(await screen.findByRole("radio", { name: /Row 1/ }));
     await userEvent.click(screen.getByRole("button", { name: "Use this row" }));
     await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
-    expect(await screen.findByRole("radio", { name: /Argentine pesos/ })).not.toBeChecked();
+    expect(await screen.findByRole("button", { name: /Argentine pesos/ })).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByRole("button", { name: "See the preview" })).toBeDisabled();
   });
 
@@ -102,9 +102,10 @@ describe("ImportWizard", () => {
     renderWithI18n(<ImportWizard api={api} />);
     await startImport();
     await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
-    await userEvent.click(await screen.findByRole("radio", { name: /Argentine pesos/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /Argentine pesos/ }));
 
     await userEvent.click(screen.getByRole("button", { name: /Upload/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "Yes, start over" }));
     await startImport();
     await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
     expect(await screen.findByText("Otro proveedor")).toBeInTheDocument();
@@ -112,7 +113,26 @@ describe("ImportWizard", () => {
     finishOld(session({ status: "ready_for_preview", answers: { currency: "ARS" } }));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(screen.getByText("Otro proveedor")).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /Argentine pesos/ })).not.toBeChecked();
+    expect(screen.getByRole("button", { name: /Argentine pesos/ })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("guards against discarding an active import when clicking Upload and supports Previous step navigation", async () => {
+    const api = fakeApi({
+      createImport: vi.fn().mockResolvedValue(withQuestion),
+    });
+    renderWithI18n(<ImportWizard api={api} />);
+    await startImport();
+    await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
+
+    await userEvent.click(screen.getByRole("button", { name: "← Previous step" }));
+    expect(await screen.findByRole("button", { name: "Confirm columns" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Upload" }));
+    const guard = await screen.findByRole("alertdialog");
+    expect(guard).toHaveTextContent("Leave this import?");
+    await userEvent.click(within(guard).getByRole("button", { name: "Keep working" }));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(screen.getByRole("button", { name: "Confirm columns" })).toBeInTheDocument();
   });
 
   it("goes where the server says when Continue finds the import not ready", async () => {
@@ -127,7 +147,7 @@ describe("ImportWizard", () => {
     renderWithI18n(<ImportWizard api={api} />);
     await startImport();
     await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
-    await userEvent.click(await screen.findByRole("radio", { name: /Argentine pesos/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /Argentine pesos/ }));
     await userEvent.click(await screen.findByRole("button", { name: "See the preview" }));
     expect(await screen.findByRole("button", { name: "Confirm columns" })).toBeInTheDocument();
     expect(api.preview).not.toHaveBeenCalled();
@@ -152,7 +172,7 @@ describe("ImportWizard", () => {
     await userEvent.click(screen.getByRole("button", { name: /Questions/ })); // back from the preview
     await userEvent.click(await screen.findByRole("button", { name: "Change" }));
 
-    await userEvent.click(await screen.findByRole("radio", { name: "10.5%" }));
+    await userEvent.click(await screen.findByRole("button", { name: "10.5%" }));
     await waitFor(() => expect(api.preview).toHaveBeenCalledTimes(2));
   });
 
@@ -167,10 +187,10 @@ describe("ImportWizard", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
 
     // The card only lets numbers through; this stands in for any value the server still refuses.
-    await userEvent.click(await screen.findByRole("radio", { name: "21%" }));
+    await userEvent.click(await screen.findByRole("button", { name: "21%" }));
     await waitFor(() => expect(api.answer).toHaveBeenCalledWith("s1", "vat_rate", "constant:21"));
     expect(await screen.findByRole("alert")).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole("radio", { name: "21%" })).not.toBeChecked());
+    await waitFor(() => expect(screen.getByRole("button", { name: "21%" })).toHaveAttribute("aria-pressed", "false"));
   });
 
   it("walks a first import from upload to approved exports", async () => {
@@ -194,8 +214,9 @@ describe("ImportWizard", () => {
 
     // The suggestion is visible and nothing is preselected.
     expect(await screen.findByText("Automatic suggestion · medium confidence")).toBeInTheDocument();
-    for (const radio of screen.getAllByRole("radio")) expect(radio).not.toBeChecked();
-    await userEvent.click(screen.getByRole("radio", { name: /Argentine pesos/ }));
+    const qGroup = screen.getByRole("group", { name: "Which currency are the prices in?" });
+    for (const button of within(qGroup).getAllByRole("button")) expect(button).toHaveAttribute("aria-pressed", "false");
+    await userEvent.click(screen.getByRole("button", { name: /Argentine pesos/ }));
     expect(api.answer).toHaveBeenCalledWith("s1", "currency", "ARS");
     // An answered question moves to the history above with its answer, where it can be changed.
     const history = await screen.findByRole("list", { name: "Answered questions" });
@@ -213,7 +234,7 @@ describe("ImportWizard", () => {
     expect(screen.getByText(/cannot parse 'abc'/)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Continue to approval" }));
-    await userEvent.click(await screen.findByRole("button", { name: "Approve import" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Approve and generate file" }));
     expect(api.approve).toHaveBeenCalledWith("s1");
 
     const csv = await screen.findByRole("link", { name: "Products (CSV)" });
@@ -234,13 +255,13 @@ describe("ImportWizard", () => {
     renderWithI18n(<ImportWizard api={api} />);
     await startImport();
     await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
-    await userEvent.click(await screen.findByRole("radio", { name: /Argentine pesos/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /Argentine pesos/ }));
     await userEvent.click(await screen.findByRole("button", { name: "See the preview" }));
     await userEvent.click(await screen.findByRole("button", { name: "Continue to approval" }));
     const steps = screen.getByRole("navigation", { name: "Import steps" });
     expect(within(steps).getByRole("button", { name: "Columns" })).toBeInTheDocument();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Approve import" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Approve and generate file" }));
     await screen.findByRole("link", { name: "Products (CSV)" });
 
     expect(within(steps).queryByRole("button", { name: /Columns/ })).toBeNull();
@@ -264,7 +285,7 @@ describe("ImportWizard", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
     expect(await screen.findByRole("button", { name: "Use this rate" })).toBeInTheDocument();
     await userEvent.click(await screen.findByRole("button", { name: "Continue to approval" }));
-    await userEvent.click(await screen.findByRole("button", { name: "Approve import" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Approve and generate file" }));
     await screen.findByRole("link", { name: "Products (CSV)" });
 
     await userEvent.click(within(screen.getByRole("navigation", { name: "Import steps" })).getByRole("button", { name: "Preview" }));
@@ -368,11 +389,11 @@ describe("ImportWizard", () => {
     await startImport();
     await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
     await userEvent.click(await screen.findByRole("button", { name: "Continue to approval" }));
-    await userEvent.click(await screen.findByRole("button", { name: "Approve import" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Approve and generate file" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("No row passed the checks");
     expect(screen.queryByRole("link", { name: "Products (CSV)" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Approve import" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Approve and generate file" })).toBeEnabled();
     // The finished steps stay reachable.
     expect(screen.getByRole("button", { name: /Columns/ })).toBeInTheDocument();
   });
@@ -390,8 +411,8 @@ describe("ImportWizard", () => {
     await startImport();
     // Full banner on Columns step
     const notice = await screen.findByRole("status");
-    expect(notice).toHaveTextContent("Gemma was not available");
-    expect(notice).toHaveTextContent("Import continues with automatic detection only. Review the columns yourself and answer every question.");
+    expect(notice).toHaveTextContent("Automatic assistant unavailable");
+    expect(notice).toHaveTextContent("You can continue normally by reviewing the columns and answering the questions; all calculations remain exact.");
     expect(notice).toHaveTextContent("connection refused");
 
     // Move to Questions step (later step)
@@ -400,8 +421,8 @@ describe("ImportWizard", () => {
 
     // Compact one-line banner on Questions step
     const compactNotice = screen.getByRole("status");
-    expect(compactNotice).toHaveTextContent("Gemma was not available");
-    expect(compactNotice).not.toHaveTextContent("Import continues with automatic detection only");
+    expect(compactNotice).toHaveTextContent("Automatic assistant unavailable");
+    expect(compactNotice).not.toHaveTextContent("You can continue normally");
     expect(compactNotice).not.toHaveTextContent("connection refused");
   });
 
@@ -418,13 +439,13 @@ describe("ImportWizard", () => {
   it("shows local upload lede text by default", () => {
     const api = fakeApi();
     renderWithI18n(<ImportWizard api={api} />);
-    expect(screen.getByText("Nothing leaves this computer. The list is read here, and every row is accounted for.")).toBeInTheDocument();
+    expect(screen.getByText("Your files stay on this computer, and the original file is never modified.")).toBeInTheDocument();
   });
 
   it("shows local upload lede text in Spanish by default", () => {
     const api = fakeApi();
     renderWithI18n(<ImportWizard api={api} />, "es");
-    expect(screen.getByText("Nada sale de esta computadora. La lista se lee aquí y cada fila queda contabilizada.")).toBeInTheDocument();
+    expect(screen.getByText("Sus archivos no salen de esta computadora y el original nunca se modifica.")).toBeInTheDocument();
   });
 
   it("shows hosted upload lede text in hosted mode", () => {
@@ -434,7 +455,7 @@ describe("ImportWizard", () => {
         <ImportWizard api={api} />
       </ServerConfigProvider>,
     );
-    expect(screen.getByText("This is a trial version on the web. The list is processed on Pricor's server, with Gemma on Google's API. Pricor can also be installed on the store's own computer, where the data does not leave it.")).toBeInTheDocument();
+    expect(screen.getByText("Web trial version: the list is processed on Pricor's server with cloud assistance. Pricor can also be installed on your store's PC so data stays 100% local.")).toBeInTheDocument();
   });
 
   it("shows hosted upload lede text in Spanish in hosted mode", () => {
@@ -445,36 +466,36 @@ describe("ImportWizard", () => {
       </ServerConfigProvider>,
       "es",
     );
-    expect(screen.getByText("Esta es una versión de prueba en la web. La lista se procesa en el servidor de Pricor, con Gemma en la API de Google. Pricor también puede instalarse en la computadora del comercio, y allí los datos no salen de ella.")).toBeInTheDocument();
+    expect(screen.getByText("Versión de prueba en la web: la lista se procesa en el servidor de Pricor con asistencia automática en la nube. También puede instalarse en la PC del comercio para trabajar 100% local.")).toBeInTheDocument();
   });
 
-  it("says the local models are working while a slow call is pending", async () => {
+  it("says the processor is working while a slow call is pending", async () => {
     let finish: (value: SessionState) => void = () => {};
     const api = fakeApi({
       createImport: vi.fn().mockReturnValue(new Promise<SessionState>((resolve) => (finish = resolve))),
     });
     renderWithI18n(<ImportWizard api={api} />);
     await startImport();
-    expect(await screen.findByText(/Working. Local models can take up to a minute/)).toBeInTheDocument();
+    expect(await screen.findByText(/Processing the list… this can take up to a minute/)).toBeInTheDocument();
     finish(withQuestion);
     await screen.findByRole("button", { name: "Confirm columns" });
-    expect(screen.queryByText(/Working. Local models can take up to a minute/)).toBeNull();
+    expect(screen.queryByText(/Processing the list… this can take up to a minute/)).toBeNull();
   });
 
-  it("says the local models are working in Spanish while a slow call is pending", async () => {
+  it("says the processor is working in Spanish while a slow call is pending", async () => {
     let finish: (value: SessionState) => void = () => {};
     const api = fakeApi({
       createImport: vi.fn().mockReturnValue(new Promise<SessionState>((resolve) => (finish = resolve))),
     });
     renderWithI18n(<ImportWizard api={api} />, "es");
     await startImport("es");
-    expect(await screen.findByText(/Trabajando. Los modelos locales pueden demorar hasta un minuto/)).toBeInTheDocument();
+    expect(await screen.findByText(/Procesando la lista… puede demorar hasta un minuto/)).toBeInTheDocument();
     finish(withQuestion);
     await screen.findByRole("button", { name: "Confirmar columnas" });
-    expect(screen.queryByText(/Trabajando. Los modelos locales pueden demorar hasta un minuto/)).toBeNull();
+    expect(screen.queryByText(/Procesando la lista… puede demorar hasta un minuto/)).toBeNull();
   });
 
-  it("says the models are working in hosted mode while a slow call is pending", async () => {
+  it("says the processor is working in hosted mode while a slow call is pending", async () => {
     let finish: (value: SessionState) => void = () => {};
     const api = fakeApi({
       createImport: vi.fn().mockReturnValue(new Promise<SessionState>((resolve) => (finish = resolve))),
@@ -485,13 +506,13 @@ describe("ImportWizard", () => {
       </ServerConfigProvider>,
     );
     await startImport();
-    expect(await screen.findByText(/Working. This can take up to a minute/)).toBeInTheDocument();
+    expect(await screen.findByText(/Processing the list… this can take up to a minute/)).toBeInTheDocument();
     finish(withQuestion);
     await screen.findByRole("button", { name: "Confirm columns" });
-    expect(screen.queryByText(/Working. This can take up to a minute/)).toBeNull();
+    expect(screen.queryByText(/Processing the list… this can take up to a minute/)).toBeNull();
   });
 
-  it("says the models are working in Spanish in hosted mode while a slow call is pending", async () => {
+  it("says the processor is working in Spanish in hosted mode while a slow call is pending", async () => {
     let finish: (value: SessionState) => void = () => {};
     const api = fakeApi({
       createImport: vi.fn().mockReturnValue(new Promise<SessionState>((resolve) => (finish = resolve))),
@@ -503,10 +524,10 @@ describe("ImportWizard", () => {
       "es",
     );
     await startImport("es");
-    expect(await screen.findByText(/Trabajando. Puede demorar hasta un minuto/)).toBeInTheDocument();
+    expect(await screen.findByText(/Procesando la lista… puede demorar hasta un minuto/)).toBeInTheDocument();
     finish(withQuestion);
     await screen.findByRole("button", { name: "Confirmar columnas" });
-    expect(screen.queryByText(/Trabajando. Puede demorar hasta un minuto/)).toBeNull();
+    expect(screen.queryByText(/Procesando la lista… puede demorar hasta un minuto/)).toBeNull();
   });
 
   it("shows what changed in prices once the import is approved", async () => {
@@ -522,7 +543,8 @@ describe("ImportWizard", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Continue to approval" }));
     expect(api.report).not.toHaveBeenCalled(); // nothing to compare before the user signs
 
-    await userEvent.click(await screen.findByRole("button", { name: "Approve import" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Approve and generate file" }));
+    await userEvent.click(await screen.findByRole("tab", { name: "Price changes" }));
 
     expect(await screen.findByRole("heading", { level: 2, name: "Price comparison" })).toBeInTheDocument();
     const summary = screen.getByRole("region", { name: "Price comparison" });
@@ -546,7 +568,7 @@ describe("ImportWizard", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Continue to approval" }));
     expect(api.exportSheet).not.toHaveBeenCalled();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Approve import" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Approve and generate file" }));
 
     const table = await screen.findByRole("table", { name: "The products file" });
     expect(table).toHaveTextContent("Bolt");
@@ -565,7 +587,8 @@ describe("ImportWizard", () => {
     await startImport();
     await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
     await userEvent.click(await screen.findByRole("button", { name: "Continue to approval" }));
-    await userEvent.click(await screen.findByRole("button", { name: "Approve import" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Approve and generate file" }));
+    await userEvent.click(await screen.findByRole("tab", { name: "Price changes" }));
 
     expect(await screen.findByText(/This is the first approved list from Ferreteria Ejemplo/)).toBeInTheDocument();
   });
@@ -653,15 +676,15 @@ describe("ImportWizard", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
 
     // Questions come one at a time; the next appears as soon as the first is answered.
-    const arsOption = await screen.findByRole("radio", { name: /Argentine pesos/ });
-    expect(screen.queryByRole("radio", { name: /Yes/ })).toBeNull();
+    const arsOption = await screen.findByRole("button", { name: /Argentine pesos/ });
+    expect(screen.queryByRole("button", { name: /Yes/ })).toBeNull();
 
     // Click first question
     await userEvent.click(arsOption);
     expect(api.answer).toHaveBeenCalledWith("s1", "currency", "ARS");
 
     // Answer the second question back to back while the first API call is still pending
-    await userEvent.click(await screen.findByRole("radio", { name: /Yes/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /Yes/ }));
 
     // Resolve first answer
     resolveFirstAnswer(
@@ -684,7 +707,7 @@ describe("ImportWizard", () => {
   });
 
   describe("slow first import notice", () => {
-    const notice = /The first list can take up to a minute while the model gets ready/;
+    const notice = /The first list can take up to a minute while the processor warms up/;
     // userEvent hangs under fake timers, so the form is driven with fireEvent.
     async function startWithTimers(file = "Price list file", button = "Start import") {
       fireEvent.change(screen.getByLabelText(file), { target: { files: [new File(["a,b"], "lista.csv")] } });
@@ -702,11 +725,11 @@ describe("ImportWizard", () => {
         await startWithTimers();
         await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
         expect(screen.queryByText(notice)).toBeNull();
-        expect(screen.getByText(/Working. Local models can take up to a minute/)).toBeInTheDocument();
+        expect(screen.getByText(/Processing the list… this can take up to a minute/)).toBeInTheDocument();
         await act(async () => { await vi.advanceTimersByTimeAsync(1500); });
         // One waiting message at a time: the minute is explained once, by the notice that replaces the generic line.
         expect(screen.getByText(notice)).toBeInTheDocument();
-        expect(screen.queryByText(/Working. Local models can take up to a minute/)).toBeNull();
+        expect(screen.queryByText(/Processing the list… this can take up to a minute/)).toBeNull();
         expect(screen.getAllByText(/up to a minute/)).toHaveLength(1);
         await act(async () => { finish(withQuestion); await vi.advanceTimersByTimeAsync(0); });
         expect(screen.queryByText(notice)).toBeNull();
@@ -740,8 +763,8 @@ describe("ImportWizard", () => {
         vi.useFakeTimers();
         await startWithTimers("Archivo de la lista de precios", "Iniciar importación");
         await act(async () => { await vi.advanceTimersByTimeAsync(5500); });
-        expect(screen.getByText("La primera lista puede tardar hasta un minuto mientras se prepara el modelo.")).toBeInTheDocument();
-        expect(screen.queryByText(/Trabajando\./)).toBeNull();
+        expect(screen.getByText("La primera lista puede tardar hasta un minuto mientras se inicia el procesador.")).toBeInTheDocument();
+        expect(screen.queryByText(/Procesando la lista/)).toBeNull();
         expect(screen.getAllByText(/hasta un minuto/)).toHaveLength(1);
       } finally {
         vi.useRealTimers();

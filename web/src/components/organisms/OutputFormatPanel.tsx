@@ -261,14 +261,41 @@ export function OutputFormatPanel({ format, loading, busy, error, fields, onUplo
                     onChange={(event) => edit(row.key, { name: event.target.value })}
                   />
                   <div className="output-format__source">
-                    <select aria-label={t("format.kindFor", { name: label })} value={row.type} onChange={(event) => chooseType(row, event.target.value as OutputKind)}>
-                      {OUTPUT_KINDS.map((type) => <option key={type} value={type}>{t(`format.kind.${type}`)}</option>)}
-                    </select>
-                    <select aria-label={t("format.sourceFor", { name: label })} value={row.kind} onChange={(event) => chooseSource(row, event.target.value)}>
-                      {available.map((field) => <option key={field} value={`field:${field}`}>{fieldLabel(field)}</option>)}
-                      <option value="empty">{t("format.empty")}</option>
-                      <option value="constant">{t("format.fixed")}</option>
-                    </select>
+                    <div className="output-format__field">
+                      <label className="output-format__field-label" htmlFor={`${titleId}-kind-${row.key}`}>{t("format.kindLabel")}</label>
+                      <select
+                        id={`${titleId}-kind-${row.key}`}
+                        aria-label={t("format.kindFor", { name: label })}
+                        value={row.type}
+                        onChange={(event) => chooseType(row, event.target.value as OutputKind)}
+                      >
+                        {OUTPUT_KINDS.map((type) => <option key={type} value={type}>{t(`format.kind.${type}`)}</option>)}
+                      </select>
+                    </div>
+                    <div className="output-format__field">
+                      <label className="output-format__field-label" htmlFor={`${titleId}-source-${row.key}`}>{t("format.sourceLabel")}</label>
+                      <select
+                        id={`${titleId}-source-${row.key}`}
+                        aria-label={t("format.sourceFor", { name: label })}
+                        value={row.kind}
+                        onChange={(event) => chooseSource(row, event.target.value)}
+                      >
+                        <optgroup label={t("format.group.core")}>
+                          {available.filter((field) => ["supplier_code", "description", "unit_cost_net", "currency"].includes(field)).map((field) => (
+                            <option key={field} value={`field:${field}`}>{fieldLabel(field)}</option>
+                          ))}
+                        </optgroup>
+                        <optgroup label={t("format.group.extra")}>
+                          {available.filter((field) => !["supplier_code", "description", "unit_cost_net", "currency"].includes(field)).map((field) => (
+                            <option key={field} value={`field:${field}`}>{fieldLabel(field)}</option>
+                          ))}
+                        </optgroup>
+                        <optgroup label={t("format.group.other")}>
+                          <option value="empty">{t("format.empty")}</option>
+                          <option value="constant">{t("format.fixed")}</option>
+                        </optgroup>
+                      </select>
+                    </div>
                     {row.kind === "constant" && (
                       <input
                         aria-label={t("format.fixedFor", { name: label })}

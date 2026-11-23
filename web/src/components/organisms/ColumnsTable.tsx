@@ -1,5 +1,5 @@
 import { confidenceLevel } from "../../lib/confidence";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { COLUMN_ROLES, type ColumnRole, type ColumnState } from "../../api/types";
 import { localizeServerText } from "../../i18n/serverText";
 import { useI18n } from "../../i18n";
@@ -154,6 +154,9 @@ function ConfidenceMeter({
  * mode to escape from. The overlay keeps the key as wide as its label, since a
  * bare select sizes itself to its longest option.
  */
+const REQUIRED_ROLES: readonly ColumnRole[] = ["code", "description", "cost_price"];
+const OPTIONAL_ROLES: readonly ColumnRole[] = COLUMN_ROLES.filter((role) => !REQUIRED_ROLES.includes(role));
+
 function RolePicker({
   label,
   current,
@@ -179,11 +182,20 @@ function RolePicker({
         <option value="" disabled hidden>
           {t("columns.change")}
         </option>
-        {COLUMN_ROLES.map((option) => (
-          <option key={option} value={option}>
-            {option === current ? `✓ ${t(`role.${option}`)}` : t(`role.${option}`)}
-          </option>
-        ))}
+        <optgroup label={t("columns.group.required")}>
+          {REQUIRED_ROLES.map((option) => (
+            <option key={option} value={option}>
+              {option === current ? `✓ ${t(`role.${option}`)}` : t(`role.${option}`)}
+            </option>
+          ))}
+        </optgroup>
+        <optgroup label={t("columns.group.optional")}>
+          {OPTIONAL_ROLES.map((option) => (
+            <option key={option} value={option}>
+              {option === current ? `✓ ${t(`role.${option}`)}` : t(`role.${option}`)}
+            </option>
+          ))}
+        </optgroup>
       </select>
     </span>
   );
@@ -200,6 +212,20 @@ export function ColumnsTable({ columns, issues, busy, sample, onConfirm }: Props
   const [edits, setEdits] = useState<Record<number, ColumnRole>>({});
 
   const unresolved = columns.filter((item) => item.role === null && edits[item.index] === undefined);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && !busy && unresolved.length === 0) {
+        const tag = (event.target as HTMLElement | null)?.tagName;
+        if (tag === "TEXTAREA") return;
+        event.preventDefault();
+        pending.mark("confirm");
+        onConfirm(edits);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [busy, unresolved.length, edits, onConfirm, pending]);
 
   const pendingSuggestionsCount = columns.filter(
     (item) => item.role === null && edits[item.index] === undefined && getBestProposal(item) !== null,
@@ -266,18 +292,18 @@ export function ColumnsTable({ columns, issues, busy, sample, onConfirm }: Props
           {/* Fixed widths: a key appearing or disappearing must not resize the other columns. */}
           <colgroup>
             <col className="col--column" />
+            <col className="col--suggestion" />
             <col className="col--role" />
             <col className="col--actions" />
             <col className="col--status" />
-            <col className="col--suggestion" />
           </colgroup>
           <thead>
             <tr>
-              <th>{t("columns.header")}</th>
-              {/* The role spans its value and its keys, so the keys line up in one column. */}
-              <th colSpan={2}>{t("columns.role")}</th>
-              <th>{t("columns.status")}</th>
-              <th>{t("columns.suggestion")}</th>
+              <th scope="col">{t("columns.header")}</th>
+              <th scope="col">{t("columns.suggestion")}</th>
+              {/* The role spans its value and its keys right next to the suggestion. */}
+              <th scope="col" colSpan={2}>{t("columns.role")}</th>
+              <th scope="col">{t("columns.status")}</th>
             </tr>
           </thead>
           <tbody>
@@ -322,6 +348,16 @@ export function ColumnsTable({ columns, issues, busy, sample, onConfirm }: Props
                     )}
                     {duplicated && <span className="cell__samples" role="alert">{t("columns.duplicateRole", { role: t(`role.${role}`) })}</span>}
                   </th>
+                  <td className="cell--suggestion" data-label={t("columns.suggestion")}>
+                    {bestProposal ? (
+                      <div className="suggestion-box">
+                        <ConfidenceMeter best={bestProposal} allProposals={allProposals} />
+                        <span className="suggestion__label">{t(`role.${bestProposal.role}`)}</span>
+                      </div>
+                    ) : (
+                      <span className="cell__empty">—</span>
+                    )}
+                  </td>
                   <td className="cell--role" data-label={t("columns.role")}>
                     {role !== null ? <span className="role-decision__value">{t(`role.${role}`)}</span> : <span className="role-decision__empty" aria-hidden="true">—</span>}
                   </td>
@@ -369,16 +405,6 @@ export function ColumnsTable({ columns, issues, busy, sample, onConfirm }: Props
                   </td>
                   <td className="cell--status" data-label={t("columns.status")}>
                     <span className={`status-badge ${statusClass}`}>{statusText}</span>
-                  </td>
-                  <td className="cell--suggestion" data-label={t("columns.suggestion")}>
-                    {bestProposal ? (
-                      <div className="suggestion-box">
-                        <ConfidenceMeter best={bestProposal} allProposals={allProposals} />
-                        <span className="suggestion__label">{t(`role.${bestProposal.role}`)}</span>
-                      </div>
-                    ) : (
-                      <span className="cell__empty">—</span>
-                    )}
                   </td>
                 </tr>
               );

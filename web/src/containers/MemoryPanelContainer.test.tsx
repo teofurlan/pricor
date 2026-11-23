@@ -37,8 +37,8 @@ describe("MemoryPanelContainer", () => {
     document.body.append(opener);
     opener.focus();
     const { rerender } = renderWithI18n(<MemoryPanelContainer api={api} open onClose={onClose} />);
-    const panel = await screen.findByRole("complementary", { name: "Memory" });
-    expect(screen.getByRole("button", { name: "Close memory" })).toHaveFocus();
+    const panel = await screen.findByRole("complementary", { name: "Saved notes & rules" });
+    expect(screen.getByRole("button", { name: "Close notes" })).toHaveFocus();
     fireEvent.keyDown(panel, { key: "Escape" });
     expect(onClose).toHaveBeenCalledOnce();
     rerender(<I18nProvider><MemoryPanelContainer api={api} open={false} onClose={onClose} /></I18nProvider>);
@@ -50,7 +50,7 @@ describe("MemoryPanelContainer", () => {
     vi.useFakeTimers();
     const api = fakeApi();
     const { rerender } = renderWithI18n(<MemoryPanelContainer api={api} open onClose={vi.fn()} />);
-    expect(screen.getByRole("complementary", { name: "Memory" })).not.toHaveClass("memory-drawer--closing");
+    expect(screen.getByRole("complementary", { name: "Saved notes & rules" })).not.toHaveClass("memory-drawer--closing");
     rerender(<MemoryPanelContainer api={api} open={false} onClose={vi.fn()} />);
     const closing = document.querySelector(".memory-drawer");
     expect(closing).toHaveClass("memory-drawer--closing");
@@ -79,23 +79,23 @@ describe("MemoryPanelContainer", () => {
     expect(await screen.findByText("USD")).toBeInTheDocument();
 
     await userEvent.click(screen.getAllByRole("button", { name: "Edit" })[0]);
-    const editor = screen.getByLabelText("Memory text");
+    const editor = screen.getByLabelText("Note text");
     await userEvent.clear(editor);
     await userEvent.type(editor, "Prices exclude VAT");
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
     expect(await screen.findByText("Prices exclude VAT")).toBeInTheDocument();
 
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     await userEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
+    await userEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
     await waitFor(() => expect(screen.queryByText("Prices exclude VAT")).toBeNull());
     expect(onMemoriesChange).toHaveBeenCalled();
   });
 
-  it("explains how to install the embedding model after a 503", async () => {
+  it("reassures the user in plain language after a 503", async () => {
     const api = fakeApi({
       listMemories: vi.fn().mockRejectedValue(new ApiError(503, "memory_unavailable", "embedder unavailable")),
     });
     renderWithI18n(<MemoryPanelContainer api={api} open onClose={vi.fn()} />);
-    expect(await screen.findByRole("alert")).toHaveTextContent("ollama pull bge-m3");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Saved notes are temporarily unavailable.");
   });
 });

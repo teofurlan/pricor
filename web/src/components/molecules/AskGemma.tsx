@@ -32,7 +32,7 @@ export function AskGemma({ thread, pending, error, onAsk }: Props) {
         <ol className="ask__thread">
           {thread.map((turn, index) => (
             <li key={index} className={`ask__turn ask__turn--${turn.role}`}>
-              <span className="ask__speaker">{turn.role === "user" ? t("ask.you") : "Gemma"}</span>
+              <span className="ask__speaker">{turn.role === "user" ? t("ask.you") : t("ask.assistant")}</span>
               <p className="ask__text">{turn.text}</p>
             </li>
           ))}

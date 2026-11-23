@@ -38,8 +38,22 @@ export function PreviewTable({ page, busy, onPage, fx = null, filter = DEFAULT_F
   const [draftQuery, setDraftQuery] = useState(filter.query);
   const debounceRef = useRef<number | null>(null);
   const tableRef = useRef<HTMLTableElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const helpId = useId();
   const searchId = useId();
+
+  useEffect(() => {
+    if (!onFilter) return;
+    function onKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) return;
+      const tag = (event.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      event.preventDefault();
+      searchInputRef.current?.focus();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onFilter]);
   const selected = (selection.offset === page.offset && page.items.find((row) => row.row_number === selection.row)) || page.items[0];
   const first = page.items.length === 0 ? 0 : page.offset + 1;
   const last = page.offset + page.items.length;
@@ -114,10 +128,11 @@ export function PreviewTable({ page, busy, onPage, fx = null, filter = DEFAULT_F
       <div className="workbench workbench--preview">
         <div className="preview-journal">
           {onFilter && (
-            <form className="filter-bar" role="search" onSubmit={handleSearchSubmit}>
+            <form className={`filter-bar${busy ? " filter-bar--busy" : ""}`} role="search" aria-busy={busy} onSubmit={handleSearchSubmit}>
               <div className="filter-bar__search">
                 <label className="sr-only" htmlFor={searchId}>{t("preview.search.label")}</label>
                 <input
+                  ref={searchInputRef}
                   id={searchId}
                   type="search"
                   value={draftQuery}
@@ -168,10 +183,6 @@ export function PreviewTable({ page, busy, onPage, fx = null, filter = DEFAULT_F
                     <td className="cell--code">{item.record?.supplier_code ?? "—"}</td>
                     <td>
                       {item.record?.description && <span className="cell__name">{item.record.description}</span>}
-                      <details className="original-cells">
-                        <summary>{t("preview.original")}</summary>
-                        <p>{item.original.join(", ")}</p>
-                      </details>
                       {item.status === "rejected" && <div className="reasons"><Badge tone="bad">{t("preview.rejected")}</Badge>{item.reasons.map((reason) => <p key={reason}>{reason}</p>)}</div>}
                     </td>
                     <td className="num cell--cost">
@@ -204,6 +215,12 @@ export function PreviewTable({ page, busy, onPage, fx = null, filter = DEFAULT_F
           {selected ? <>
             <p className="tape__reference"># {t("preview.rowNumber", { row: selected.row_number })}{selected.record?.supplier_code ? ` / ${selected.record.supplier_code}` : ""}</p>
             {selected.record?.description && <p className="tape__description">{selected.record.description}</p>}
+            {selected.original.length > 0 && (
+              <details className="original-cells original-cells--tape">
+                <summary>{t("preview.original")}</summary>
+                <p>{selected.original.join(", ")}</p>
+              </details>
+            )}
             {selected.status === "rejected" ? <div className="reasons"><strong>{t("preview.rejected")}</strong>{selected.reasons.map((reason) => <p key={reason}>{reason}</p>)}</div> : selected.trace.length ? <StepTrace key={selected.row_number} trace={selected.trace} currency={selected.record?.currency ?? null} convertedCurrency={fx?.to ?? null} animate={!browsed} announce /> : <p className="hint">{t("preview.noTrace")}</p>}
           </> : <p className="hint">{t("preview.empty")}</p>}
         </section>

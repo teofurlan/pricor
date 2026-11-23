@@ -89,10 +89,11 @@ describe("UploadForm", () => {
     expect(onSubmit).toHaveBeenCalledWith({ file, supplierName: "lista", sheet: "", language: "en" });
   });
 
-  it("renders drop zone copy and changes text on dragover", () => {
+  it("renders drop zone copy, nests the file input for focus rings, and changes text on dragover", () => {
     renderWithI18n(<UploadForm busy={false} onSubmit={vi.fn()} />);
     const dropzone = document.querySelector(".dropzone");
     expect(dropzone).toBeInTheDocument();
+    expect(dropzone?.contains(screen.getByLabelText("Price list file"))).toBe(true);
     expect(within(dropzone as HTMLElement).getByText("Drag your price list here")).toBeInTheDocument();
     expect(within(dropzone as HTMLElement).getByText("or")).toBeInTheDocument();
     expect(within(dropzone as HTMLElement).getByText("Choose file")).toBeInTheDocument();
@@ -413,7 +414,7 @@ describe("ColumnsTable", () => {
     expect(screen.queryByRole("columnheader", { name: "Decided by" })).not.toBeInTheDocument();
 
     const rowCodigo = screen.getByRole("row", { name: /Codigo/ });
-    expect(within(rowCodigo).getByText("✓ Set by the model (confident)")).toBeInTheDocument();
+    expect(within(rowCodigo).getByText("✓ Automatically detected")).toBeInTheDocument();
 
     const rowMisterio = screen.getByRole("row", { name: /Misterio/ });
     expect(within(rowMisterio).getByText("Needs your confirmation")).toBeInTheDocument();
@@ -439,7 +440,7 @@ describe("ColumnsTable", () => {
     const row = screen.getByRole("row", { name: /codart/ });
 
     // Suggestion header
-    expect(screen.getByRole("columnheader", { name: "Suggestion (model confidence)" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Suggestion" })).toBeInTheDocument();
 
     // Suggested role uses role.* label: "Product code" (not raw "CODE")
     const suggestionCell = row.querySelector(".cell--suggestion") as HTMLElement;
@@ -748,7 +749,7 @@ describe("QuestionsPanel", () => {
     expect(within(history).getByText("Argentine pesos (ARS)")).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "Include VAT?" })).toBeInTheDocument();
     await userEvent.click(within(history).getByRole("button", { name: "Change" }));
-    await userEvent.click(screen.getByRole("radio", { name: /US dollars/ }));
+    await userEvent.click(screen.getByRole("button", { name: /US dollars/ }));
     expect(onAnswer).toHaveBeenCalledWith("currency", "USD");
   });
 
@@ -764,26 +765,26 @@ describe("QuestionsPanel", () => {
     const onAsk = vi.fn(() => new Promise<{ reply: string; suggested_option: string | null }>((done) => { resolve = done; }));
     const onAnswer = vi.fn();
     renderWithI18n(<QuestionsPanel questions={[question()]} answers={{}} busy={false} onAnswer={onAnswer} onContinue={vi.fn()} onAsk={onAsk} />);
-    await userEvent.type(screen.getByLabelText("Ask Gemma about this question"), "The list says $ only");
+    await userEvent.type(screen.getByLabelText("Ask the assistant about this question"), "The list says $ only");
     await userEvent.click(screen.getByRole("button", { name: "Ask" }));
     expect(onAsk).toHaveBeenCalledWith("currency", "The list says $ only", []);
     expect(screen.getByRole("button", { name: /Ask/ })).toHaveAttribute("aria-busy", "true");
     await act(async () => resolve({ reply: "A bare $ in an Argentine list usually means pesos.", suggested_option: "ARS" }));
     expect(screen.getByText("The list says $ only")).toBeInTheDocument();
     expect(screen.getByText("A bare $ in an Argentine list usually means pesos.")).toBeInTheDocument();
-    const ars = screen.getByRole("radio", { name: /Argentine pesos/ });
-    expect(ars).not.toBeChecked();
-    expect(ars.closest("label")).toHaveTextContent("Suggested in the conversation");
+    const ars = screen.getByRole("button", { name: /Argentine pesos/ });
+    expect(ars).toHaveAttribute("aria-pressed", "false");
+    expect(ars).toHaveTextContent("Suggested in the conversation");
     expect(onAnswer).not.toHaveBeenCalled();
   });
 
-  it("keeps the question answerable when Gemma cannot be reached", async () => {
+  it("keeps the question answerable when the assistant cannot be reached", async () => {
     const onAsk = vi.fn().mockRejectedValue(new ApiError(503, "model_unavailable", "down"));
     renderWithI18n(<QuestionsPanel questions={[question()]} answers={{}} busy={false} onAnswer={vi.fn()} onContinue={vi.fn()} onAsk={onAsk} />);
-    await userEvent.type(screen.getByLabelText("Ask Gemma about this question"), "Which one?");
+    await userEvent.type(screen.getByLabelText("Ask the assistant about this question"), "Which one?");
     await userEvent.click(screen.getByRole("button", { name: "Ask" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Gemma is not available right now. You can still answer with the keys.");
-    expect(screen.getByRole("radio", { name: /Argentine pesos/ })).toBeEnabled();
+    expect(await screen.findByRole("alert")).toHaveTextContent("The assistant is unavailable right now. You can still answer with the buttons.");
+    expect(screen.getByRole("button", { name: /Argentine pesos/ })).toBeEnabled();
   });
 
   it("says so when there is nothing to ask", () => {
@@ -862,12 +863,13 @@ describe("QuestionsPanel", () => {
 });
 
 describe("PreviewTable", () => {
-  it("shows the file row and original cells in the journal, with every step and final cost on the selected tape", async () => {
+  it("shows the file row in the journal, with original cells, every step and final cost on the selected tape", async () => {
     renderWithI18n(<PreviewTable page={previewPage()} busy={false} onPage={vi.fn()} />);
     const row = screen.getByRole("button", { name: "Row 3" }).closest("tr")!;
-    await userEvent.click(within(row).getByText("In your file"));
-    expect(within(row).getByText("A1, Tornillo, 1.210,00, 21%")).toBeVisible();
+    expect(within(row).queryByText("In your file")).toBeNull();
     const tape = screen.getByRole("region", { name: "From file to cost" });
+    await userEvent.click(within(tape).getByText("In your file"));
+    expect(within(tape).getByText("A1, Tornillo, 1.210,00, 21%")).toBeVisible();
     expect(await within(tape).findByText("VAT removed")).toBeInTheDocument();
     expect(
       await within(tape).findByText((_, el) => Boolean(el?.classList.contains("trace__value") && el?.textContent === "1,000.00 ARS")),
@@ -913,6 +915,14 @@ describe("RejectedList", () => {
     renderWithI18n(<RejectedList rows={[]} />);
     expect(screen.getByText("No rows were rejected.")).toBeInTheDocument();
   });
+
+  it("paginates very long rejected lists in batches of 50", async () => {
+    const many = Array.from({ length: 65 }, (_, index) => ({ row_number: index + 2, reasons: [`bad row ${index + 2}`] }));
+    renderWithI18n(<RejectedList rows={many} />);
+    expect(screen.getAllByRole("listitem")).toHaveLength(50);
+    await userEvent.click(screen.getByRole("button", { name: "Show more (15 left)" }));
+    expect(screen.getAllByRole("listitem")).toHaveLength(65);
+  });
 });
 
 describe("ApprovePanel", () => {
@@ -927,13 +937,13 @@ describe("ApprovePanel", () => {
     expect(screen.getByText(/5 products will be saved/)).toBeInTheDocument();
     expect(screen.getByText(/1 rejected row stays out/)).toBeInTheDocument();
     expect(screen.queryByRole("link")).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "Approve import" }));
+    await userEvent.click(screen.getByRole("button", { name: "Approve and generate file" }));
     expect(onApprove).toHaveBeenCalled();
   });
 
   it("offers every download once approved", () => {
     renderWithI18n(<ApprovePanel totals={previewPage().totals} approved busy={false} links={links} onApprove={vi.fn()} />);
-    expect(screen.queryByRole("button", { name: "Approve import" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Approve and generate file" })).toBeNull();
     expect(screen.getByRole("link", { name: "Products (CSV)" })).toHaveAttribute("href", links.products.csv);
     expect(screen.getByRole("link", { name: "Products (XLSX)" })).toHaveAttribute("href", links.products.xlsx);
     expect(screen.getByRole("link", { name: "Rejected rows (CSV)" })).toHaveAttribute("href", links.rejected.csv);
@@ -995,9 +1005,9 @@ describe("waiting keys", () => {
   it("animates the signature key while the import is being approved", async () => {
     const links = { products: { csv: "", xlsx: "" }, rejected: { csv: "", xlsx: "" } };
     const { rerender } = renderWithI18n(<ApprovePanel totals={previewPage().totals} approved={false} busy={false} links={links} onApprove={vi.fn()} />);
-    await userEvent.click(screen.getByRole("button", { name: "Approve import" }));
+    await userEvent.click(screen.getByRole("button", { name: "Approve and generate file" }));
     rerender(<ApprovePanel totals={previewPage().totals} approved={false} busy links={links} onApprove={vi.fn()} />);
-    expect(screen.getByRole("button", { name: "Approve import" })).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("button", { name: "Approve and generate file" })).toHaveAttribute("aria-busy", "true");
   });
 });
 

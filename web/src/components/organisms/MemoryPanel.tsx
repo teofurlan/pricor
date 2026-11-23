@@ -21,6 +21,7 @@ export function MemoryPanel({ memories, loading, busy, error = null, onAdd, onEd
   const [supplier, setSupplier] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -78,10 +79,28 @@ export function MemoryPanel({ memories, loading, busy, error = null, onAdd, onEd
               ) : (
                 <>
                   <p className="memory-card__text">{memory.text}</p>
-                  <div className="actions">
-                    <Button variant="link" disabled={busy} onClick={() => { setEditing(memory.id); setEditText(memory.text); }}>{t("memory.edit")}</Button>
-                    <Button variant="link" className="button--danger" disabled={busy} onClick={() => window.confirm(t("memory.delete.confirm")) && onDelete(memory.id)}>{t("memory.delete")}</Button>
-                  </div>
+                  {confirmDeleteId === memory.id ? (
+                    <div className="memory-card__confirm" role="group" aria-label={t("memory.delete.confirm")}>
+                      <p className="memory-card__confirm-text">{t("memory.delete.confirm")}</p>
+                      <div className="actions">
+                        <Button
+                          className="button--danger"
+                          disabled={busy}
+                          onClick={() => { setConfirmDeleteId(null); onDelete(memory.id); }}
+                        >
+                          {t("memory.delete.confirmAction")}
+                        </Button>
+                        <Button disabled={busy} onClick={() => setConfirmDeleteId(null)}>
+                          {t("memory.cancel")}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="actions">
+                      <Button variant="link" disabled={busy} onClick={() => { setConfirmDeleteId(null); setEditing(memory.id); setEditText(memory.text); }}>{t("memory.edit")}</Button>
+                      <Button variant="link" className="button--danger" disabled={busy} onClick={() => setConfirmDeleteId(memory.id)}>{t("memory.delete")}</Button>
+                    </div>
+                  )}
                 </>
               )}
             </article>

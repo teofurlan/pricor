@@ -54,9 +54,9 @@ describe("ImportWizard memory", () => {
     const api = fakeApi({ createImport: vi.fn().mockResolvedValue(asking) });
     renderWithI18n(<ImportWizard api={api} />);
     await startImport();
-    expect(await screen.findByText("Based on your memory:")).toBeInTheDocument();
+    expect(await screen.findByText("Based on your saved notes:")).toBeInTheDocument();
     expect(screen.getByText("Prices include VAT")).toBeInTheDocument();
-    expect(screen.getByText("a memory that was deleted")).toBeInTheDocument();
+    expect(screen.getByText("a note that was deleted")).toBeInTheDocument();
     expect(api.listMemories).toHaveBeenCalledTimes(1);
   });
 
@@ -65,10 +65,10 @@ describe("ImportWizard memory", () => {
     const api = fakeApi({ createImport: vi.fn().mockResolvedValue(asking), answer: vi.fn().mockResolvedValue(accepted) });
     renderWithI18n(<ImportWizard api={api} />);
     await startImport();
-    await userEvent.click(screen.getByRole("radio", { name: /US dollars/ }));
+    await userEvent.click(screen.getByRole("button", { name: /US dollars/ }));
     await userEvent.click(await screen.findByRole("button", { name: "Remember this" }));
     expect(api.rememberSuggestion).toHaveBeenCalledWith("s1", "currency");
-    expect(await screen.findByText("Saved to memory")).toBeInTheDocument();
+    expect(await screen.findByText("Saved to notes")).toBeInTheDocument();
   });
 
   it("does not offer Remember this when the user rejected the suggestion", async () => {
@@ -76,7 +76,7 @@ describe("ImportWizard memory", () => {
     const api = fakeApi({ createImport: vi.fn().mockResolvedValue(asking), answer: vi.fn().mockResolvedValue(rejected) });
     renderWithI18n(<ImportWizard api={api} />);
     await startImport();
-    await userEvent.click(screen.getByRole("radio", { name: /Argentine pesos/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Argentine pesos/ }));
     const history = await screen.findByRole("list", { name: "Answered questions" });
     expect(within(history).getByText("Argentine pesos (ARS)")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Remember this" })).toBeNull();
@@ -91,7 +91,7 @@ describe("ImportWizard memory", () => {
     });
     renderWithI18n(<ImportWizard api={api} />);
     await startImport();
-    await userEvent.click(screen.getByRole("radio", { name: /US dollars/ }));
+    await userEvent.click(screen.getByRole("button", { name: /US dollars/ }));
     await userEvent.click(await screen.findByRole("button", { name: "Remember this" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("The recorded answer is not the suggestion.");
   });

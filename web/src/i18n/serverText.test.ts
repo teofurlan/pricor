@@ -53,22 +53,22 @@ describe("localizeNotice", () => {
   it.each([
     [
       "stage 'gemma' could not classify columns (ModelUnavailableError): connection refused",
-      "La etapa 'gemma' no pudo clasificar las columnas.",
-      "ModelUnavailableError: connection refused",
+      "La detección automática no pudo clasificar todas las columnas.",
+      "gemma (ModelUnavailableError): connection refused",
     ],
     [
       "stage 'laya' was skipped: the Laya model could not be loaded (ImportError: no module); install it",
-      "Se omitió la etapa 'laya'.",
-      "the Laya model could not be loaded (ImportError: no module); install it",
+      "Se omitió un paso automático opcional.",
+      "laya: the Laya model could not be loaded (ImportError: no module); install it",
     ],
     [
       "the plan advisor could not help (ModelTimeoutError): timed out after 30s",
-      "El asesor del plan no pudo ayudar.",
+      "El asistente no pudo sugerir respuestas para esta lista.",
       "ModelTimeoutError: timed out after 30s",
     ],
     [
       "semantic memory could not be retrieved (EmbedderUnavailableError): no vector",
-      "No se pudo consultar la memoria semántica.",
+      "No se pudieron consultar sus notas guardadas.",
       "EmbedderUnavailableError: no vector",
     ],
   ])("gives a Spanish sentence for %j and keeps the technical detail apart", (english, sentence, detail) => {

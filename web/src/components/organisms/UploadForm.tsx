@@ -5,6 +5,7 @@ import { useI18n } from "../../i18n";
 import { describeError } from "../../i18n/serverText";
 import { Button } from "../atoms/Button";
 import { FileMark } from "../atoms/FileMark";
+import { TapeFigure } from "../atoms/TapeFigure";
 import { TapeLoader } from "../atoms/TapeLoader";
 import { SamplePicker } from "../molecules/SamplePicker";
 
@@ -145,7 +146,7 @@ export function UploadForm({ busy, onSubmit, onSubmitMany, onInspectSheets, onLi
   };
 
   return (
-    <div className="upload">
+    <div className={`upload${chosen.length === 0 ? " workbench workbench--upload" : ""}`}>
     <form className="form" onSubmit={submit}>
       <div className="feed-slot">
         <span aria-hidden="true">↓</span>
@@ -155,21 +156,22 @@ export function UploadForm({ busy, onSubmit, onSubmitMany, onInspectSheets, onLi
         <label className="field__label" htmlFor={fileId}>
           {t("upload.file")}
         </label>
-        <input
-          id={fileId}
-          ref={fileInputRef}
-          type="file"
-          className="sr-only"
-          accept=".csv,.xlsx,.xlsm,.xls"
-          multiple={many}
-          aria-describedby={hintId}
-          onChange={(event) => {
-            add(Array.from(event.target.files ?? []));
-            event.target.value = "";
-          }}
-        />
         {chosen.length === 0 ? (
           <div className={`dropzone${dragOver ? " dropzone--active" : ""}`} onClick={pick} {...dropTarget}>
+            <input
+              id={fileId}
+              ref={fileInputRef}
+              type="file"
+              className="sr-only"
+              accept=".csv,.xlsx,.xlsm,.xls"
+              multiple={many}
+              aria-describedby={hintId}
+              onClick={(event) => event.stopPropagation()}
+              onChange={(event) => {
+                add(Array.from(event.target.files ?? []));
+                event.target.value = "";
+              }}
+            />
             {dragOver ? (
               <p className="dropzone__main dropzone__main--active">{t("upload.dropActive")}</p>
             ) : (
@@ -215,6 +217,20 @@ export function UploadForm({ busy, onSubmit, onSubmitMany, onInspectSheets, onLi
               );
             })}
             <li className="file-tile file-tile--add">
+              <input
+                id={fileId}
+                ref={fileInputRef}
+                type="file"
+                className="sr-only"
+                tabIndex={-1}
+                accept=".csv,.xlsx,.xlsm,.xls"
+                multiple={many}
+                aria-describedby={hintId}
+                onChange={(event) => {
+                  add(Array.from(event.target.files ?? []));
+                  event.target.value = "";
+                }}
+              />
               <button ref={addKeyRef} type="button" className="file-tile__add" aria-describedby={hintId} onClick={pick}>
                 <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
                   <path d="M14 5v18M5 14h18" />
@@ -262,26 +278,74 @@ export function UploadForm({ busy, onSubmit, onSubmitMany, onInspectSheets, onLi
       )}
       {onListSamples && onLoadSample && <SamplePicker list={onListSamples} onChoose={chooseSample} disabled={busy} />}
       {notice && <p className="field__error" role="status">{notice}</p>}
-      <div className="form__row">
-        <label className="field">
-          <span className="field__label">{t("upload.language")}</span>
-          <select value={language} onChange={(event) => setManualLanguage(event.target.value as Language)}>
-            <option value="en">{t("language.en")}</option>
-            <option value="es">{t("language.es")}</option>
-          </select>
-        </label>
-      </div>
-      <div className="check">
-        <input id={freshId} type="checkbox" checked={fresh} aria-describedby={freshHintId} onChange={(event) => setFresh(event.target.checked)} />
-        <div>
-          <label className="check__label" htmlFor={freshId}>{t("upload.fresh")}</label>
-          <span id={freshHintId} className="field__hint">{t("upload.freshHint")}</span>
+      <details className="upload__advanced">
+        <summary>{t("upload.advanced")}</summary>
+        <div className="upload__advanced-body">
+          <label className="field">
+            <span className="field__label">{t("upload.language")}</span>
+            <select value={language} onChange={(event) => setManualLanguage(event.target.value as Language)}>
+              <option value="en">{t("language.en")}</option>
+              <option value="es">{t("language.es")}</option>
+            </select>
+          </label>
+          <div className="check">
+            <input id={freshId} type="checkbox" checked={fresh} aria-describedby={freshHintId} onChange={(event) => setFresh(event.target.checked)} />
+            <div>
+              <label className="check__label" htmlFor={freshId}>{t("upload.fresh")}</label>
+              <span id={freshHintId} className="field__hint">{t("upload.freshHint")}</span>
+            </div>
+          </div>
         </div>
-      </div>
+      </details>
       <Button type="submit" variant="primary" disabled={!ready || busy} className={busy ? "button--busy" : undefined}>
         {busy ? <TapeLoader size="normal" text={t("upload.reading")} /> : t("upload.start")}
       </Button>
     </form>
+    {chosen.length === 0 && (
+      <section className="tape tape--example" aria-label={t("upload.exampleTitle")}>
+        <h2 className="tape__heading">{t("upload.exampleTitle")}</h2>
+        <p className="tape__description">{t("upload.exampleNote")}</p>
+        <ol className="trace">
+          <li className="trace__step">
+            <span className="trace__operator" aria-hidden="true">#</span>
+            <span className="trace__label">{t("upload.exampleBox")}</span>
+            <TapeFigure className="trace__value" language={interfaceLanguage} value="12100.00" fracWidth={3} />
+            <span className="trace__mark" aria-hidden="true" />
+          </li>
+          <li className="trace__step">
+            <span className="trace__operator" aria-hidden="true">×</span>
+            <span className="trace__label">{t("upload.exampleDisc1")}</span>
+            <TapeFigure className="trace__value" language={interfaceLanguage} value="0.90" fracWidth={3} />
+            <span className="trace__mark" aria-hidden="true" />
+          </li>
+          <li className="trace__step">
+            <span className="trace__operator" aria-hidden="true">×</span>
+            <span className="trace__label">{t("upload.exampleDisc2")}</span>
+            <TapeFigure className="trace__value" language={interfaceLanguage} value="0.95" fracWidth={3} />
+            <span className="trace__mark" aria-hidden="true" />
+          </li>
+          <li className="trace__step">
+            <span className="trace__operator" aria-hidden="true">÷</span>
+            <span className="trace__label">{t("upload.exampleVat")}</span>
+            <TapeFigure className="trace__value" language={interfaceLanguage} value="1.21" fracWidth={3} />
+            <span className="trace__mark" aria-hidden="true" />
+          </li>
+          <li className="trace__step">
+            <span className="trace__operator" aria-hidden="true">÷</span>
+            <span className="trace__label">{t("upload.examplePack")}</span>
+            <TapeFigure className="trace__value" language={interfaceLanguage} value="10" fracWidth={3} />
+            <span className="trace__mark" aria-hidden="true" />
+          </li>
+          <li className="trace__step trace__step--final">
+            <span className="trace__operator" aria-hidden="true">=</span>
+            <span className="trace__label">{t("upload.exampleTotal")}</span>
+            <TapeFigure className="trace__value" language={interfaceLanguage} value="855.00 ARS" fracWidth={3} />
+            <span className="trace__mark" aria-hidden="true">✱</span>
+          </li>
+        </ol>
+        <div className="tape__tear" aria-hidden="true" />
+      </section>
+    )}
     </div>
   );
 }

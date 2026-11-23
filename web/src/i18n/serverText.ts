@@ -74,10 +74,10 @@ export function localizeServerText(text: string, language: Language): string {
  * `application/import_first_time.py`.
  */
 const NOTICE_RULES: Array<[RegExp, (...groups: string[]) => { text: string; detail: string }]> = [
-  [/^stage '(.+?)' could not classify columns \((\w+)\): ([\s\S]*)$/, (stage, kind, message) => ({ text: `La etapa '${stage}' no pudo clasificar las columnas.`, detail: `${kind}: ${message}` })],
-  [/^stage '(.+?)' was skipped: ([\s\S]*)$/, (stage, reason) => ({ text: `Se omitió la etapa '${stage}'.`, detail: reason })],
-  [/^the plan advisor could not help \((\w+)\): ([\s\S]*)$/, (kind, message) => ({ text: "El asesor del plan no pudo ayudar.", detail: `${kind}: ${message}` })],
-  [/^semantic memory could not be retrieved \((\w+)\): ([\s\S]*)$/, (kind, message) => ({ text: "No se pudo consultar la memoria semántica.", detail: `${kind}: ${message}` })],
+  [/^stage '(.+?)' could not classify columns \((\w+)\): ([\s\S]*)$/, (stage, kind, message) => ({ text: "La detección automática no pudo clasificar todas las columnas.", detail: `${stage} (${kind}): ${message}` })],
+  [/^stage '(.+?)' was skipped: ([\s\S]*)$/, (stage, reason) => ({ text: "Se omitió un paso automático opcional.", detail: `${stage}: ${reason}` })],
+  [/^the plan advisor could not help \((\w+)\): ([\s\S]*)$/, (kind, message) => ({ text: "El asistente no pudo sugerir respuestas para esta lista.", detail: `${kind}: ${message}` })],
+  [/^semantic memory could not be retrieved \((\w+)\): ([\s\S]*)$/, (kind, message) => ({ text: "No se pudieron consultar sus notas guardadas.", detail: `${kind}: ${message}` })],
 ];
 
 /** A session notice: the server's text in English; in Spanish a sentence plus its technical detail. */

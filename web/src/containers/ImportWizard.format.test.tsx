@@ -61,74 +61,59 @@ async function toPreview() {
 
 const stepNames = () => within(screen.getByRole("navigation", { name: "Import steps" })).getAllByRole("listitem").map((item) => item.textContent?.replace(/^(✓|\d+)/, ""));
 
-describe("ImportWizard output format step", () => {
-  it("keeps the template panel out of the upload step", async () => {
-    const api = fakeApi(confirmed);
-    renderWithI18n(<ImportWizard api={api} />);
-    expect(await screen.findByLabelText("Price list file")).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Products file columns" })).toBeNull();
-    expect(screen.queryByLabelText("Template file")).toBeNull();
-    expect(api.getOutputFormat).not.toHaveBeenCalled();
-  });
-
-  it("puts the output format between the preview and the approval", async () => {
-    renderWithI18n(<ImportWizard api={fakeApi(null)} />);
+describe("ImportWizard output format drawer", () => {
+  it("keeps the weekly stepper to 5 steps without an extra Output format stop", async () => {
+    renderWithI18n(<ImportWizard api={fakeApi(confirmed)} />);
     await screen.findByLabelText("Price list file");
-    expect(stepNames()).toEqual(["Upload", "Columns", "Questions", "Preview", "Output format", "Approve"]);
+    expect(stepNames()).toEqual(["Upload", "Columns", "Questions", "Preview", "Approve"]);
+    expect(screen.queryByRole("region", { name: "Products file columns" })).toBeNull();
   });
 
-  it("summarises a saved format and goes to approval in one click", async () => {
+  it("shows the saved format count in the top bar and opens the non-modal format drawer", async () => {
     const api = fakeApi(confirmed);
     renderWithI18n(<ImportWizard api={api} />);
-    await toPreview();
-    expect(await screen.findByText("Using your format: 2 columns")).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Products file columns" })).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "Continue to approval" }));
-    expect(await screen.findByRole("button", { name: "Approve import" })).toBeInTheDocument();
+    const trigger = await screen.findByRole("button", { name: "Format: Custom (2 cols)" });
+    await userEvent.click(trigger);
+    const drawer = await screen.findByRole("complementary", { name: "Export format" });
+    expect(within(drawer).getByRole("region", { name: "Products file columns" })).toBeInTheDocument();
+    await userEvent.click(within(drawer).getByRole("button", { name: "Close format" }));
   });
 
-  it("opens the editor from Change", async () => {
+  it("goes straight from Preview to Approve and surfaces a quick Change link before approving", async () => {
     renderWithI18n(<ImportWizard api={fakeApi(confirmed)} />);
     await toPreview();
-    await userEvent.click(await screen.findByRole("button", { name: "Change" }));
-    expect(await screen.findByRole("region", { name: "Products file columns" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Change" })).toBeNull();
+    expect(await screen.findByRole("button", { name: "Approve and generate file" })).toBeInTheDocument();
+    expect(screen.getByText("Export format: Your format (2 columns)")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Change" }));
+    expect(await screen.findByRole("complementary", { name: "Export format" })).toBeInTheDocument();
   });
 
-  it("continues with the standard columns when there is no format, and offers to set one up", async () => {
+  it("shows standard format label when no custom format is stored", async () => {
     renderWithI18n(<ImportWizard api={fakeApi(null)} />);
+    expect(await screen.findByRole("button", { name: "Format: Standard" })).toBeInTheDocument();
     await toPreview();
-    expect(await screen.findByText("The products file will use Pricor's standard columns.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Set up my format" })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Continue to approval" }));
-    expect(await screen.findByRole("button", { name: "Approve import" })).toBeInTheDocument();
+    expect(await screen.findByText("Export format: Pricor standard columns")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Approve and generate file" })).toBeInTheDocument();
   });
 
   it("speaks to the user as usted in Spanish", async () => {
     renderWithI18n(<ImportWizard api={fakeApi(confirmed)} />, "es");
+    expect(await screen.findByRole("button", { name: "Formato: Mi sistema (2 col.)" })).toBeInTheDocument();
     await userEvent.upload(screen.getByLabelText("Archivo de la lista de precios"), new File(["a,b"], "lista.csv"));
     await userEvent.clear(screen.getByLabelText("Proveedor de lista.csv"));
     await userEvent.type(screen.getByLabelText("Proveedor de lista.csv"), "Ferreteria Ejemplo");
     await userEvent.click(screen.getByRole("button", { name: "Iniciar importación" }));
     await userEvent.click(await screen.findByRole("button", { name: "Confirmar columnas" }));
     await userEvent.click(await screen.findByRole("button", { name: "Continuar a la aprobación" }));
-    expect(await screen.findByText("Usando su formato: 2 columnas")).toBeInTheDocument();
+    expect(await screen.findByText("Formato de exportación: Su formato (2 columnas)")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cambiar" })).toBeInTheDocument();
   });
 
-  it("locks the step once the import is approved, like the other plan steps", async () => {
-    renderWithI18n(<ImportWizard api={fakeApi(null)} />);
-    await toPreview();
-    await userEvent.click(await screen.findByRole("button", { name: "Continue to approval" }));
-    await userEvent.click(await screen.findByRole("button", { name: "Approve import" }));
-    await screen.findByRole("link", { name: "Products (CSV)" });
-    expect(screen.getByRole("navigation", { name: "Import steps" })).toHaveTextContent("Output format locked");
-  });
-
-  it("has no output format step when the server offers none", async () => {
+  it("hides the format button when the server offers no output format API", async () => {
     const { getOutputFormat: _a, uploadOutputFormat: _b, confirmOutputFormat: _c, defineOutputFormat: _d, deleteOutputFormat: _e, ...plain } = fakeApi(null);
     renderWithI18n(<ImportWizard api={plain} />);
     await screen.findByLabelText("Price list file");
+    expect(screen.queryByRole("button", { name: /Format:/ })).toBeNull();
     expect(stepNames()).toEqual(["Upload", "Columns", "Questions", "Preview", "Approve"]);
   });
 });

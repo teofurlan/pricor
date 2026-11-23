@@ -65,25 +65,28 @@ describe("MemoryPanel", () => {
     const props = renderPanel();
     const first = screen.getByRole("article", { name: /Prices include VAT/ });
     await userEvent.click(within(first).getByRole("button", { name: "Edit" }));
-    const editor = within(first).getByLabelText("Memory text");
+    const editor = within(first).getByLabelText("Note text");
     await userEvent.clear(editor);
     await userEvent.type(editor, "Prices exclude VAT");
     await userEvent.click(within(first).getByRole("button", { name: "Save changes" }));
     expect(props.onEdit).toHaveBeenCalledWith("m1", "Prices exclude VAT");
   });
 
-  it("asks for confirmation before deleting", async () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+  it("asks for inline confirmation before deleting and cancels cleanly", async () => {
     const props = renderPanel();
     const first = screen.getByRole("article", { name: /Prices include VAT/ });
     await userEvent.click(within(first).getByRole("button", { name: "Delete" }));
-    expect(confirm).toHaveBeenCalledWith("Delete this memory? This cannot be undone.");
+    expect(within(first).getByText("Delete this note? This cannot be undone.")).toBeInTheDocument();
+    await userEvent.click(within(first).getByRole("button", { name: "Cancel" }));
+    expect(props.onDelete).not.toHaveBeenCalled();
+
+    await userEvent.click(within(first).getByRole("button", { name: "Delete" }));
+    await userEvent.click(within(first).getByRole("button", { name: "Confirm delete" }));
     expect(props.onDelete).toHaveBeenCalledWith("m1");
-    confirm.mockRestore();
   });
 
   it("shows an inviting empty state", () => {
     renderPanel({ memories: [] });
-    expect(screen.getByText("No memories yet. Add a note to help Gemma with future lists.")).toBeInTheDocument();
+    expect(screen.getByText("No notes yet. Add a supplier rule so Pricor can apply it on future lists.")).toBeInTheDocument();
   });
 });

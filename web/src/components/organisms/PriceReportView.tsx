@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { Language, PriceReport, ReportChange, ReportProduct } from "../../api/types";
 import { formatFigure, formatInteger } from "../../lib/decimalText";
 import { percentToRatio, ratioToPercent, signedPercent } from "../../lib/percent";
@@ -7,6 +7,8 @@ import { Button } from "../atoms/Button";
 import { TapeFigure } from "../atoms/TapeFigure";
 
 const ROW_LIMIT = 50;
+const BATCH_STEP = 100;
+const SHOW_ALL_CAP = 200;
 
 function foldText(text: string): string {
   return text.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -41,8 +43,10 @@ function Section({
 }) {
   const { t, language } = useI18n();
   const headingId = useId();
-  const [expanded, setExpanded] = useState(false);
-  const visible = expanded ? count : Math.min(count, ROW_LIMIT);
+  const [limit, setLimit] = useState(ROW_LIMIT);
+  const visible = Math.min(count, limit);
+  const remaining = count - visible;
+  const nextStep = count <= SHOW_ALL_CAP ? remaining : Math.min(BATCH_STEP, remaining);
   return (
     <section className="stack report__section" aria-labelledby={headingId}>
       <h3 id={headingId} className="subtitle">
@@ -50,9 +54,13 @@ function Section({
       </h3>
       {lede && <p className="hint">{lede}</p>}
       <div className="table-wrap">{children(visible)}</div>
-      {visible < count && (
+      {remaining > 0 && (
         <div className="actions">
-          <Button onClick={() => setExpanded(true)}>{t("report.showAll", { count: formatInteger(count, language) })}</Button>
+          <Button onClick={() => setLimit((current) => current + nextStep)}>
+            {count <= SHOW_ALL_CAP
+              ? t("report.showAll", { count: formatInteger(count, language) })
+              : t("report.showMore", { count: formatInteger(nextStep, language), remaining: formatInteger(remaining, language) })}
+          </Button>
         </div>
       )}
     </section>
@@ -65,13 +73,13 @@ function ChangeTable({ rows, showPercent = true }: { rows: ReportChange[]; showP
     <table className="table table--report">
       <thead>
         <tr>
-          <th>{t("report.col.code")}</th>
-          <th>{t("report.col.description")}</th>
-          <th className="num">{t("report.col.before")}</th>
-          <th className="num">{t("report.col.now")}</th>
-          <th className="num">{t("report.col.change")}</th>
-          {showPercent && <th className="num">{t("report.col.percent")}</th>}
-          <th />
+          <th scope="col">{t("report.col.code")}</th>
+          <th scope="col">{t("report.col.description")}</th>
+          <th scope="col" className="num">{t("report.col.before")}</th>
+          <th scope="col" className="num">{t("report.col.now")}</th>
+          <th scope="col" className="num">{t("report.col.change")}</th>
+          {showPercent && <th scope="col" className="num">{t("report.col.percent")}</th>}
+          <th scope="col"><span className="sr-only">{t("report.review")}</span></th>
         </tr>
       </thead>
       <tbody>
@@ -81,8 +89,8 @@ function ChangeTable({ rows, showPercent = true }: { rows: ReportChange[]; showP
             <td>{row.description}</td>
             <td className="num">{money(row.previous_cost, row.currency, language)}</td>
             <td className="num">{money(row.current_cost, row.currency, language)}</td>
-            <td className={`num${row.change.startsWith("-") ? " num--negative" : ""}`}>{signedMoney(row.change, row.currency, language)}</td>
-            {showPercent && <td className={`num${row.change_pct?.startsWith("-") ? " num--negative" : ""}`}>{row.change_pct === null ? "" : formatFigure(signedPercent(row.change_pct), language)}</td>}
+            <td className={`num${row.change.startsWith("-") ? " num--negative" : " num--increase"}`}>{signedMoney(row.change, row.currency, language)}</td>
+            {showPercent && <td className={`num${row.change_pct?.startsWith("-") ? " num--negative" : row.change_pct ? " num--increase" : ""}`}>{row.change_pct === null ? "" : formatFigure(signedPercent(row.change_pct), language)}</td>}
             <td>{row.anomaly && <span className="anomaly-mark">✱ {t("report.review")}</span>}</td>
           </tr>
         ))}
@@ -97,9 +105,9 @@ function ProductTable({ rows }: { rows: ReportProduct[] }) {
     <table className="table table--report">
       <thead>
         <tr>
-          <th>{t("report.col.code")}</th>
-          <th>{t("report.col.description")}</th>
-          <th className="num">{t("report.col.cost")}</th>
+          <th scope="col">{t("report.col.code")}</th>
+          <th scope="col">{t("report.col.description")}</th>
+          <th scope="col" className="num">{t("report.col.cost")}</th>
         </tr>
       </thead>
       <tbody>
@@ -151,6 +159,20 @@ export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
   const { t, language } = useI18n();
   const [query, setQuery] = useState("");
   const searchId = useId();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) return;
+      const tag = (event.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (!searchInputRef.current) return;
+      event.preventDefault();
+      searchInputRef.current.focus();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
   const { summary } = report;
   const threshold = ratioToPercent(report.threshold);
   const plural = (base: "report.anomaly" | "report.new", count: number) =>
@@ -178,7 +200,7 @@ export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
 
   const summaryLines = [
     { mark: "◇", value: summary.unchanged, label: t("report.unchanged", { count: "" }).trim() },
-    { mark: "↑", value: summary.increases, label: t("report.up", { count: "" }).trim() },
+    { mark: "↑", value: summary.increases, label: t("report.up", { count: "" }).trim(), increase: true },
     { mark: "↓", value: summary.decreases, label: t("report.down", { count: "" }).trim(), negative: true },
     { mark: "+", value: summary.new_products, label: plural("report.new", summary.new_products).replace(formatInteger(summary.new_products, language), "").trim() },
     { mark: "−", value: summary.discontinued, label: t("report.gone", { count: "" }).trim() },
@@ -191,7 +213,7 @@ export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
         <section className="tape report__summary" aria-label={t("report.summary")}>
           <h2 className="report__headline">{t("report.summary")}</h2>
           <ol className="report__summary-list">
-            {summaryLines.map((line) => <li key={line.label} className={`report__summary-line${line.negative ? " report__summary-line--negative" : ""}${line.total ? " report__summary-line--total" : ""}`}>
+            {summaryLines.map((line) => <li key={line.label} className={`report__summary-line${line.increase ? " report__summary-line--increase" : ""}${line.negative ? " report__summary-line--negative" : ""}${line.total ? " report__summary-line--total" : ""}`}>
               <span aria-hidden="true">{line.mark}</span><span className="report__summary-label">{line.label}</span><TapeFigure className="report__summary-value" language={language} value={line.value} fracWidth={0} />
             </li>)}
           </ol>
@@ -212,6 +234,7 @@ export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
             <div className="filter-bar__search">
               <label className="sr-only" htmlFor={searchId}>{t("report.search.label")}</label>
               <input
+                ref={searchInputRef}
                 id={searchId}
                 type="search"
                 value={query}
@@ -285,10 +308,10 @@ export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
             <table className="table table--report">
               <thead>
                 <tr>
-                  <th>{t("report.col.code")}</th>
-                  <th>{t("report.col.description")}</th>
-                  <th className="num">{t("report.col.before")}</th>
-                  <th className="num">{t("report.col.now")}</th>
+                  <th scope="col">{t("report.col.code")}</th>
+                  <th scope="col">{t("report.col.description")}</th>
+                  <th scope="col" className="num">{t("report.col.before")}</th>
+                  <th scope="col" className="num">{t("report.col.now")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -306,23 +329,25 @@ export function PriceReportView({ report, csvUrl, busy, onThreshold }: Props) {
         </Section>
       )}
       {ambiguousCodes.length > 0 && (
-        <section className="stack report__section" aria-labelledby="report-ambiguous">
-          <h3 id="report-ambiguous" className="subtitle">
-            {t("report.ambiguous", { count: formatInteger(ambiguousCodes.length, language) })}
-          </h3>
-          <p className="hint">{t("report.ambiguous.lede")}</p>
-          <ul className="report__left-out">
-            {ambiguousCodes.map((item, position) => (
-              <li key={`${item.supplier_code}-${position}`}>
-                {t("report.ambiguous.item", {
-                  code: item.supplier_code,
-                  before: times(item.previous_count),
-                  after: times(item.current_count),
-                })}
-              </li>
-            ))}
-          </ul>
-        </section>
+        <Section
+          title={t("report.ambiguous", { count: formatInteger(ambiguousCodes.length, language) })}
+          lede={t("report.ambiguous.lede")}
+          count={ambiguousCodes.length}
+        >
+          {(visible) => (
+            <ul className="report__left-out">
+              {ambiguousCodes.slice(0, visible).map((item, position) => (
+                <li key={`${item.supplier_code}-${position}`}>
+                  {t("report.ambiguous.item", {
+                    code: item.supplier_code,
+                    before: times(item.previous_count),
+                    after: times(item.current_count),
+                  })}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
       )}
         </>
       )}

@@ -13,14 +13,14 @@ const page = () => previewPage({
 });
 
 describe("PreviewTable calculation tape", () => {
-  it("says in plain words that a row can be clicked or tapped for its step-by-step calculation", () => {
+  it("says in plain words that a row can be clicked to inspect its step-by-step calculation", () => {
     renderWithI18n(<PreviewTable page={page()} busy={false} onPage={vi.fn()} />);
-    expect(screen.getByText(/Click or tap a row to see its step-by-step calculation/)).toBeVisible();
+    expect(screen.getByText(/Click a row to inspect its step-by-step calculation/)).toBeVisible();
   });
 
   it("says it in Spanish with usted", () => {
     renderWithI18n(<PreviewTable page={page()} busy={false} onPage={vi.fn()} />, "es");
-    expect(screen.getByText(/Haga clic o toque una fila para ver el cálculo paso a paso/)).toBeVisible();
+    expect(screen.getByText(/Haga clic en una fila para ver el detalle del cálculo/)).toBeVisible();
   });
 
   it("opens the first row on its own and follows the row the user picks", async () => {

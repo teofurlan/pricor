@@ -60,22 +60,21 @@ export function QuestionCard({ question, answer, onAnswer, disabled = false, mem
         {primary.map((option) => {
           const isSelected = answer === option.token;
           return (
-            <label key={option.token} className={`choice choice--key${isSelected ? " choice--pressed" : ""}`}>
-              <input
-                type="radio"
-                className="sr-only"
-                name={question.id}
-                value={option.token}
-                checked={isSelected}
-                onChange={() => onAnswer(question.id, option.token)}
-              />
+            <button
+              key={option.token}
+              type="button"
+              className={`choice choice--key${isSelected ? " choice--pressed" : ""}`}
+              aria-pressed={isSelected}
+              disabled={disabled}
+              onClick={() => onAnswer(question.id, option.token)}
+            >
               <span className="choice__mark" aria-hidden="true">
                 {isSelected ? "✓" : ""}
               </span>
               <span className="choice__label">{option.label[language]}</span>
               {question.suggestion?.option === option.token && <SuggestionBadge suggestion={question.suggestion} />}
               {chatSuggestion === option.token && <span className="badge badge--chat">{t("ask.suggested")}</span>}
-            </label>
+            </button>
           );
         })}
       </div>

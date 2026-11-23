@@ -36,14 +36,13 @@ export function NoticeList({ notices, compact = false }: { notices: Notice[]; co
                 <p>{t("notice.modelUnavailable.body")}</p>
               </>
             )}
-            {detail === null ? (
-              // An untranslated server text under the explanation is detail; on its own it is the message.
-              <p className={modelNotice ? "notice__detail" : undefined}>{text}</p>
-            ) : (
-              <>
-                <p>{text}</p>
-                <p className="notice__detail">{t("notice.detail", { detail })}</p>
-              </>
+            {!modelNotice && <p>{text}</p>}
+            {(detail !== null || modelNotice) && (
+              <details className="notice__tech">
+                <summary>{t("notice.techDetails")}</summary>
+                {modelNotice && detail !== null && <p className="notice__detail">{text}</p>}
+                <p className="notice__detail">{detail !== null ? t("notice.detail", { detail }) : text}</p>
+              </details>
             )}
           </div>
         );
