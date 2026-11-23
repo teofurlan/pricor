@@ -16,6 +16,9 @@ import type {
   ServerConfig,
   SampleListing,
   FunnelEvent,
+  GoogleResolution,
+  GoogleWorkspaceReply,
+  WorkspaceInfo,
 } from "./types";
 
 /** A failed API call, normalized from the server's `{"error": {code, message}}` envelope. */
@@ -75,11 +78,13 @@ export interface SampleApiClient {
 
 /** The visitor's private workspace: its personal link, which also sets the workspace cookie. */
 export interface WorkspaceApiClient {
-  workspace(): Promise<{ link: string }>;
+  workspace(): Promise<WorkspaceInfo>;
   /** The workspace the cookie points at, or null when there is none; never creates one. */
-  currentWorkspace(): Promise<{ link: string } | null>;
+  currentWorkspace(): Promise<WorkspaceInfo | null>;
   /** Switch this browser to the workspace of a personal link's token (sets the cookie). */
-  claimWorkspace(token: string): Promise<{ link: string }>;
+  claimWorkspace(token: string): Promise<WorkspaceInfo>;
+  googleSignIn?(credential: string, resolution?: GoogleResolution): Promise<GoogleWorkspaceReply>;
+  unlinkGoogleAccount?(): Promise<WorkspaceInfo>;
 }
 
 export interface MemoryApiClient {
@@ -230,16 +235,19 @@ export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), 
     editMemory: (id, text) => call(`/memories/${encodeURIComponent(id)}`, json("PATCH", { text })),
     deleteMemory: (id) => call(`/memories/${encodeURIComponent(id)}`, { method: "DELETE" }),
     config: () => call<ServerConfig>("/config"),
-    workspace: () => call<{ link: string }>("/workspace"),
+    workspace: () => call<WorkspaceInfo>("/workspace"),
     async currentWorkspace() {
       try {
-        return await call<{ link: string }>("/workspace/current");
+        return await call<WorkspaceInfo>("/workspace/current");
       } catch (failure) {
         if (failure instanceof ApiError && failure.status === 404 && failure.code === "workspace_not_found") return null;
         throw failure;
       }
     },
-    claimWorkspace: (token) => call<{ link: string }>("/workspace/claim", json("POST", { token })),
+    claimWorkspace: (token) => call<WorkspaceInfo>("/workspace/claim", json("POST", { token })),
+    googleSignIn: (credential, resolution = "auto") =>
+      call<GoogleWorkspaceReply>("/workspace/google", json("POST", { credential, resolution })),
+    unlinkGoogleAccount: () => call<WorkspaceInfo>("/workspace/google", { method: "DELETE" }),
     async downloadCombined(sessionIds, format, kind) {
       let response: Response;
       try {

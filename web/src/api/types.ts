@@ -20,6 +20,22 @@ export interface ServerConfig {
   demo: boolean;
   /** True when each visitor gets a private workspace (`GET /workspace`). */
   workspaces?: boolean;
+  google_client_id?: string;
+}
+
+export interface WorkspaceAccount {
+  email: string;
+}
+
+export type GoogleResolution = "auto" | "use_account" | "link_current";
+
+export interface WorkspaceInfo {
+  link: string;
+  account?: WorkspaceAccount | null;
+}
+
+export interface GoogleWorkspaceReply extends WorkspaceInfo {
+  status: "linked" | "switched" | "conflict";
 }
 
 export type SessionStatus =

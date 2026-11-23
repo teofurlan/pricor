@@ -209,6 +209,7 @@ class ApiDependencies:
     warm_up: Callable[[], None] | None = None  # run once in the background at startup
     workspaces: bool = False  # private workspace per visitor (hosted demo); see workspaces.py
     warm_up_timeout: float = 120.0  # seconds `POST /warm-up` holds a request open for the load
+    google_client_id: str | None = None  # optional OAuth client ID for Google Sign-In
 
 
 class OutputMappingBody(BaseModel):
@@ -993,11 +994,14 @@ def create_app(
 
     @app.get("/config")
     def get_config() -> dict[str, Any]:
-        return {
+        body: dict[str, Any] = {
             "model_provider": dependencies.model_provider,
             "demo": dependencies.demo,
             "workspaces": dependencies.workspaces,
         }
+        if dependencies.google_client_id:
+            body["google_client_id"] = dependencies.google_client_id
+        return body
 
     if extra_routes is not None:
         extra_routes(app)

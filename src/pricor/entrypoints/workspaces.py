@@ -20,7 +20,7 @@ import tempfile
 import threading
 from collections import OrderedDict
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
@@ -31,6 +31,8 @@ from starlette.concurrency import run_in_threadpool
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from pricor.entrypoints.api import ApiDependencies, create_app
+from pricor.entrypoints.workspace_accounts import WorkspaceAccountStore
+from pricor.ports.google_auth import GoogleTokenVerifier, InvalidGoogleTokenError
 from pricor.ports.workspace_backup import WorkspaceBackup
 
 logger = logging.getLogger(__name__)
@@ -111,6 +113,30 @@ class WorkspaceRegistry:
             return False
         self.release(lease)
         return True
+
+    def is_empty(self, token: str | None) -> bool:
+        lease = self.acquire(token)
+        if lease is None:
+            return True
+        try:
+            path = self._path(lease.key)
+            if not path.is_file():
+                return True
+            with closing(sqlite3.connect(path)) as conn:
+                tables = {
+                    row[0]
+                    for row in conn.execute(
+                        "SELECT name FROM sqlite_master WHERE type = 'table'"
+                    ).fetchall()
+                }
+                for table in ("sessions", "plans", "memories", "output_format"):
+                    if table in tables:
+                        count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                        if count > 0:
+                            return False
+            return True
+        finally:
+            self.release(lease)
 
     @contextmanager
     def lease(self, token: str | None) -> Iterator[OpenWorkspace | None]:
@@ -293,13 +319,34 @@ def _is_json(request: Request) -> bool:
     return media_type == "application/json"
 
 
-def install_workspace_routes(app: FastAPI, registry: WorkspaceRegistry) -> None:
+def _error_response(status_code: int, code: str, message: str) -> JSONResponse:
+    return JSONResponse({"error": {"code": code, "message": message}}, status_code=status_code)
+
+
+def _workspace_body(
+    request: Request, token: str, accounts: WorkspaceAccountStore | None
+) -> dict[str, Any]:
+    body: dict[str, Any] = {"link": _link(request, token)}
+    if accounts is not None:
+        linked = accounts.get_by_workspace_key(workspace_key(token))
+        if linked is not None:
+            body["account"] = {"email": linked.email}
+    return body
+
+
+def install_workspace_routes(
+    app: FastAPI,
+    registry: WorkspaceRegistry,
+    accounts: WorkspaceAccountStore | None = None,
+    google_verifier: GoogleTokenVerifier | None = None,
+) -> None:
     @app.get("/workspace")
     def workspace(request: Request) -> Response:
         token = request.cookies.get(COOKIE_NAME)
         if not registry.exists(token):
             token = registry.create()
-        response = JSONResponse({"link": _link(request, token)})
+        assert token is not None
+        response = JSONResponse(_workspace_body(request, token, accounts))
         return _no_store(_with_cookie(response, token, request))
 
     @app.get("/workspace/current")
@@ -307,7 +354,7 @@ def install_workspace_routes(app: FastAPI, registry: WorkspaceRegistry) -> None:
         token = request.cookies.get(COOKIE_NAME)
         if token is None or not registry.exists(token):
             return _no_store(_not_found())
-        return _no_store(JSONResponse({"link": _link(request, token)}))
+        return _no_store(JSONResponse(_workspace_body(request, token, accounts)))
 
     @app.post("/workspace/claim")
     async def claim(request: Request) -> Response:
@@ -322,8 +369,105 @@ def install_workspace_routes(app: FastAPI, registry: WorkspaceRegistry) -> None:
         token = body.get("token") if isinstance(body, dict) else None
         if not isinstance(token, str) or not await run_in_threadpool(registry.exists, token):
             return _no_store(_not_found())
-        response = JSONResponse({"link": _link(request, token)})
+        payload = await run_in_threadpool(_workspace_body, request, token, accounts)
+        response = JSONResponse(payload)
         return _no_store(_with_cookie(response, token, request))
+
+    @app.post("/workspace/google")
+    async def google_sign_in(request: Request) -> Response:
+        if not _is_json(request):
+            return _no_store(_unsupported_media_type())
+        if google_verifier is None or accounts is None:
+            return _no_store(
+                _error_response(
+                    404,
+                    "google_auth_unavailable",
+                    "Google sign-in is not configured on this server",
+                )
+            )
+        try:
+            body = await request.json()
+        except ValueError:
+            body = None
+        if not isinstance(body, dict):
+            return _no_store(_error_response(422, "invalid_input", "expected a JSON object"))
+        credential = body.get("credential")
+        if not isinstance(credential, str) or not credential.strip():
+            return _no_store(
+                _error_response(422, "invalid_input", "credential must be a non-empty string")
+            )
+        resolution = body.get("resolution", "auto")
+        if resolution not in ("auto", "use_account", "link_current"):
+            return _no_store(
+                _error_response(
+                    422,
+                    "invalid_input",
+                    "resolution must be 'auto', 'use_account', or 'link_current'",
+                )
+            )
+        try:
+            identity = await run_in_threadpool(google_verifier.verify, credential)
+        except InvalidGoogleTokenError as err:
+            return _no_store(_error_response(401, "invalid_google_token", str(err)))
+
+        existing = await run_in_threadpool(accounts.get_by_sub, identity.sub)
+        if existing is not None and await run_in_threadpool(registry.exists, existing.token):
+            account_token: str | None = existing.token
+        else:
+            account_token = None
+
+        current_token = request.cookies.get(COOKIE_NAME)
+        has_current = await run_in_threadpool(registry.exists, current_token)
+
+        if account_token is None or account_token == current_token or resolution == "link_current":
+            if not has_current:
+                current_token = await run_in_threadpool(registry.create)
+            assert current_token is not None
+            await run_in_threadpool(accounts.link, identity.sub, identity.email, current_token)
+            response = JSONResponse(
+                {
+                    "status": "linked",
+                    "link": _link(request, current_token),
+                    "account": {"email": identity.email},
+                }
+            )
+            return _no_store(_with_cookie(response, current_token, request))
+
+        if (
+            resolution == "use_account"
+            or not has_current
+            or await run_in_threadpool(registry.is_empty, current_token)
+        ):
+            response = JSONResponse(
+                {
+                    "status": "switched",
+                    "link": _link(request, account_token),
+                    "account": {"email": identity.email},
+                }
+            )
+            return _no_store(_with_cookie(response, account_token, request))
+
+        assert current_token is not None
+        return _no_store(
+            JSONResponse(
+                {
+                    "status": "conflict",
+                    "link": _link(request, current_token),
+                    "account": {"email": identity.email},
+                }
+            )
+        )
+
+    @app.delete("/workspace/google")
+    async def unlink_google(request: Request) -> Response:
+        current_token = request.cookies.get(COOKIE_NAME)
+        if not current_token or not await run_in_threadpool(registry.exists, current_token):
+            return _no_store(_workspace_required())
+        if accounts is not None:
+            await run_in_threadpool(
+                accounts.unlink_by_workspace_key, workspace_key(current_token)
+            )
+        return _no_store(JSONResponse({"link": _link(request, current_token), "account": None}))
 
 
 class WorkspaceDispatcher:
@@ -367,10 +511,15 @@ class WorkspaceDispatcher:
             self.registry.release(lease)
 
 
-def create_workspace_app(public: ApiDependencies, registry: WorkspaceRegistry) -> ASGIApp:
+def create_workspace_app(
+    public: ApiDependencies,
+    registry: WorkspaceRegistry,
+    accounts: WorkspaceAccountStore | None = None,
+    google_verifier: GoogleTokenVerifier | None = None,
+) -> ASGIApp:
     """The public app (config, samples, web shell, workspace links) in front of the workspaces."""
     app = create_app(
         replace(public, workspaces=True),
-        extra_routes=lambda app: install_workspace_routes(app, registry),
+        extra_routes=lambda app: install_workspace_routes(app, registry, accounts, google_verifier),
     )
     return WorkspaceDispatcher(app, registry)

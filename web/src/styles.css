@@ -601,6 +601,9 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
 .workspace__row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .workspace__link { flex: 1 1 260px; min-width: 0; font: inherit; font-family: var(--figures); font-size: 0.8125rem; padding: 6px 8px; border: 1px solid var(--rule-strong); background: var(--surface-subtle); color: inherit; }
 .workspace__status { font-size: 0.8125rem; color: var(--green); font-weight: 600; }
+.workspace__account { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding-top: 8px; border-top: 1px dashed var(--rule); }
+.workspace__account-label { font-size: 0.875rem; color: var(--ink); font-weight: 560; }
+.workspace__gis-slot:empty { display: none; }
 .workspace-switch { border: 1px solid var(--amber-border); border-radius: 4px; background: var(--amber-bg); padding: 14px 18px; margin: 0; max-width: 78ch; display: grid; gap: 10px; }
 .workspace-switch p { margin: 0; font-weight: 560; }
 .workspace-switch__actions { display: flex; gap: 12px; flex-wrap: wrap; }

@@ -567,3 +567,361 @@ def test_combined_export_is_routed_through_the_workspace_and_isolated(tmp_path):
     unauthenticated = visitor.post("/imports/combined-export", json=body)
     assert unauthenticated.status_code == 401
     assert unauthenticated.json()["error"]["code"] == "workspace_required"
+
+
+# -- google sign-in and account linking -------------------------------------------
+
+
+class FakeGoogleVerifier:
+    def __init__(self, tokens: dict[str, tuple[str, str]] | None = None):
+        self.tokens = dict(tokens or {})
+
+    def verify(self, credential: str):
+        from pricor.ports.google_auth import GoogleIdentity, InvalidGoogleTokenError
+
+        item = self.tokens.get(credential)
+        if item is None:
+            raise InvalidGoogleTokenError("invalid Google ID token")
+        return GoogleIdentity(sub=item[0], email=item[1])
+
+
+def make_google_host(
+    tmp_path,
+    *,
+    backup=None,
+    tokens: dict[str, tuple[str, str]] | None = None,
+    google_client_id: str | None = "client-id.apps.googleusercontent.com",
+):
+    from pricor.entrypoints.workspace_accounts import WorkspaceAccountStore
+
+    backup = backup if backup is not None else RecordingBackup()
+    directory = tmp_path / "workspaces"
+    registry = WorkspaceRegistry(directory, opener(), backup)
+    accounts = WorkspaceAccountStore(directory, backup)
+    verifier = FakeGoogleVerifier(tokens)
+    public = ApiDependencies(
+        public_dependencies().use_case,
+        model_provider="gemini",
+        demo=True,
+        google_client_id=google_client_id,
+    )
+    app = create_workspace_app(public, registry, accounts=accounts, google_verifier=verifier)
+    return app, registry, accounts, backup
+
+
+def test_account_store_links_relinks_unlinks_and_restores(tmp_path):
+    from pricor.entrypoints.workspace_accounts import ACCOUNT_BACKUP_KEY, WorkspaceAccountStore
+    from pricor.entrypoints.workspaces import workspace_key
+
+    backup = RecordingBackup()
+    store = WorkspaceAccountStore(tmp_path / "before", backup)
+
+    linked = store.link("sub-1", "ada@example.com", "tok-A" + "x" * 38)
+    assert linked.sub == "sub-1"
+    assert linked.email == "ada@example.com"
+    assert linked.workspace_key == workspace_key("tok-A" + "x" * 38)
+    assert ACCOUNT_BACKUP_KEY in backup.saved
+
+    # Re-linking the same workspace to a different Google sub replaces the previous sub for that workspace
+    tok_a = "tok-A" + "x" * 38
+    store.link("sub-2", "bob@example.com", tok_a)
+    assert store.get_by_sub("sub-1") is None
+    assert store.get_by_sub("sub-2").email == "bob@example.com"
+    assert store.get_by_workspace_key(workspace_key(tok_a)).sub == "sub-2"
+
+    # A new instance on an empty disk restores from backup
+    restored_store = WorkspaceAccountStore(tmp_path / "after", backup)
+    restored = restored_store.get_by_sub("sub-2")
+    assert restored is not None
+    assert restored.email == "bob@example.com"
+    assert restored.token == tok_a
+
+    # Unlinking deletes the row and returns True; second unlink returns False
+    assert restored_store.unlink_by_workspace_key(workspace_key(tok_a)) is True
+    assert restored_store.get_by_sub("sub-2") is None
+    assert restored_store.unlink_by_workspace_key(workspace_key(tok_a)) is False
+
+
+def test_account_store_handles_failed_restore_cleanly(tmp_path, caplog):
+    from pricor.entrypoints.workspace_accounts import WorkspaceAccountStore
+
+    class BrokenRestoreBackup(RecordingBackup):
+        def restore(self, key: str, target: Path) -> bool:
+            target.write_bytes(b"corrupt")
+            raise OSError("gcs error")
+
+    store = WorkspaceAccountStore(tmp_path / "w", BrokenRestoreBackup())
+    with caplog.at_level(logging.WARNING, logger="pricor"):
+        assert store.get_by_sub("sub-missing") is None
+    assert any("restore" in record.getMessage().lower() for record in caplog.records)
+
+
+def test_registry_is_empty_checks_tables_and_missing_tokens(tmp_path):
+    app, registry, _, _ = make_google_host(tmp_path)
+    assert registry.is_empty(None) is True
+    assert registry.is_empty("bad-token") is True
+    assert registry.is_empty("A" * 43) is True
+
+    client = client_for(app)
+    token = new_workspace(client)
+    assert registry.is_empty(token) is True
+
+    assert upload(client).status_code == 201
+    assert registry.is_empty(token) is False
+
+
+def test_config_includes_google_client_id_only_when_configured(tmp_path):
+    app, _, _, _ = make_google_host(tmp_path, google_client_id="my-google-client-id")
+    client = client_for(app)
+    assert client.get("/config").json() == {
+        "model_provider": "gemini",
+        "demo": True,
+        "workspaces": True,
+        "google_client_id": "my-google-client-id",
+    }
+
+    app_off, _, _ = make_host(tmp_path / "off")
+    assert "google_client_id" not in client_for(app_off).get("/config").json()
+
+
+def test_post_workspace_google_returns_404_when_unconfigured(tmp_path):
+    app, _, _ = make_host(tmp_path)
+    client = client_for(app)
+
+    response = client.post("/workspace/google", json={"credential": "tok"})
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "google_auth_unavailable"
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_post_workspace_google_requires_json_and_valid_input(tmp_path):
+    app, _, _, _ = make_google_host(tmp_path, tokens={"valid": ("sub-1", "ada@example.com")})
+    client = client_for(app)
+
+    non_json = client.post("/workspace/google", data={"credential": "valid"})
+    assert non_json.status_code == 415
+    assert non_json.json()["error"]["code"] == "unsupported_media_type"
+    assert non_json.headers["cache-control"] == "no-store"
+
+    for bad_body in ({}, {"credential": ""}, {"credential": "   "}, {"credential": 123}, {"credential": "valid", "resolution": "bogus"}):
+        bad = client.post("/workspace/google", json=bad_body)
+        assert bad.status_code == 422
+        assert bad.json()["error"]["code"] == "invalid_input"
+        assert bad.headers["cache-control"] == "no-store"
+
+    invalid_json = client.post(
+        "/workspace/google", content=b"{not json", headers={"Content-Type": "application/json"}
+    )
+    assert invalid_json.status_code == 422
+    assert invalid_json.json()["error"]["code"] == "invalid_input"
+
+
+def test_post_workspace_google_rejects_invalid_token_with_401(tmp_path):
+    app, _, _, _ = make_google_host(tmp_path, tokens={"valid": ("sub-1", "ada@example.com")})
+    client = client_for(app)
+
+    response = client.post("/workspace/google", json={"credential": "bad-token"})
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "invalid_google_token"
+    assert response.headers["cache-control"] == "no-store"
+    assert COOKIE_NAME not in client.cookies
+
+
+def test_google_sign_in_creates_and_links_workspace_when_no_cookie(tmp_path):
+    app, _, _, _ = make_google_host(tmp_path, tokens={"cred-ada": ("sub-ada", "ada@example.com")})
+    client = client_for(app)
+
+    response = client.post("/workspace/google", json={"credential": "cred-ada"})
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    body = response.json()
+    assert body["status"] == "linked"
+    assert body["account"] == {"email": "ada@example.com"}
+    token = TOKEN.search(body["link"]).group(1)
+    assert client.cookies.get(COOKIE_NAME) == token
+    assert "HttpOnly" in response.headers["set-cookie"]
+
+    assert client.get("/workspace").json() == {"link": body["link"], "account": {"email": "ada@example.com"}}
+    assert client.get("/workspace/current").json() == {"link": body["link"], "account": {"email": "ada@example.com"}}
+
+
+def test_google_sign_in_links_existing_workspace_and_claim_includes_account(tmp_path):
+    app, _, _, _ = make_google_host(tmp_path, tokens={"cred-ada": ("sub-ada", "ada@example.com")})
+    client = client_for(app)
+    token = new_workspace(client)
+    created = upload(client)
+    assert created.status_code == 201
+
+    response = client.post("/workspace/google", json={"credential": "cred-ada"})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "linked",
+        "link": f"http://testserver/#w={token}",
+        "account": {"email": "ada@example.com"},
+    }
+    # Re-signing in while already on the same workspace keeps status "linked"
+    again = client.post("/workspace/google", json={"credential": "cred-ada"})
+    assert again.status_code == 200
+    assert again.json()["status"] == "linked"
+
+    other = client_for(app)
+    claimed = claim(other, token)
+    assert claimed.status_code == 200
+    assert claimed.json() == {
+        "link": f"http://testserver/#w={token}",
+        "account": {"email": "ada@example.com"},
+    }
+
+
+def test_google_sign_in_switches_automatically_from_new_or_empty_device(tmp_path):
+    app, _, _, _ = make_google_host(tmp_path, tokens={"cred-ada": ("sub-ada", "ada@example.com")})
+    phone = client_for(app)
+    phone_token = new_workspace(phone)
+    created = upload(phone)
+    assert created.status_code == 201
+    assert phone.post("/workspace/google", json={"credential": "cred-ada"}).status_code == 200
+
+    # Device with no cookie switches directly
+    tablet = client_for(app)
+    switched = tablet.post("/workspace/google", json={"credential": "cred-ada"})
+    assert switched.status_code == 200
+    assert switched.json() == {
+        "status": "switched",
+        "link": f"http://testserver/#w={phone_token}",
+        "account": {"email": "ada@example.com"},
+    }
+    assert tablet.cookies.get(COOKIE_NAME) == phone_token
+    assert tablet.get(f"/imports/{created.json()['id']}").status_code == 200
+
+    # Device with an empty workspace cookie also switches automatically
+    laptop = client_for(app)
+    empty_token = new_workspace(laptop)
+    assert empty_token != phone_token
+    switched2 = laptop.post("/workspace/google", json={"credential": "cred-ada"})
+    assert switched2.status_code == 200
+    assert switched2.json()["status"] == "switched"
+    assert laptop.cookies.get(COOKIE_NAME) == phone_token
+
+
+def test_google_sign_in_conflict_and_resolutions_when_current_workspace_has_data(tmp_path):
+    app, _, accounts, _ = make_google_host(
+        tmp_path, tokens={"cred-ada": ("sub-ada", "ada@example.com")}
+    )
+    phone = client_for(app)
+    phone_token = new_workspace(phone)
+    phone_import = upload(phone).json()["id"]
+    assert phone.post("/workspace/google", json={"credential": "cred-ada"}).status_code == 200
+
+    laptop = client_for(app)
+    laptop_token = new_workspace(laptop)
+    laptop_import = upload(laptop).json()["id"]
+
+    # Auto mode detects conflict and leaves cookie + link untouched
+    conflict = laptop.post("/workspace/google", json={"credential": "cred-ada"})
+    assert conflict.status_code == 200
+    assert conflict.json() == {
+        "status": "conflict",
+        "link": f"http://testserver/#w={laptop_token}",
+        "account": {"email": "ada@example.com"},
+    }
+    assert laptop.cookies.get(COOKIE_NAME) == laptop_token
+    assert accounts.get_by_sub("sub-ada").token == phone_token
+
+    # Resolution "use_account" switches to the account's workspace
+    use_acct = laptop.post(
+        "/workspace/google", json={"credential": "cred-ada", "resolution": "use_account"}
+    )
+    assert use_acct.status_code == 200
+    assert use_acct.json() == {
+        "status": "switched",
+        "link": f"http://testserver/#w={phone_token}",
+        "account": {"email": "ada@example.com"},
+    }
+    assert laptop.cookies.get(COOKIE_NAME) == phone_token
+    assert laptop.get(f"/imports/{phone_import}").status_code == 200
+
+    # Resolution "link_current" from a third non-empty workspace moves the Google link to it
+    desktop = client_for(app)
+    desktop_token = new_workspace(desktop)
+    desktop_import = upload(desktop).json()["id"]
+    relinked = desktop.post(
+        "/workspace/google", json={"credential": "cred-ada", "resolution": "link_current"}
+    )
+    assert relinked.status_code == 200
+    assert relinked.json() == {
+        "status": "linked",
+        "link": f"http://testserver/#w={desktop_token}",
+        "account": {"email": "ada@example.com"},
+    }
+    assert accounts.get_by_sub("sub-ada").token == desktop_token
+    assert desktop.get(f"/imports/{desktop_import}").status_code == 200
+
+
+def test_delete_workspace_google_unlinks_and_requires_workspace(tmp_path):
+    app, _, _, _ = make_google_host(tmp_path, tokens={"cred-ada": ("sub-ada", "ada@example.com")})
+
+    anon = client_for(app)
+    unauth = anon.delete("/workspace/google")
+    assert unauth.status_code == 401
+    assert unauth.json()["error"]["code"] == "workspace_required"
+    assert unauth.headers["cache-control"] == "no-store"
+
+    client = client_for(app)
+    token = new_workspace(client)
+    assert client.post("/workspace/google", json={"credential": "cred-ada"}).status_code == 200
+    assert "account" in client.get("/workspace/current").json()
+
+    unlinked = client.delete("/workspace/google")
+    assert unlinked.status_code == 200
+    assert unlinked.headers["cache-control"] == "no-store"
+    assert unlinked.json() == {"link": f"http://testserver/#w={token}", "account": None}
+
+    current_after = client.get("/workspace/current")
+    assert current_after.status_code == 200
+    assert current_after.json() == {"link": f"http://testserver/#w={token}"}
+
+
+def test_google_account_mapping_survives_server_restart_on_empty_disk(tmp_path):
+    backup = RecordingBackup()
+    first, _, _, _ = make_google_host(
+        tmp_path / "before", backup=backup, tokens={"cred-ada": ("sub-ada", "ada@example.com")}
+    )
+    phone = client_for(first)
+    phone_token = new_workspace(phone)
+    created = upload(phone).json()["id"]
+    assert phone.post("/workspace/google", json={"credential": "cred-ada"}).status_code == 200
+
+    # New instance with empty local disk restores both _accounts.sqlite and the workspace SQLite
+    second, _, _, _ = make_google_host(
+        tmp_path / "after", backup=backup, tokens={"cred-ada": ("sub-ada", "ada@example.com")}
+    )
+    laptop = client_for(second)
+    res = laptop.post("/workspace/google", json={"credential": "cred-ada"})
+    assert res.status_code == 200
+    assert res.json() == {
+        "status": "switched",
+        "link": f"http://testserver/#w={phone_token}",
+        "account": {"email": "ada@example.com"},
+    }
+    assert laptop.get(f"/imports/{created}").status_code == 200
+
+
+def test_wiring_enables_google_auth_when_client_id_env_is_set(tmp_path):
+    from pricor.entrypoints.wiring import workspace_app_from_env
+
+    app = workspace_app_from_env(
+        {
+            "PRICOR_MODEL_PROVIDER": "ollama",
+            "PRICOR_GOOGLE_CLIENT_ID": "  my-client.apps.googleusercontent.com  ",
+        },
+        tmp_path / "workspaces",
+    )
+    client = client_for(app)
+    assert client.get("/config").json()["google_client_id"] == "my-client.apps.googleusercontent.com"
+    res = client.post("/workspace/google", json={"credential": "not-a-real-jwt"})
+    assert res.status_code == 401
+    assert res.json()["error"]["code"] == "invalid_google_token"
