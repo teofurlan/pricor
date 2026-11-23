@@ -22,6 +22,8 @@ Environment variables:
     PRICOR_FX_TIMEOUT      seconds per DolarAPI request      (default 10)
     PRICOR_WORKSPACES_DIR  turn on private workspaces (hosted demo): folder of one SQLite file
                            per visitor; PRICOR_DB is then unused       (default: off, one database)
+    PRICOR_WORKSPACES_BUCKET Google Cloud Storage bucket to back up and restore workspace SQLite
+                           files across restarts                       (default: off, local disk only)
     PRICOR_WORKSPACES_MAX_OPEN workspaces kept open in memory, least recently used closed first
                            (default 16)
     PRICOR_RATE_LIMIT_RPM  per-IP requests/min for general API and public endpoints

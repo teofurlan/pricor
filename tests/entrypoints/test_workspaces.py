@@ -514,6 +514,45 @@ def test_concurrent_first_requests_open_a_workspace_once(tmp_path):
     assert len(opened) == 1
 
 
+def test_slow_restore_of_one_workspace_does_not_block_another_workspace(tmp_path):
+    restore_started = threading.Event()
+    allow_restore_finish = threading.Event()
+
+    class SlowRestoreBackup(RecordingBackup):
+        def restore(self, key: str, target: Path) -> bool:
+            restore_started.set()
+            assert allow_restore_finish.wait(timeout=5.0), "other workspace was blocked by global lock"
+            return super().restore(key, target)
+
+    backup = SlowRestoreBackup()
+    first, _, _ = make_host(tmp_path / "before", backup=backup)
+    alice_token = new_workspace(client_for(first))
+
+    second, registry, _ = make_host(tmp_path / "after", backup=backup)
+    bob_token = new_workspace(client_for(second))
+
+    alice_done = threading.Event()
+
+    def restore_alice():
+        with registry.lease(alice_token) as ws:
+            assert ws is not None
+        alice_done.set()
+
+    t = threading.Thread(target=restore_alice)
+    t.start()
+    try:
+        assert restore_started.wait(timeout=2.0)
+        # While Alice's restore is mid-download from GCS, Bob's open workspace must not block
+        with registry.lease(bob_token) as bob_ws:
+            assert bob_ws is not None
+        allow_restore_finish.set()
+    finally:
+        allow_restore_finish.set()
+        t.join(timeout=5.0)
+
+    assert alice_done.is_set()
+
+
 def test_combined_export_is_routed_through_the_workspace_and_isolated(tmp_path):
     app, _, _ = make_host(tmp_path)
     alice, bob, visitor = client_for(app), client_for(app), client_for(app)

@@ -87,6 +87,8 @@ All settings are environment variables; every one has a working default.
 | `PRICOR_FX_RATE_TYPE` | `oficial` (rate type suggested for conversion: `oficial`, `blue`, `bolsa`, `contadoconliqui`, `mayorista`, `cripto`, `tarjeta`) |
 | `PRICOR_FX_TIMEOUT` | `10` (seconds per DolarAPI request) |
 | `PRICOR_WORKSPACES_DIR` | unset (local single-database mode; set a directory to enable private per-visitor workspaces for hosted demo mode) |
+| `PRICOR_WORKSPACES_BUCKET` | unset (when set with `PRICOR_WORKSPACES_DIR`, backs up and restores each workspace's SQLite file in that Google Cloud Storage bucket under `workspaces/<sha256>.sqlite`) |
+| `PRICOR_WORKSPACES_MAX_OPEN` | `16` (maximum workspaces kept open in memory before closing the least recently used idle one) |
 | `PRICOR_RATE_LIMIT_RPM` | `120` in hosted mode, `0` (off) locally (per-IP requests per minute for general API and public endpoints; `0` disables) |
 | `PRICOR_RATE_LIMIT_HEAVY_RPM` | `30` (capped at `PRICOR_RATE_LIMIT_RPM`; per-IP requests per minute for imports, AI questions, templates, warm-up and workspace creation) |
 | `PRICOR_TRUSTED_PROXIES` | `1` in hosted mode, `0` locally (trusted reverse-proxy hops used from the right of `X-Forwarded-For`; `0` uses the direct peer IP) |

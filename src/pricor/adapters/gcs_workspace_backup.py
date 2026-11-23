@@ -1,9 +1,11 @@
 """`WorkspaceBackup` adapter that saves and restores workspace SQLite files from Google Cloud Storage."""
 
+from contextlib import closing
 import logging
 import os
-import tempfile
 from pathlib import Path
+import sqlite3
+import tempfile
 from typing import Any
 
 from pricor.ports.workspace_backup import WorkspaceBackup
@@ -11,6 +13,13 @@ from pricor.ports.workspace_backup import WorkspaceBackup
 logger = logging.getLogger(__name__)
 
 DEFAULT_PREFIX = "workspaces/"
+
+
+def _validate_sqlite_file(path: Path) -> None:
+    with closing(sqlite3.connect(path)) as conn:
+        row = conn.execute("PRAGMA quick_check").fetchone()
+    if not row or row[0] != "ok":
+        raise sqlite3.DatabaseError("restored SQLite file failed quick_check")
 
 
 class GcsWorkspaceBackup(WorkspaceBackup):
@@ -57,6 +66,7 @@ class GcsWorkspaceBackup(WorkspaceBackup):
 
         try:
             blob.download_to_filename(str(tmp_path))
+            _validate_sqlite_file(tmp_path)
             os.replace(tmp_path, target)
             return True
         except Exception:

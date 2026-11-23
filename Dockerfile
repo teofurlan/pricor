@@ -30,6 +30,8 @@ COPY models/laya-pricor/ ./models/laya-pricor/
 
 ENV PRICOR_LAYA_DEVICE=cpu \
     PRICOR_PRELOAD_MODELS=1 \
+    PRICOR_WORKSPACES_DIR=/tmp/pricor-workspaces \
+    PRICOR_WORKSPACES_BUCKET=run-sources-pricor-us-central1 \
     HF_HUB_OFFLINE=1 \
     TRANSFORMERS_OFFLINE=1
 
