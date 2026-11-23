@@ -131,4 +131,28 @@ describe("api client", () => {
     expect(cfg).toEqual({ model_provider: "gemini", demo: false });
     expect(fetchMock).toHaveBeenCalledWith("/config", undefined);
   });
+
+  it("signs in with Google via POST /workspace/google and unlinks via DELETE /workspace/google", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ status: "linked", link: "https://pricor.test/#w=abc", account: { email: "ana@example.com" } }))
+      .mockResolvedValueOnce(jsonResponse({ status: "switched", link: "https://pricor.test/#w=xyz", account: { email: "ana@example.com" } }))
+      .mockResolvedValueOnce(jsonResponse({ link: "https://pricor.test/#w=xyz", account: null }));
+    const api = createApiClient(fetchMock);
+
+    const linked = await api.googleSignIn!("id-token-1");
+    expect(linked).toEqual({ status: "linked", link: "https://pricor.test/#w=abc", account: { email: "ana@example.com" } });
+
+    const switched = await api.googleSignIn!("id-token-2", "use_account");
+    expect(switched).toEqual({ status: "switched", link: "https://pricor.test/#w=xyz", account: { email: "ana@example.com" } });
+
+    const unlinked = await api.unlinkGoogleAccount!();
+    expect(unlinked).toEqual({ link: "https://pricor.test/#w=xyz", account: null });
+
+    expect(fetchMock.mock.calls).toEqual([
+      ["/workspace/google", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ credential: "id-token-1", resolution: "auto" }) }],
+      ["/workspace/google", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ credential: "id-token-2", resolution: "use_account" }) }],
+      ["/workspace/google", { method: "DELETE" }],
+    ]);
+  });
 });

@@ -185,3 +185,178 @@ describe("opening a personal link (U6d)", () => {
     expect(await screen.findByText("Your private space")).toBeInTheDocument();
   });
 });
+
+describe("Google Sign-In in workspace (S1, S3, S4)", () => {
+  const GOOGLE_CONFIG: ServerConfig = {
+    model_provider: "gemini",
+    demo: true,
+    workspaces: true,
+    google_client_id: "google-client-123",
+  };
+
+  afterEach(() => {
+    delete (window as unknown as { __pricorGooglePrompt?: unknown }).__pricorGooglePrompt;
+  });
+
+  function installGooglePrompt(credential = "google-id-token") {
+    (window as unknown as { __pricorGooglePrompt?: (cb: (cred: string) => void) => void }).__pricorGooglePrompt = (cb) => {
+      cb(credential);
+    };
+  }
+
+  it("links the current workspace with Google and shows the linked email", async () => {
+    installGooglePrompt("cred-1");
+    const googleSignIn = vi.fn().mockResolvedValue({
+      status: "linked",
+      link: link(OTHER),
+      account: { email: "user@example.com" },
+    });
+    const client = api(GOOGLE_CONFIG, { googleSignIn });
+    mount(client);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Continue with Google" }));
+
+    await waitFor(() => expect(googleSignIn).toHaveBeenCalledWith("cred-1", "auto"));
+    expect(await screen.findByText("Space linked to user@example.com")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Continue with Google" })).not.toBeInTheDocument();
+  });
+
+  it("switches directly when googleSignIn returns status 'switched' and reloads workspace-scoped data", async () => {
+    installGooglePrompt("cred-2");
+    const googleSignIn = vi.fn().mockResolvedValue({
+      status: "switched",
+      link: link(TOKEN),
+      account: { email: "user@example.com" },
+    });
+    const getOutputFormat = vi.fn().mockResolvedValue(null);
+    const listMemories = vi.fn().mockResolvedValue([]);
+    const client = api(GOOGLE_CONFIG, { googleSignIn, getOutputFormat, listMemories });
+    mount(client);
+
+    await screen.findByRole("button", { name: "Continue with Google" });
+    await waitFor(() => expect(getOutputFormat).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(listMemories).toHaveBeenCalledTimes(1));
+
+    await userEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
+
+    expect(await screen.findByText("Space linked to user@example.com")).toBeInTheDocument();
+    expect(screen.getByLabelText("Personal link")).toHaveValue(link(TOKEN));
+    await waitFor(() => expect(getOutputFormat).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(listMemories).toHaveBeenCalledTimes(2));
+  });
+
+  it("opens conflict dialog and resolves with 'Open my account's space' (use_account)", async () => {
+    installGooglePrompt("cred-conflict");
+    const googleSignIn = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: "conflict",
+        link: link(OTHER),
+        account: { email: "user@example.com" },
+      })
+      .mockResolvedValueOnce({
+        status: "switched",
+        link: link(TOKEN),
+        account: { email: "user@example.com" },
+      });
+    const getOutputFormat = vi.fn().mockResolvedValue(null);
+    const listMemories = vi.fn().mockResolvedValue([]);
+    const client = api(GOOGLE_CONFIG, { googleSignIn, getOutputFormat, listMemories });
+    mount(client);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Continue with Google" }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("Your Google account (user@example.com) already has another saved space.");
+
+    await userEvent.click(screen.getByRole("button", { name: "Open my account's space" }));
+
+    await waitFor(() => expect(googleSignIn).toHaveBeenNthCalledWith(2, "cred-conflict", "use_account"));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(await screen.findByText("Space linked to user@example.com")).toBeInTheDocument();
+    expect(screen.getByLabelText("Personal link")).toHaveValue(link(TOKEN));
+    await waitFor(() => expect(getOutputFormat).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(listMemories).toHaveBeenCalledTimes(2));
+  });
+
+  it("resolves conflict dialog with 'Save current space to my account' (link_current) or cancels", async () => {
+    installGooglePrompt("cred-conflict-2");
+    const googleSignIn = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: "conflict",
+        link: link(OTHER),
+        account: { email: "user@example.com" },
+      })
+      .mockResolvedValueOnce({
+        status: "conflict",
+        link: link(OTHER),
+        account: { email: "user@example.com" },
+      })
+      .mockResolvedValueOnce({
+        status: "linked",
+        link: link(OTHER),
+        account: { email: "user@example.com" },
+      });
+    const client = api(GOOGLE_CONFIG, { googleSignIn });
+    mount(client);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Continue with Google" }));
+    await screen.findByRole("alertdialog");
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(googleSignIn).toHaveBeenCalledTimes(1);
+
+    await userEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
+    await screen.findByRole("alertdialog");
+    await userEvent.click(screen.getByRole("button", { name: "Save current space to my account" }));
+
+    await waitFor(() => expect(googleSignIn).toHaveBeenNthCalledWith(3, "cred-conflict-2", "link_current"));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(await screen.findByText("Space linked to user@example.com")).toBeInTheDocument();
+  });
+
+  it("unlinks the Google account when Unlink account is clicked", async () => {
+    const unlinkGoogleAccount = vi.fn().mockResolvedValue({ link: link(OTHER), account: null });
+    const client = api(GOOGLE_CONFIG, {
+      workspace: vi.fn().mockResolvedValue({ link: link(OTHER), account: { email: "user@example.com" } }),
+      unlinkGoogleAccount,
+    });
+    mount(client);
+
+    expect(await screen.findByText("Space linked to user@example.com")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Unlink account" }));
+
+    await waitFor(() => expect(unlinkGoogleAccount).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
+    expect(screen.queryByText("Space linked to user@example.com")).not.toBeInTheDocument();
+  });
+
+  it("renders conflict dialog and Google verification error in Spanish (usted)", async () => {
+    installGooglePrompt("cred-es");
+    const googleSignIn = vi
+      .fn()
+      .mockRejectedValueOnce(new ApiError(401, "invalid_google_token", "bad token"))
+      .mockResolvedValueOnce({
+        status: "conflict",
+        link: link(OTHER),
+        account: { email: "user@example.com" },
+      });
+    const client = api(GOOGLE_CONFIG, { googleSignIn });
+    mount(client, "es");
+
+    await userEvent.click(await screen.findByRole("button", { name: "Continuar con Google" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "No pudimos verificar su cuenta de Google. Intente de nuevo.",
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Continuar con Google" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent(
+      "Su cuenta de Google (user@example.com) ya tiene otro espacio guardado. ¿Quiere abrir el espacio de su cuenta o guardar el espacio actual en su cuenta?",
+    );
+    expect(screen.getByRole("button", { name: "Abrir el espacio de mi cuenta" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Guardar el espacio actual en mi cuenta" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancelar" })).toBeInTheDocument();
+  });
+});
