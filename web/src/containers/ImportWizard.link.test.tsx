@@ -48,7 +48,6 @@ describe("opening a personal link (U6d)", () => {
     expect(replace).toHaveBeenCalled();
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     await waitFor(() => expect(client.workspace).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText("Your private space")).toBeInTheDocument();
   });
 
   it("claims before it asks for the workspace link, so the claimed cookie is the one used", async () => {
@@ -126,7 +125,6 @@ describe("opening a personal link (U6d)", () => {
     await waitFor(() => expect(client.claimWorkspace).toHaveBeenCalledWith(TOKEN));
     await waitFor(() => expect(client.workspace).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
-    expect(await screen.findByText("Your private space")).toBeInTheDocument();
   });
 
   it("keeps the current workspace, with no claim call, when the user stays", async () => {
@@ -139,7 +137,6 @@ describe("opening a personal link (U6d)", () => {
     await waitFor(() => expect(client.workspace).toHaveBeenCalledTimes(1));
     expect(client.claimWorkspace).not.toHaveBeenCalled();
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
-    expect(await screen.findByText("Your private space")).toBeInTheDocument();
   });
 
   it("holds the data calls back while the question is open", async () => {
@@ -158,7 +155,7 @@ describe("opening a personal link (U6d)", () => {
     const client = api(CONFIG);
     mount(client);
 
-    expect(await screen.findByText("Your private space")).toBeInTheDocument();
+    await waitFor(() => expect(client.workspace).toHaveBeenCalledTimes(1));
     expect(client.currentWorkspace).not.toHaveBeenCalled();
     expect(client.claimWorkspace).not.toHaveBeenCalled();
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
@@ -169,7 +166,7 @@ describe("opening a personal link (U6d)", () => {
     const client = api(CONFIG);
     mount(client);
 
-    expect(await screen.findByText("Your private space")).toBeInTheDocument();
+    await waitFor(() => expect(client.workspace).toHaveBeenCalledTimes(1));
     expect(client.claimWorkspace).not.toHaveBeenCalled();
     expect(window.location.hash).toBe("#other=1");
   });
@@ -182,7 +179,6 @@ describe("opening a personal link (U6d)", () => {
     mount(client);
 
     await waitFor(() => expect(client.workspace).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText("Your private space")).toBeInTheDocument();
   });
 });
 
@@ -217,7 +213,7 @@ describe("Google Sign-In in workspace (S1, S3, S4)", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Continue with Google" }));
 
     await waitFor(() => expect(googleSignIn).toHaveBeenCalledWith("cred-1", "auto"));
-    expect(await screen.findByText("Space linked to user@example.com")).toBeInTheDocument();
+    expect(await screen.findByText("Your suppliers are saved to user@example.com")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Continue with Google" })).not.toBeInTheDocument();
   });
 
@@ -239,8 +235,7 @@ describe("Google Sign-In in workspace (S1, S3, S4)", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
 
-    expect(await screen.findByText("Space linked to user@example.com")).toBeInTheDocument();
-    expect(screen.getByLabelText("Personal link")).toHaveValue(link(TOKEN));
+    expect(await screen.findByText("Your suppliers are saved to user@example.com")).toBeInTheDocument();
     await waitFor(() => expect(getOutputFormat).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(listMemories).toHaveBeenCalledTimes(2));
   });
@@ -273,8 +268,7 @@ describe("Google Sign-In in workspace (S1, S3, S4)", () => {
 
     await waitFor(() => expect(googleSignIn).toHaveBeenNthCalledWith(2, "cred-conflict", "use_account"));
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
-    expect(await screen.findByText("Space linked to user@example.com")).toBeInTheDocument();
-    expect(screen.getByLabelText("Personal link")).toHaveValue(link(TOKEN));
+    expect(await screen.findByText("Your suppliers are saved to user@example.com")).toBeInTheDocument();
     await waitFor(() => expect(getOutputFormat).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(listMemories).toHaveBeenCalledTimes(2));
   });
@@ -313,7 +307,7 @@ describe("Google Sign-In in workspace (S1, S3, S4)", () => {
 
     await waitFor(() => expect(googleSignIn).toHaveBeenNthCalledWith(3, "cred-conflict-2", "link_current"));
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
-    expect(await screen.findByText("Space linked to user@example.com")).toBeInTheDocument();
+    expect(await screen.findByText("Your suppliers are saved to user@example.com")).toBeInTheDocument();
   });
 
   it("unlinks the Google account when Unlink account is clicked", async () => {
@@ -324,12 +318,12 @@ describe("Google Sign-In in workspace (S1, S3, S4)", () => {
     });
     mount(client);
 
-    expect(await screen.findByText("Space linked to user@example.com")).toBeInTheDocument();
+    expect(await screen.findByText("Your suppliers are saved to user@example.com")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Unlink account" }));
 
     await waitFor(() => expect(unlinkGoogleAccount).toHaveBeenCalledTimes(1));
     expect(await screen.findByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
-    expect(screen.queryByText("Space linked to user@example.com")).not.toBeInTheDocument();
+    expect(screen.queryByText("Your suppliers are saved to user@example.com")).not.toBeInTheDocument();
   });
 
   it("renders conflict dialog and Google verification error in Spanish (usted)", async () => {

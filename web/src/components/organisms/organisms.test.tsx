@@ -1091,15 +1091,13 @@ describe("LanguageToggle", () => {
 });
 
 describe("WorkspacePanel", () => {
-  it("renders only the personal link when no Google client ID or account is provided", () => {
-    renderWithI18n(<WorkspacePanel link="https://pricor.test/#w=abc" />);
-    expect(screen.getByDisplayValue("https://pricor.test/#w=abc")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Copy link" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Continue with Google" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Unlink account" })).not.toBeInTheDocument();
+  it("renders nothing when no Google client ID or linked account is provided", () => {
+    const { container } = renderWithI18n(<WorkspacePanel link="https://pricor.test/#w=abc" />);
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByDisplayValue("https://pricor.test/#w=abc")).not.toBeInTheDocument();
   });
 
-  it("renders Continue with Google when googleClientId and onGoogleCredential are set and invokes callback via prompt hook", async () => {
+  it("renders Continue with Google without showing the raw personal link and invokes callback via prompt hook", async () => {
     const onGoogleCredential = vi.fn();
     (window as unknown as { __pricorGooglePrompt?: (cb: (cred: string) => void) => void }).__pricorGooglePrompt = (cb) => {
       cb("mock-google-credential");
@@ -1112,11 +1110,38 @@ describe("WorkspacePanel", () => {
           onGoogleCredential={onGoogleCredential}
         />,
       );
+      expect(screen.queryByDisplayValue("https://pricor.test/#w=abc")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Copy link" })).not.toBeInTheDocument();
       const signInBtn = screen.getByRole("button", { name: "Continue with Google" });
       await userEvent.click(signInBtn);
       expect(onGoogleCredential).toHaveBeenCalledWith("mock-google-credential");
     } finally {
       delete (window as unknown as { __pricorGooglePrompt?: unknown }).__pricorGooglePrompt;
+    }
+  });
+
+  it("hides the fallback button once Google Identity Services renders its own button", () => {
+    const renderButton = vi.fn((parent: HTMLElement) => {
+      const btn = document.createElement("button");
+      btn.textContent = "Google GIS Button";
+      parent.appendChild(btn);
+    });
+    (window as unknown as { google?: unknown }).google = {
+      accounts: { id: { initialize: vi.fn(), prompt: vi.fn(), renderButton } },
+    };
+    try {
+      renderWithI18n(
+        <WorkspacePanel
+          link="https://pricor.test/#w=abc"
+          googleClientId="client-123"
+          onGoogleCredential={vi.fn()}
+        />,
+      );
+      expect(renderButton).toHaveBeenCalledTimes(1);
+      expect(screen.getByText("Google GIS Button")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Continue with Google" })).not.toBeInTheDocument();
+    } finally {
+      delete (window as unknown as { google?: unknown }).google;
     }
   });
 
@@ -1131,7 +1156,8 @@ describe("WorkspacePanel", () => {
         onUnlinkGoogle={onUnlinkGoogle}
       />,
     );
-    expect(screen.getByText("Space linked to ana@example.com")).toBeInTheDocument();
+    expect(screen.getByText("Your suppliers are saved to ana@example.com")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("https://pricor.test/#w=abc")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Continue with Google" })).not.toBeInTheDocument();
     const unlinkBtn = screen.getByRole("button", { name: "Unlink account" });
     await userEvent.click(unlinkBtn);
@@ -1147,6 +1173,7 @@ describe("WorkspacePanel", () => {
       />,
       "es",
     );
+    expect(screen.getByText(/sus proveedores y formatos se guardan en este navegador/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continuar con Google" })).toBeInTheDocument();
 
     rerender(
@@ -1158,7 +1185,7 @@ describe("WorkspacePanel", () => {
       />,
       "es",
     );
-    expect(screen.getByText("Espacio vinculado a ana@example.com")).toBeInTheDocument();
+    expect(screen.getByText("Sus proveedores se guardan en ana@example.com")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Desvincular cuenta" })).toBeInTheDocument();
   });
 });

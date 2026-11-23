@@ -19,7 +19,7 @@ interface GoogleWindow extends Window {
 }
 
 export interface WorkspacePanelProps {
-  link: string;
+  link?: string;
   account?: { email: string } | null;
   googleClientId?: string | null;
   busy?: boolean;
@@ -27,9 +27,8 @@ export interface WorkspacePanelProps {
   onUnlinkGoogle?: () => void | Promise<void>;
 }
 
-/** The visitor's personal link, quiet but copyable; whoever holds the link sees the lists. */
+/** Optional Google account bar; without Google auth configured, the workspace cookie works silently. */
 export function WorkspacePanel({
-  link,
   account = null,
   googleClientId = null,
   busy = false,
@@ -37,7 +36,7 @@ export function WorkspacePanel({
   onUnlinkGoogle,
 }: WorkspacePanelProps) {
   const { t } = useI18n();
-  const [outcome, setOutcome] = useState<"copied" | "failed" | null>(null);
+  const [gisRendered, setGisRendered] = useState(false);
   const gisButtonRef = useRef<HTMLDivElement>(null);
   const onCredentialRef = useRef(onGoogleCredential);
   onCredentialRef.current = onGoogleCredential;
@@ -56,12 +55,17 @@ export function WorkspacePanel({
     if (gisButtonRef.current && typeof gsi.renderButton === "function") {
       gisButtonRef.current.innerHTML = "";
       gsi.renderButton(gisButtonRef.current, { theme: "outline", size: "medium" });
+      setGisRendered(true);
     }
     return true;
   }, []);
 
   useEffect(() => {
-    if (!googleClientId || account?.email || !onGoogleCredential) return;
+    if (account?.email) {
+      setGisRendered(false);
+      return;
+    }
+    if (!googleClientId || !onGoogleCredential) return;
     if (initGis(googleClientId)) return;
 
     let active = true;
@@ -104,51 +108,38 @@ export function WorkspacePanel({
     }
   }
 
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(link);
-      setOutcome("copied");
-    } catch {
-      setOutcome("failed");
-    }
-  }
-
-  return (
-    <section className="workspace" aria-labelledby="workspace-title">
-      <h2 id="workspace-title" className="workspace__title">{t("workspace.title")}</h2>
-      <p className="workspace__body">{t("workspace.body")}</p>
-      <div className="workspace__row">
-        <input
-          className="workspace__link"
-          readOnly
-          value={link}
-          aria-label={t("workspace.linkLabel")}
-          onFocus={(event) => event.currentTarget.select()}
-        />
-        <Button variant="quiet" onClick={copy}>{t("workspace.copy")}</Button>
-        <span className="workspace__status" role="status">
-          {outcome === "copied" ? t("workspace.copied") : outcome === "failed" ? t("workspace.copyFailed") : ""}
-        </span>
-      </div>
-      {account?.email ? (
-        <div className="workspace__account">
-          <span className="workspace__account-label">
-            {t("workspace.google.linked", { email: account.email })}
-          </span>
-          {onUnlinkGoogle && (
+  if (account?.email) {
+    return (
+      <section className="workspace" aria-label={t("workspace.title")}>
+        <p className="workspace__account-label">
+          {t("workspace.google.linked", { email: account.email })}
+        </p>
+        {onUnlinkGoogle && (
+          <div className="workspace__actions">
             <Button variant="quiet" disabled={busy} onClick={() => void onUnlinkGoogle()}>
               {t("workspace.google.unlink")}
             </Button>
-          )}
-        </div>
-      ) : googleClientId && onGoogleCredential ? (
-        <div className="workspace__account">
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  if (!googleClientId || !onGoogleCredential) {
+    return null;
+  }
+
+  return (
+    <section className="workspace" aria-label={t("workspace.title")}>
+      <p className="workspace__body">{t("workspace.body")}</p>
+      <div className="workspace__actions">
+        <div ref={gisButtonRef} className="workspace__gis-slot" />
+        {!gisRendered && (
           <Button variant="quiet" disabled={busy} onClick={startGoogleSignIn}>
             {t("workspace.google.signIn")}
           </Button>
-          <div ref={gisButtonRef} className="workspace__gis-slot" />
-        </div>
-      ) : null}
+        )}
+      </div>
     </section>
   );
 }
