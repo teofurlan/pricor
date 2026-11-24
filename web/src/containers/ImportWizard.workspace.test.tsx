@@ -25,21 +25,21 @@ function mount(client: ApiClient, language: "en" | "es" = "en") {
 afterEach(() => vi.restoreAllMocks());
 
 describe("private workspace panel", () => {
-  it("shows the personal link once when workspaces is on", async () => {
+  it("establishes the workspace cookie silently without showing a raw personal link when Google auth is off", async () => {
     const client = api({ model_provider: "gemini", demo: true, workspaces: true });
     mount(client);
 
-    expect(await screen.findByText("Your private space")).toBeInTheDocument();
-    expect(screen.getByDisplayValue(LINK)).toBeInTheDocument();
-    expect(screen.getByText(/anyone with the link can see your lists/i)).toBeInTheDocument();
-    expect(client.workspace).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(client.workspace).toHaveBeenCalledTimes(1));
+    expect(screen.queryByDisplayValue(LINK)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Copy link" })).not.toBeInTheDocument();
   });
 
-  it("is in Spanish with the usted register", async () => {
-    mount(api({ model_provider: "gemini", demo: true, workspaces: true }), "es");
+  it("shows the Google sign-in strip in Spanish (usted) when google_client_id is configured", async () => {
+    mount(api({ model_provider: "gemini", demo: true, workspaces: true, google_client_id: "g-123" }), "es");
 
-    expect(await screen.findByText("Su espacio privado")).toBeInTheDocument();
-    expect(screen.getByText(/guarde este enlace para volver desde otra computadora o celular; quien tenga el enlace puede ver sus listas/i)).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Continuar con Google" })).toBeInTheDocument();
+    expect(screen.getByText(/sus proveedores y formatos se guardan en este navegador/i)).toBeInTheDocument();
+    expect(screen.queryByDisplayValue(LINK)).not.toBeInTheDocument();
   });
 
   it.each([[false], [undefined]])("is hidden and never calls /workspace when workspaces is %s", async (workspaces) => {
@@ -48,33 +48,8 @@ describe("private workspace panel", () => {
 
     await screen.findByLabelText("Price list file");
     await waitFor(() => expect(client.config).toHaveBeenCalled());
-    expect(screen.queryByText("Your private space")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Your private space" })).not.toBeInTheDocument();
     expect(client.workspace).not.toHaveBeenCalled();
-  });
-
-  it("copies the link and confirms", async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
-    mount(api({ model_provider: "gemini", demo: true, workspaces: true }));
-
-    await userEvent.click(await screen.findByRole("button", { name: "Copy link" }, { timeout: 5000 }));
-
-    expect(writeText).toHaveBeenCalledWith(LINK);
-    expect(await screen.findByText("Copied")).toBeInTheDocument();
-    vi.unstubAllGlobals();
-  });
-
-  it("keeps the link selectable and says so when copying fails", async () => {
-    const writeText = vi.fn().mockRejectedValue(new Error("denied"));
-    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
-    mount(api({ model_provider: "gemini", demo: true, workspaces: true }));
-
-    await userEvent.click(await screen.findByRole("button", { name: "Copy link" }, { timeout: 5000 }));
-
-    expect(await screen.findByText("Could not copy. Select the link and copy it by hand.")).toBeInTheDocument();
-    expect(screen.queryByText("Copied")).not.toBeInTheDocument();
-    expect(screen.getByDisplayValue(LINK)).toBeInTheDocument();
-    vi.unstubAllGlobals();
   });
 
   it("does not load memories or the output format before the workspace cookie exists", async () => {
