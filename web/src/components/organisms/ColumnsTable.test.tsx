@@ -105,4 +105,13 @@ describe("ColumnsTable duplicate roles", () => {
     await userEvent.click(screen.getByRole("button", { name: "Confirm columns" }));
     expect(onConfirm).toHaveBeenCalledWith({ 0: "ignore", 1: "code" });
   });
+
+  it("hides retail_price from the role picker in both English and Spanish", () => {
+    const { unmount } = renderWithI18n(<ColumnsTable columns={[column({ index: 0, header: "PVP" })]} issues={[]} busy={false} onConfirm={vi.fn()} />);
+    expect(screen.queryByRole("option", { name: /Suggested retail price/ })).not.toBeInTheDocument();
+    unmount();
+
+    renderWithI18n(<ColumnsTable columns={[column({ index: 0, header: "PVP" })]} issues={[]} busy={false} onConfirm={vi.fn()} />, "es");
+    expect(screen.queryByRole("option", { name: /Precio de venta sugerido/ })).not.toBeInTheDocument();
+  });
 });

@@ -163,7 +163,7 @@ export function UploadForm({ busy, onSubmit, onSubmitMany, onInspectSheets, onLi
               ref={fileInputRef}
               type="file"
               className="sr-only"
-              accept=".csv,.xlsx,.xlsm,.xls"
+              accept=".csv,.xlsx,.xlsm,.xls,.pdf"
               multiple={many}
               aria-describedby={hintId}
               onClick={(event) => event.stopPropagation()}
@@ -223,7 +223,7 @@ export function UploadForm({ busy, onSubmit, onSubmitMany, onInspectSheets, onLi
                 type="file"
                 className="sr-only"
                 tabIndex={-1}
-                accept=".csv,.xlsx,.xlsm,.xls"
+                accept=".csv,.xlsx,.xlsm,.xls,.pdf"
                 multiple={many}
                 aria-describedby={hintId}
                 onChange={(event) => {

@@ -141,6 +141,8 @@ export const es: Record<TextKey, string> = {
   "notice.detail": "Detalle técnico: {detail}",
   "notice.techDetails": "Ver detalle técnico",
   "notice.modelUnavailable.body": "Puede continuar normalmente revisando las columnas y respondiendo las preguntas; los cálculos siguen siendo exactos.",
+  "notice.pdfVision.title": "PDF leído visualmente",
+  "notice.pdfVision.body": "Este PDF no tenía una tabla estructurada y se leyó por reconocimiento visual. Revise los códigos y precios en la vista previa antes de aprobar.",
 
   "question.reason": "Por qué lo preguntamos: {reason}",
   "question.moreOptions": "Otra cotización…",
@@ -174,7 +176,7 @@ export const es: Record<TextKey, string> = {
   "upload.dragDrop": "Arrastre su lista de precios aquí",
   "upload.or": "o",
   "upload.dropActive": "Suéltela para leerla",
-  "upload.fileHint": "Excel (.xls, .xlsx) o CSV · hasta 20 MB",
+  "upload.fileHint": "Excel (.xls, .xlsx), CSV o PDF · hasta 20 MB",
   "upload.sheet": "Hoja",
   "upload.sheetsFailed": "No se pudo leer este archivo: {reason}",
   "upload.sheetDefault": "Primera hoja con datos",

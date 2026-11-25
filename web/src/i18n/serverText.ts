@@ -105,7 +105,7 @@ const SPANISH_ERRORS: Record<string, string> = {
   model_unavailable: "Los modelos locales no responden ahora. Puede seguir respondiendo usted.",
   memory_unavailable: "La memoria no está disponible ahora.",
   embedder_unavailable: "El modelo que busca en la memoria no está disponible ahora.",
-  unsupported_format: "Ese tipo de archivo no se puede leer. Use Excel (.xls, .xlsx) o CSV.",
+  unsupported_format: "Ese tipo de archivo no se puede leer. Use Excel (.xls, .xlsx), CSV o PDF.",
   file_too_large: "El archivo es demasiado grande.",
   too_many_rows: "El archivo tiene demasiadas filas.",
   unreadable_file: "No se pudo leer el archivo. Revise que no esté dañado ni vacío.",
@@ -117,6 +117,26 @@ export function describeError(error: { code: string; message: string }, language
   if (language !== "es") return error.message;
   if (error.message.startsWith("these files were approved with different output formats")) {
     return "Estos archivos se aprobaron con formatos de salida distintos. Descárguelos por separado o vuelva a aprobarlos con el mismo formato.";
+  }
+  if (error.message.includes("visual reader is currently unavailable")) {
+    return "Este PDF es escaneado o no tiene una tabla legible, y el lector visual no está disponible ahora. Intente de nuevo más tarde o cargue un archivo Excel o CSV.";
+  }
+  if (error.message.includes("no vision model is configured")) {
+    return "Este PDF no tiene una tabla estructurada y no hay un lector visual configurado. Cargue un archivo Excel o CSV.";
+  }
+  const pageLimitMatch = /^scanned PDF has (\d+) pages; the limit for visual extraction is (\d+)$/.exec(error.message);
+  if (pageLimitMatch) {
+    return `Este PDF escaneado tiene ${pageLimitMatch[1]} páginas; el límite para lectura visual es de ${pageLimitMatch[2]} páginas.`;
+  }
+  const digitalLimitMatch = /^the PDF has (\d+) pages; the limit is (\d+)$/.exec(error.message);
+  if (digitalLimitMatch) {
+    return `Este PDF tiene ${digitalLimitMatch[1]} páginas; el límite es de ${digitalLimitMatch[2]} páginas.`;
+  }
+  if (error.message === "the PDF has no readable price table" || error.message === "the PDF has no table") {
+    return "No se encontró una tabla de precios legible en este PDF.";
+  }
+  if (error.message.startsWith("cannot read the PDF")) {
+    return "No se pudo leer el archivo PDF. Revise que no esté dañado ni protegido con contraseña.";
   }
   return SPANISH_ERRORS[error.code] ?? `Ocurrió un error inesperado (detalle: ${error.message}).`;
 }

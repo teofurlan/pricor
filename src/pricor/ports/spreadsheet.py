@@ -42,6 +42,7 @@ class SheetNotFoundError(SpreadsheetError):
 class Sheet:
     name: str
     rows: tuple[Row, ...]
+    extraction: str | None = None
 
 
 class SpreadsheetReader(Protocol):

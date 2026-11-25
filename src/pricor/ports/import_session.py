@@ -131,6 +131,7 @@ class ImportSession:
     plan: ImportPlan | None = None
     result: ImportResult | None = None
     notices: list[Notice] = field(default_factory=list)
+    source_notices: tuple[Notice, ...] = ()
     proposal: PlanProposal | None = None
     proposal_key: tuple | None = None
     model_unreachable: bool = False

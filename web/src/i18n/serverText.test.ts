@@ -90,3 +90,45 @@ describe("combined export with different output formats", () => {
     expect(text).toBe("Estos archivos se aprobaron con formatos de salida distintos. Descárguelos por separado o vuelva a aprobarlos con el mismo formato.");
   });
 });
+
+describe("PDF error translations", () => {
+  it.each([
+    [
+      "unsupported_format",
+      "unsupported file type",
+      "Ese tipo de archivo no se puede leer. Use Excel (.xls, .xlsx), CSV o PDF.",
+    ],
+    [
+      "unreadable_file",
+      "this PDF has no readable table and the visual reader is currently unavailable",
+      "Este PDF es escaneado o no tiene una tabla legible, y el lector visual no está disponible ahora. Intente de nuevo más tarde o cargue un archivo Excel o CSV.",
+    ],
+    [
+      "unreadable_file",
+      "the PDF has no readable table and no vision model is configured",
+      "Este PDF no tiene una tabla estructurada y no hay un lector visual configurado. Cargue un archivo Excel o CSV.",
+    ],
+    [
+      "unreadable_file",
+      "scanned PDF has 25 pages; the limit for visual extraction is 20",
+      "Este PDF escaneado tiene 25 páginas; el límite para lectura visual es de 20 páginas.",
+    ],
+    [
+      "unreadable_file",
+      "the PDF has 250 pages; the limit is 200",
+      "Este PDF tiene 250 páginas; el límite es de 200 páginas.",
+    ],
+    [
+      "unreadable_file",
+      "the PDF has no readable price table",
+      "No se encontró una tabla de precios legible en este PDF.",
+    ],
+    [
+      "unreadable_file",
+      "cannot read the PDF broken.pdf",
+      "No se pudo leer el archivo PDF. Revise que no esté dañado ni protegido con contraseña.",
+    ],
+  ])("translates %s (%s) in Spanish", (code, message, expected) => {
+    expect(describeError({ code, message }, "es")).toBe(expected);
+  });
+});

@@ -339,6 +339,23 @@ describe("NoticeList", () => {
     );
     expect(screen.getByRole("status")).toHaveTextContent("Sin asistencia automática");
   });
+
+  it("shows pdf_vision_extracted warning in English, Spanish, and compact mode", () => {
+    const pdfNotice = {
+      code: "pdf_vision_extracted",
+      message: "this PDF was read visually",
+      stage: "pdf_vision",
+    };
+
+    const { unmount } = renderWithI18n(<NoticeList notices={[pdfNotice]} />);
+    expect(screen.getByRole("status")).toHaveTextContent("PDF read visually");
+    expect(screen.getByRole("status")).toHaveTextContent("Verify codes and prices carefully");
+    unmount();
+
+    renderWithI18n(<NoticeList compact notices={[pdfNotice]} />, "es");
+    expect(screen.getByRole("status")).toHaveTextContent("PDF leído visualmente");
+    expect(screen.getByRole("status")).toHaveTextContent("Revise los códigos y precios en la vista previa");
+  });
 });
 
 describe("AskGemma", () => {

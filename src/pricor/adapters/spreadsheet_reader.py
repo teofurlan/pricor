@@ -21,6 +21,7 @@ from typing import Any
 import openpyxl
 import xlrd
 
+from pricor.adapters.pdf_price_list_reader import PdfPriceListReader
 from pricor.ports.spreadsheet import (
     Cell,
     FileTooLargeError,
@@ -28,6 +29,7 @@ from pricor.ports.spreadsheet import (
     Sheet,
     SheetNotFoundError,
     SpreadsheetError,
+    SpreadsheetReader,
     TooManyRowsError,
     UnsupportedFormatError,
 )
@@ -121,14 +123,24 @@ def _collect(rows: Iterable[Row], max_rows: int) -> tuple[Row, ...]:
 
 
 class FileSpreadsheetReader:
-    def __init__(self, max_file_bytes: int = MAX_FILE_BYTES, max_rows: int = MAX_ROWS):
+    def __init__(
+        self,
+        max_file_bytes: int = MAX_FILE_BYTES,
+        max_rows: int = MAX_ROWS,
+        pdf_reader: SpreadsheetReader | None = None,
+    ):
         self.max_file_bytes = max_file_bytes
         self.max_rows = max_rows
+        self._pdf_reader = pdf_reader or PdfPriceListReader(
+            max_file_bytes=max_file_bytes, max_rows=max_rows
+        )
 
     # -- port --
 
     def sheet_names(self, path: Path) -> list[str]:
         kind = self._check(path)
+        if kind == "pdf":
+            return self._pdf_reader.sheet_names(path)
         if kind == "csv":
             return [path.stem]
         if kind == "xlsx":
@@ -145,6 +157,11 @@ class FileSpreadsheetReader:
 
     def read_sheet(self, path: Path, sheet: str | None = None) -> Sheet:
         kind = self._check(path)
+        if kind == "pdf":
+            result = self._pdf_reader.read_sheet(path, sheet)
+            if len(result.rows) > self.max_rows:
+                raise TooManyRowsError(f"the sheet has more than {self.max_rows} rows")
+            return result
         if kind == "csv":
             return self._read_csv(path, sheet)
         if kind == "xlsx":
@@ -157,12 +174,14 @@ class FileSpreadsheetReader:
         suffix = path.suffix.lower()
         if suffix == ".csv":
             kind = "csv"
+        elif suffix == ".pdf":
+            kind = "pdf"
         elif suffix in _XLSX_SUFFIXES or suffix == ".xls":
             kind = "xlsx" if suffix in _XLSX_SUFFIXES else "xls"
         else:
             raise UnsupportedFormatError(
                 f"unsupported file type {suffix or '(none)'!r}; "
-                "expected .csv, .xlsx, .xlsm or .xls"
+                "expected .csv, .xlsx, .xlsm, .xls or .pdf"
             )
         try:
             size = path.stat().st_size
@@ -172,7 +191,7 @@ class FileSpreadsheetReader:
             raise FileTooLargeError(
                 f"{path.name} is {size} bytes; the limit is {self.max_file_bytes}"
             )
-        if kind != "csv":
+        if kind not in ("csv", "pdf"):
             kind = self._sniff_binary_format(path, kind)
         return kind
 

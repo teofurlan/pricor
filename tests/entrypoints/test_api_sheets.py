@@ -53,11 +53,23 @@ def test_sheets_csv():
     assert response.json() == {"sheets": ["lista_octubre"]}
 
 
+def test_sheets_pdf(tmp_path):
+    from ..adapters.pdf_fixtures import pdf_bytes
+
+    client = make_client()
+    response = client.post(
+        "/sheets",
+        files={"file": ("catalogo.pdf", pdf_bytes([[["Cod", "Precio"], ["1", "2"]]]), "application/pdf")},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"sheets": ["catalogo"]}
+
+
 def test_sheets_bad_extension():
     client = make_client()
     response = client.post(
         "/sheets",
-        files={"file": ("catalogo.pdf", b"%PDF-1.4...", "application/pdf")},
+        files={"file": ("catalogo.txt", b"hello", "text/plain")},
     )
     assert response.status_code == 415
     assert response.json()["error"]["code"] == "unsupported_format"

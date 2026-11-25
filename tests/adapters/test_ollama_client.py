@@ -1,3 +1,4 @@
+import base64
 import json
 import urllib.error
 
@@ -125,3 +126,36 @@ def test_json_that_is_not_an_object_is_invalid():
 def test_all_errors_share_a_base_type():
     for error in (ModelUnavailableError, ModelTimeoutError, ModelInvalidJsonError):
         assert issubclass(error, ModelError)
+
+
+def test_chat_json_with_images_encodes_base64_images_on_user_message():
+    transport = FakeTransport(envelope('{"answer": "vision"}'))
+    img1 = b"\x89PNG\r\n\x1a\npage1"
+    img2 = b"\x89PNG\r\n\x1a\npage2"
+
+    reply = client(transport).chat_json_with_images("system vision", "extract rows", [img1, img2], SCHEMA)
+
+    (url, body, _), = transport.calls
+    assert url == "http://localhost:11434/api/chat"
+    assert body["messages"] == [
+        {"role": "system", "content": "system vision"},
+        {
+            "role": "user",
+            "content": "extract rows",
+            "images": [
+                base64.b64encode(img1).decode("ascii"),
+                base64.b64encode(img2).decode("ascii"),
+            ],
+        },
+    ]
+    assert body["format"] == SCHEMA
+    assert body["options"]["temperature"] == 0
+    assert reply.content == {"answer": "vision"}
+
+
+def test_chat_json_with_images_propagates_typed_errors():
+    with pytest.raises(ModelUnavailableError):
+        client(FakeTransport(error=ConnectionResetError())).chat_json_with_images("s", "u", [b"png"], SCHEMA)
+
+    with pytest.raises(ModelInvalidJsonError):
+        client(FakeTransport(b"not json")).chat_json_with_images("s", "u", [b"png"], SCHEMA)

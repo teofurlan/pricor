@@ -183,8 +183,8 @@ EVENT_NAMES = frozenset({"visit", "import_started", "approved", "downloaded"})
 _GROUP = re.compile(r"[a-z0-9_-]{1,40}")
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
-ALLOWED_EXTENSIONS = frozenset({".csv", ".xlsx", ".xlsm", ".xls"})
-TEMPLATE_EXTENSIONS = frozenset(ALLOWED_EXTENSIONS | {".pdf"})  # only the output-format template accepts a PDF
+ALLOWED_EXTENSIONS = frozenset({".csv", ".xlsx", ".xlsm", ".xls", ".pdf"})
+TEMPLATE_EXTENSIONS = ALLOWED_EXTENSIONS
 _CHUNK = 1024 * 1024
 # Letters in any script, digits, spaces, dots and dashes survive; separators and the
 # characters Windows forbids in file names do not.
