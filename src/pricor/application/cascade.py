@@ -31,6 +31,7 @@ UNCALIBRATED_THRESHOLD = 0.75
 QUANTITY_DISCOUNT_RATIONALE = (
     "quantity discount: its values depend on how much is bought, so no stage settles it as a discount"
 )
+RETAIL_PRICE_RATIONALE = "retail price is not used to compute unit cost"
 
 
 @dataclass(frozen=True)
@@ -130,6 +131,30 @@ def _agreement_outcomes(stage: AgreementStage, subset: SheetProfile) -> dict[int
     return outcomes
 
 
+def _suppress_retail_price(outcomes: dict[int, _Outcome]) -> dict[int, _Outcome]:
+    """Never auto-suggest or settle `retail_price`; turn proposals into `ignore` for user confirmation."""
+    result: dict[int, _Outcome] = {}
+    for index, outcome in outcomes.items():
+        proposals = tuple(
+            StageProposal(
+                item.stage,
+                ColumnRole.IGNORE,
+                item.score,
+                f"{item.rationale} ({RETAIL_PRICE_RATIONALE})" if item.rationale else RETAIL_PRICE_RATIONALE,
+            )
+            if item.role is ColumnRole.RETAIL_PRICE
+            else item
+            for item in outcome.proposals
+        )
+        settled = (
+            None
+            if outcome.settled is not None and outcome.settled.role is ColumnRole.RETAIL_PRICE
+            else outcome.settled
+        )
+        result[index] = _Outcome(proposals, settled)
+    return result
+
+
 def _one_code_suggestion(
     outcomes: dict[int, _Outcome],
     columns: dict[int, ColumnProfile],
@@ -223,6 +248,7 @@ def run_cascade(
             unreachable = isinstance(error, ModelUnavailableError | ModelTimeoutError)
             break
         logger.info("cascade stage %s: %.2fs", stage.name, time.perf_counter() - started)
+        outcomes = _suppress_retail_price(outcomes)
         code_settled = any(decision.role is ColumnRole.CODE for decision in decisions.values())
         outcomes, contested_code = _one_code_suggestion(
             outcomes, {column.index: column for column in remaining}, code_settled, contested_code

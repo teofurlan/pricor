@@ -155,7 +155,9 @@ function ConfidenceMeter({
  * bare select sizes itself to its longest option.
  */
 const REQUIRED_ROLES: readonly ColumnRole[] = ["code", "description", "cost_price"];
-const OPTIONAL_ROLES: readonly ColumnRole[] = COLUMN_ROLES.filter((role) => !REQUIRED_ROLES.includes(role));
+const OPTIONAL_ROLES: readonly ColumnRole[] = COLUMN_ROLES.filter(
+  (role) => !REQUIRED_ROLES.includes(role) && role !== "retail_price",
+);
 
 function RolePicker({
   label,
