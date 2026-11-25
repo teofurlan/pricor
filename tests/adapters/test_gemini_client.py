@@ -1,3 +1,4 @@
+import base64
 import json
 import urllib.error
 
@@ -205,3 +206,38 @@ def test_the_model_name_cannot_change_the_request_path():
 
     (url, _, _, _), = transport.calls
     assert url == "https://generativelanguage.googleapis.com/v1beta/models/..%2Fx%2Fy:generateContent"
+
+
+def test_chat_json_with_images_encodes_png_parts_and_parses_reply():
+    transport = FakeTransport(gemini_reply('{"answer": "vision"}'))
+    client = GeminiChatClient(api_key="secret-key", transport=transport)
+    img1 = b"\x89PNG\r\n\x1a\npage1"
+    img2 = b"\x89PNG\r\n\x1a\npage2"
+
+    reply = client.chat_json_with_images("system vision", "extract rows", [img1, img2], SCHEMA)
+
+    (_, headers, body, _), = transport.calls
+    assert headers["x-goog-api-key"] == "secret-key"
+    assert body["systemInstruction"] == {"parts": [{"text": "system vision"}]}
+    assert body["contents"] == [
+        {
+            "role": "user",
+            "parts": [
+                {"text": "extract rows"},
+                {"inlineData": {"mimeType": "image/png", "data": base64.b64encode(img1).decode("ascii")}},
+                {"inlineData": {"mimeType": "image/png", "data": base64.b64encode(img2).decode("ascii")}},
+            ],
+        }
+    ]
+    assert body["generationConfig"]["responseJsonSchema"] == SCHEMA
+    assert reply.content == {"answer": "vision"}
+
+
+def test_chat_json_with_images_propagates_typed_errors():
+    client = GeminiChatClient(api_key="key", transport=FakeTransport(error=TimeoutError("timed out")))
+    with pytest.raises(ModelTimeoutError):
+        client.chat_json_with_images("s", "u", [b"png"], SCHEMA)
+
+    client_bad = GeminiChatClient(api_key="key", transport=FakeTransport(b"not json"))
+    with pytest.raises(ModelInvalidJsonError):
+        client_bad.chat_json_with_images("s", "u", [b"png"], SCHEMA)

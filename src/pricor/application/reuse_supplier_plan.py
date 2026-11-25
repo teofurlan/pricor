@@ -142,8 +142,10 @@ class ReuseSupplierPlan(ImportFirstTime):
                 self._stages, replace(profile, columns=rest)
             )
             decisions.update(cascaded)
-            session.notices = list(notices)
+            session.notices = [*session.source_notices, *notices]
             session.model_unreachable = unreachable
+        else:
+            session.notices = list(session.source_notices)
         session.decisions = decisions
         session.changes = _changes(comparison, roles)
         session.answers = _saved_answers(stored.plan.confirmations)

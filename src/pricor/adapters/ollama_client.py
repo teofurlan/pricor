@@ -6,11 +6,12 @@ tests never touch the network. Everything the model says is untrusted: this
 module only parses it, the adapters validate it.
 """
 
+import base64
 import json
 import time
 import urllib.error
 import urllib.request
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 from pricor.ports.chat_client import ChatReply  # re-exported: older code imports it from here
@@ -56,12 +57,32 @@ class OllamaClient:
 
     def chat_json(self, system: str, user: str, schema: dict[str, Any]) -> ChatReply:
         """Send one chat turn and return the JSON object the model produced."""
+        return self._chat(system, {"role": "user", "content": user}, schema)
+
+    def chat_json_with_images(
+        self,
+        system: str,
+        user: str,
+        images: Sequence[bytes],
+        schema: dict[str, Any],
+    ) -> ChatReply:
+        """Send one chat turn with PNG image bytes and return the JSON object the model produced."""
+        message = {
+            "role": "user",
+            "content": user,
+            "images": [base64.b64encode(image).decode("ascii") for image in images],
+        }
+        return self._chat(system, message, schema)
+
+    def _chat(
+        self, system: str, user_message: dict[str, Any], schema: dict[str, Any]
+    ) -> ChatReply:
         body = json.dumps(
             {
                 "model": self.model,
                 "messages": [
                     {"role": "system", "content": system},
-                    {"role": "user", "content": user},
+                    user_message,
                 ],
                 "stream": False,
                 "think": self.think,

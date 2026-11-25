@@ -156,6 +156,18 @@ class ImportFirstTime:
         path = Path(file_path)
         data = self._reader.read_sheet(path, sheet)
         profile = profile_sheet(data.rows)
+        source_notices = (
+            (
+                Notice(
+                    "pdf_vision_extracted",
+                    "this PDF was read visually (no structured table was found); "
+                    "verify codes and prices in the preview before approving",
+                    "pdf_vision",
+                ),
+            )
+            if data.extraction == "pdf_vision"
+            else ()
+        )
         return ImportSession(
             id=self._new_id(),
             supplier_name=supplier_name.strip(),
@@ -166,6 +178,8 @@ class ImportFirstTime:
             profile=profile,
             header_confirmed=profile.header_row is not None and not profile.header_ambiguous,
             header_candidates=_header_candidates(data.rows, profile),
+            notices=list(source_notices),
+            source_notices=source_notices,
         )
 
     def _begin(self, session: ImportSession) -> None:
@@ -412,7 +426,7 @@ class ImportFirstTime:
         if not session.profile.columns:
             raise InvalidInputError("the sheet has no data columns")
         session.decisions, notices, unreachable = run_cascade(self._stages, session.profile)
-        session.notices = list(notices)
+        session.notices = [*session.source_notices, *notices]
         session.model_unreachable = unreachable
         session.header_confirmed = True
         self._refresh(session)

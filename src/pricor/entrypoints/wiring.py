@@ -64,6 +64,7 @@ from pricor.adapters.gemma_question_helper import GemmaQuestionHelper
 from pricor.adapters.google_auth import GoogleOidcVerifier
 from pricor.adapters.heuristic_classifier import HeuristicColumnClassifier
 from pricor.adapters.heuristic_output_format import HeuristicOutputFormat
+from pricor.adapters.pdf_price_list_reader import PdfPriceListReader
 from pricor.adapters.pdf_table_reader import PdfTableReader
 from pricor.adapters.laya_classifier import (
     DEFAULT_MODEL_PATH,
@@ -358,7 +359,7 @@ def database_dependencies(
         SqliteMemoryStore(database, shared.embedder.model), shared.embedder, database.sessions.get
     )
     use_case = ReuseSupplierPlan(
-        FileSpreadsheetReader(),
+        FileSpreadsheetReader(pdf_reader=PdfPriceListReader(vision_client=client)),
         database.sessions,
         shared.stages,
         GemmaPlanAdvisor(client),

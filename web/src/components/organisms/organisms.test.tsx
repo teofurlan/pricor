@@ -98,7 +98,7 @@ describe("UploadForm", () => {
     expect(within(dropzone as HTMLElement).getByText("Drag your price list here")).toBeInTheDocument();
     expect(within(dropzone as HTMLElement).getByText("or")).toBeInTheDocument();
     expect(within(dropzone as HTMLElement).getByText("Choose file")).toBeInTheDocument();
-    expect(within(dropzone as HTMLElement).getByText("Excel (.xls, .xlsx) or CSV · up to 20 MB")).toBeInTheDocument();
+    expect(within(dropzone as HTMLElement).getByText("Excel (.xls, .xlsx), CSV or PDF · up to 20 MB")).toBeInTheDocument();
 
     const file = new File(["col1,col2"], "test.csv", { type: "text/csv" });
     fireEvent.dragOver(dropzone!, { dataTransfer: { files: [file] } });
@@ -115,7 +115,7 @@ describe("UploadForm", () => {
     expect(within(dropzone as HTMLElement).getByText("Arrastre su lista de precios aquí")).toBeInTheDocument();
     expect(within(dropzone as HTMLElement).getByText("o")).toBeInTheDocument();
     expect(within(dropzone as HTMLElement).getByText("Seleccionar archivo")).toBeInTheDocument();
-    expect(within(dropzone as HTMLElement).getByText("Excel (.xls, .xlsx) o CSV · hasta 20 MB")).toBeInTheDocument();
+    expect(within(dropzone as HTMLElement).getByText("Excel (.xls, .xlsx), CSV o PDF · hasta 20 MB")).toBeInTheDocument();
 
     const file = new File(["col1,col2"], "test.csv", { type: "text/csv" });
     fireEvent.dragOver(dropzone!, { dataTransfer: { files: [file] } });
@@ -140,13 +140,15 @@ describe("UploadForm", () => {
 
   it("marks each kind of price list with its own type", async () => {
     renderWithI18n(<UploadForm busy={false} onSubmit={vi.fn()} onSubmitMany={vi.fn()} />);
+    expect(screen.getByLabelText("Price list file")).toHaveAttribute("accept", expect.stringContaining(".pdf"));
     await userEvent.upload(screen.getByLabelText("Price list file"), [
-      new File(["a"], "a.xlsx"), new File(["b"], "b.XLS"), new File(["c"], "c.xlsm"), new File(["d"], "d.csv"),
+      new File(["a"], "a.xlsx"), new File(["b"], "b.XLS"), new File(["c"], "c.xlsm"), new File(["d"], "d.csv"), new File(["e"], "e.pdf"),
     ]);
     const tiles = within(screen.getByRole("list", { name: "Chosen files" })).getAllByRole("listitem");
-    expect(tiles.slice(0, 4).map((tile) => tile.querySelector(".file-mark")?.getAttribute("data-kind"))).toEqual(["xlsx", "xls", "xlsm", "csv"]);
+    expect(tiles.slice(0, 5).map((tile) => tile.querySelector(".file-mark")?.getAttribute("data-kind"))).toEqual(["xlsx", "xls", "xlsm", "csv", "pdf"]);
     expect(within(tiles[1]).getByText("XLS")).toBeInTheDocument();
     expect(within(tiles[1]).getByText(".XLS")).toBeInTheDocument();
+    expect(within(tiles[4]).getByText("PDF")).toBeInTheDocument();
   });
 
   it("accepts only one dropped file when the form takes one file", async () => {

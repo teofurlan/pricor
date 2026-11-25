@@ -177,9 +177,10 @@ def test_pdf_without_a_table_is_422_and_keeps_the_prior_format(api):
     assert client.get("/output-format").json() == before
 
 
-def test_pdf_is_still_rejected_on_the_price_list_endpoints(api):
+def test_pdf_is_accepted_on_price_list_endpoints_and_txt_is_rejected(api):
     client, _ = api
     content = pdf_bytes([[["Codigo", "Costo"], ["1", "2"]]])
     imports = client.post("/imports", files={"file": ("lista.pdf", content)}, data={"supplier_name": "X"})
-    assert imports.status_code == 415
-    assert client.post("/sheets", files={"file": ("lista.pdf", content)}).status_code == 415
+    assert imports.status_code == 201
+    assert client.post("/sheets", files={"file": ("lista.pdf", content)}).status_code == 200
+    assert client.post("/imports", files={"file": ("lista.txt", b"hello")}, data={"supplier_name": "X"}).status_code == 415

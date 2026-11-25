@@ -14,6 +14,14 @@ export function NoticeList({ notices, compact = false }: { notices: Notice[]; co
   return (
     <div className="notices">
       {notices.map((notice) => {
+        if (notice.code === "pdf_vision_extracted") {
+          return (
+            <div key={`${notice.code}-${notice.stage}-${notice.message}`} role="status" className="notice">
+              <strong className="notice__title">{t("notice.pdfVision.title")}</strong>
+              <p>{t("notice.pdfVision.body")}</p>
+            </div>
+          );
+        }
         const modelNotice = notice.code === "model_unavailable";
         const title = t(
           notice.stage !== null && !GEMMA_STAGES.has(notice.stage)

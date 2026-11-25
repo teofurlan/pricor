@@ -5,13 +5,14 @@ The API key travels exclusively in the `x-goog-api-key` header, never in the
 URL, logs, exception messages, or `repr()`.
 """
 
+import base64
 import json
 import re
 import time
 import urllib.error
 import urllib.request
 from urllib.parse import quote
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from pricor.ports.chat_client import ChatClient, ChatReply
@@ -75,10 +76,34 @@ class GeminiChatClient(ChatClient):
         )
 
     def chat_json(self, system: str, user: str, schema: dict[str, Any]) -> ChatReply:
+        return self._generate(system, [{"text": user}], schema)
+
+    def chat_json_with_images(
+        self,
+        system: str,
+        user: str,
+        images: Sequence[bytes],
+        schema: dict[str, Any],
+    ) -> ChatReply:
+        parts: list[dict[str, Any]] = [{"text": user}]
+        for image in images:
+            parts.append(
+                {
+                    "inlineData": {
+                        "mimeType": "image/png",
+                        "data": base64.b64encode(image).decode("ascii"),
+                    }
+                }
+            )
+        return self._generate(system, parts, schema)
+
+    def _generate(
+        self, system: str, parts: list[dict[str, Any]], schema: dict[str, Any]
+    ) -> ChatReply:
         body = json.dumps(
             {
                 "systemInstruction": {"parts": [{"text": system}]},
-                "contents": [{"role": "user", "parts": [{"text": user}]}],
+                "contents": [{"role": "user", "parts": parts}],
                 "generationConfig": {
                     "temperature": 0,
                     "responseMimeType": "application/json",

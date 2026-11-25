@@ -138,6 +138,8 @@ export const en = {
   "notice.detail": "Technical detail: {detail}",
   "notice.techDetails": "Show technical details",
   "notice.modelUnavailable.body": "You can continue normally by reviewing the columns and answering the questions; all calculations remain exact.",
+  "notice.pdfVision.title": "PDF read visually",
+  "notice.pdfVision.body": "This PDF had no structured table and was read with visual recognition. Verify codes and prices carefully in the preview before approving.",
 
   "question.reason": "Why we ask: {reason}",
   "question.moreOptions": "Another rate…",
@@ -171,7 +173,7 @@ export const en = {
   "upload.dragDrop": "Drag your price list here",
   "upload.or": "or",
   "upload.dropActive": "Drop it to read it",
-  "upload.fileHint": "Excel (.xls, .xlsx) or CSV · up to 20 MB",
+  "upload.fileHint": "Excel (.xls, .xlsx), CSV or PDF · up to 20 MB",
   "upload.sheet": "Sheet",
   "upload.sheetDefault": "First sheet with data",
   "upload.sheetsFailed": "Could not read this file: {reason}",

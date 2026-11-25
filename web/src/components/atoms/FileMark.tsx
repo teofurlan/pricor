@@ -1,9 +1,11 @@
-export type FileKind = "xlsx" | "xls" | "xlsm" | "csv" | "other";
+export type FileKind = "xlsx" | "xls" | "xlsm" | "csv" | "pdf" | "other";
 
 /** The kind of price list a file name suggests, from its extension. */
 export function fileKind(name: string): FileKind {
   const extension = name.includes(".") ? name.slice(name.lastIndexOf(".") + 1).toLowerCase() : "";
-  return extension === "xlsx" || extension === "xls" || extension === "xlsm" || extension === "csv" ? extension : "other";
+  return extension === "xlsx" || extension === "xls" || extension === "xlsm" || extension === "csv" || extension === "pdf"
+    ? extension
+    : "other";
 }
 
 /**
@@ -30,6 +32,11 @@ export function FileMark({ name }: { name: string }) {
           <>
             <path d="M10 21h5M19 21h4M27 21h3M10 28h6M20 28h3M27 28h3M10 35h4M18 35h6M28 35h2" />
             <path d="M16.5 22.5l-.8 1.6M24.5 22.5l-.8 1.6M17.5 29.5l-.8 1.6M24.5 29.5l-.8 1.6M15.5 36.5l-.8 1.6M25.5 36.5l-.8 1.6" />
+          </>
+        )}
+        {kind === "pdf" && (
+          <>
+            <path d="M10 20h20M10 26h20M10 32h14M10 38h18" />
           </>
         )}
         {kind === "other" && <path d="M10 22h20M10 28h20M10 34h14" />}

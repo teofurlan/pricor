@@ -315,10 +315,22 @@ def test_csv_text_percentages_remain_unchanged(tmp_path):
 
 
 def test_unsupported_extension(tmp_path):
-    path = tmp_path / "list.pdf"
-    path.write_bytes(b"%PDF")
-    with pytest.raises(UnsupportedFormatError, match=".pdf"):
+    path = tmp_path / "list.txt"
+    path.write_text("just text", encoding="utf-8")
+    with pytest.raises(UnsupportedFormatError, match=".txt"):
         FileSpreadsheetReader().read_sheet(path)
+
+
+def test_delegates_pdf_to_pdf_reader(tmp_path):
+    from .pdf_fixtures import pdf_bytes
+
+    path = tmp_path / "lista.pdf"
+    path.write_bytes(pdf_bytes([[["Codigo", "Precio"], ["001", "100"]]]))
+    reader = FileSpreadsheetReader()
+    assert reader.sheet_names(path) == ["lista"]
+    sheet = reader.read_sheet(path)
+    assert sheet.rows == (("Codigo", "Precio"), ("001", "100"))
+    assert sheet.extraction == "pdf_table"
 
 
 def test_file_size_limit(tmp_path):
