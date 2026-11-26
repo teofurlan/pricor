@@ -34,7 +34,7 @@ Open-weight models run locally and only interpret the file: they propose column 
 - Partial imports are allowed, but rejected rows are always visible and exportable. Nothing is omitted silently.
 - Bilingual UI: English and Spanish, with a language toggle and a question language chosen per import.
 - Several price lists can be queued at once: each is reviewed and approved on its own, then all approved products download as one file with a supplier column.
-- The output format can be defined from an Excel, CSV or PDF template (the first table's headers) or by hand, with simple column types (text, description, code, number, price). Supplier price lists accept Excel, CSV, and PDF: digital PDF tables are extracted deterministically across pages (`pdfplumber`), and scanned or borderless PDFs fall back to multimodal vision with an explicit warning notice so the user verifies codes and prices in the preview.
+- The output format can be defined from an Excel, CSV or PDF template (the first table's headers) or by hand, with simple column types (text, description, code, number, price). Supplier price lists accept Excel, CSV, and PDF: digital PDF tables (ruled or borderless column-aligned) are extracted deterministically across pages (`pdfplumber`), and scanned or non-tabular PDFs fall back to multimodal vision with an explicit warning notice so the user verifies codes and prices in the preview.
 - Out of scope: ERP-specific export formats, an installable desktop app.
 
 ## Brand Commitments

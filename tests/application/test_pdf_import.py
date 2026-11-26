@@ -12,7 +12,7 @@ from pricor.application.reuse_supplier_plan import ReuseSupplierPlan
 from pricor.domain.roles import ColumnRole
 from pricor.ports.chat_client import ChatReply
 
-from ..adapters.pdf_fixtures import pdf_bytes
+from ..adapters.pdf_fixtures import borderless_pdf_bytes, pdf_bytes
 
 
 class FakeVisionClient:
@@ -112,3 +112,62 @@ def test_vision_pdf_import_adds_and_preserves_notice_through_header_reuse_and_co
         assert [n.code for n in reused.notices] == ["pdf_vision_extracted"]
     finally:
         db.close()
+
+
+def test_borderless_digital_pdf_imports_without_vision_or_notice(tmp_path):
+    pdf = tmp_path / "domitec.pdf"
+    pdf.write_bytes(
+        borderless_pdf_bytes(
+            [
+                [
+                    (["LISTA DE PRECIOS VENTA SUELTOS"], False),
+                    (["COD_ALFA", "DETALLE", "PRECIO", "PR. UNIT"], True),
+                    (["GRUPO DE PRODUCTOS 01 - AUTOMOVIL"], False),
+                    (["055170911", "DET CONC 2X10 LT LIMPIA MOTOR", "1286.26", "64.31"], False),
+                    (["055152911", "DET CONC 3X4.5 LT SILICON", "2196.39", "81.34"], False),
+                    (["069151999", "SOLO ENVASE SIN FRACCIONAR", "250.80", ""], False),
+                    (["Usuario:CBOSCHI Fecha:11/01/2021 Item:2035"], False),
+                ],
+                [
+                    (["COD_ALFA", "DETALLE", "PRECIO", "PR. UNIT"], True),
+                    (["068152912", "CERA LIQUIDA 3X4.5 LTS NEGRA", "2851.83", "42.24"], False),
+                    (["Usuario:CBOSCHI Fecha:11/01/2021 Item:2035"], False),
+                ],
+            ],
+            right_align_cols=(2, 3),
+        )
+    )
+    reader = FileSpreadsheetReader(pdf_reader=PdfPriceListReader(vision_client=None))
+    use_case = ImportFirstTime(
+        reader,
+        InMemoryImportSessionRepository(),
+        [ClassifierStage("heuristics", HeuristicColumnClassifier(), 0.75)],
+        None,
+    )
+
+    session = use_case.start(pdf, "Domitec")
+
+    assert all(n.code != "pdf_vision_extracted" for n in session.notices)
+    assert session.source_notices == ()
+    assert [c.header for c in session.columns] == ["COD_ALFA", "DETALLE", "PRECIO", "PR. UNIT"]
+    session = use_case.set_roles(
+        session.id,
+        {
+            0: ColumnRole.CODE,
+            1: ColumnRole.DESCRIPTION,
+            2: ColumnRole.COST_PRICE,
+            3: ColumnRole.IGNORE,
+        },
+    )
+    session = use_case.answer(session.id, "price_includes_vat", "no")
+    session = use_case.answer(session.id, "currency", "ARS")
+    page = use_case.preview(session.id)
+    assert page.totals["accepted"] == 4
+    accepted = [item for item in page.items if item.record is not None]
+    assert [item.record["supplier_code"] for item in accepted] == [
+        "055170911",
+        "055152911",
+        "069151999",
+        "068152912",
+    ]
+    assert str(accepted[0].record["unit_cost_net"]) == "1286.26"
