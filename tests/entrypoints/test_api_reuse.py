@@ -135,3 +135,27 @@ def test_the_wired_app_reuses_plans(tmp_path):
     dependencies = dependencies_from_env({"PRICOR_DB": str(tmp_path / "pricor.db")})
 
     assert isinstance(dependencies.use_case, ReuseSupplierPlan)
+
+
+def test_get_suppliers_lists_distinct_approved_suppliers_sorted(client):
+    assert client.get("/suppliers").json() == {"suppliers": []}
+
+    # Unapproved import must not appear in saved suppliers.
+    unapproved = upload(client, rows=CLEAN, supplier="Sin Aprobar")
+    assert unapproved.status_code == 201
+    assert client.get("/suppliers").json() == {"suppliers": []}
+
+    # Approve two suppliers (with multiple versions for one of them).
+    approved_first_import(client)
+    second = upload(client, rows=CLEAN, supplier="Distribuidora Norte").json()
+    for question in second["questions"]:
+        option = {"price_includes_vat": "yes", "currency": "ARS"}[question["id"]]
+        assert answer(client, second["id"], question["id"], option).status_code == 200
+    assert client.post(f"/imports/{second['id']}/approve").status_code == 200
+
+    reused = upload(client, rows=CLEAN, supplier="Ferreteria Ejemplo").json()
+    assert client.post(f"/imports/{reused['id']}/approve").status_code == 200
+
+    response = client.get("/suppliers")
+    assert response.status_code == 200
+    assert response.json() == {"suppliers": ["Distribuidora Norte", "Ferreteria Ejemplo"]}

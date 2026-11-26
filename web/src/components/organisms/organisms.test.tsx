@@ -366,6 +366,87 @@ describe("UploadForm", () => {
     await userEvent.click(screen.getByRole("button", { name: "set-es" }));
     expect(getSelect()).toHaveValue("es");
   });
+
+  it("suggests saved suppliers accent-insensitively and lets the user pick via click or keyboard without blocking new names", async () => {
+    const onSubmit = vi.fn();
+    renderWithI18n(
+      <UploadForm
+        busy={false}
+        onSubmit={onSubmit}
+        savedSuppliers={["Distribuidora Masiva", "Ferretería Norte", "Mayorista Sur"]}
+      />,
+    );
+
+    const file = new File(["a"], "lista.csv");
+    await userEvent.upload(screen.getByLabelText("Price list file"), file);
+    const input = supplierOf("lista.csv");
+
+    // Typing without accent finds "Ferretería Norte", while exact reuse mark stays hidden until accents match.
+    await userEvent.clear(input);
+    await userEvent.type(input, "Ferreteria");
+    const listbox = screen.getByRole("listbox", { name: "Saved suppliers" });
+    expect(within(listbox).getByRole("option", { name: /Ferretería Norte/ })).toBeInTheDocument();
+    expect(within(listbox).queryByRole("option", { name: /Mayorista Sur/ })).not.toBeInTheDocument();
+    expect(screen.queryByText("Saved plan will be reused")).not.toBeInTheDocument();
+
+    // Selecting via ArrowDown + Enter fills the exact saved spelling and does NOT submit the form.
+    await userEvent.keyboard("{ArrowDown}{Enter}");
+    expect(input).toHaveValue("Ferretería Norte");
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByText("Saved plan will be reused")).toBeInTheDocument();
+
+    // Submitting sends the selected saved supplier name.
+    await userEvent.click(screen.getByRole("button", { name: "Start import" }));
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ supplierName: "Ferretería Norte" }));
+
+    // Clicking a suggestion works and free-text new supplier entry still works.
+    await userEvent.clear(input);
+    await userEvent.type(input, "Masiva");
+    await userEvent.click(screen.getByRole("option", { name: /Distribuidora Masiva/ }));
+    expect(input).toHaveValue("Distribuidora Masiva");
+
+    await userEvent.clear(input);
+    await userEvent.type(input, "Proveedor Nuevo");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(screen.queryByText("Saved plan will be reused")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Start import" }));
+    expect(onSubmit).toHaveBeenLastCalledWith(expect.objectContaining({ supplierName: "Proveedor Nuevo" }));
+  });
+
+  it("keeps supplier autocomplete independent per row in a multi-file queue", async () => {
+    const onSubmitMany = vi.fn();
+    renderWithI18n(
+      <UploadForm
+        busy={false}
+        onSubmit={vi.fn()}
+        onSubmitMany={onSubmitMany}
+        savedSuppliers={["Ferretería Norte", "Mayorista Sur"]}
+      />,
+    );
+
+    const firstFile = new File(["a"], "uno.csv");
+    const secondFile = new File(["b"], "dos.csv");
+    await userEvent.upload(screen.getByLabelText("Price list file"), [firstFile, secondFile]);
+
+    const firstInput = supplierOf("uno.csv");
+    const secondInput = supplierOf("dos.csv");
+
+    await userEvent.clear(firstInput);
+    await userEvent.type(firstInput, "Ferreteria");
+    await userEvent.click(screen.getByRole("option", { name: /Ferretería Norte/ }));
+
+    await userEvent.clear(secondInput);
+    await userEvent.type(secondInput, "Mayorista");
+    await userEvent.click(screen.getByRole("option", { name: /Mayorista Sur/ }));
+
+    expect(firstInput).toHaveValue("Ferretería Norte");
+    expect(secondInput).toHaveValue("Mayorista Sur");
+    await userEvent.click(screen.getByRole("button", { name: "Start import" }));
+    expect(onSubmitMany).toHaveBeenCalledWith([
+      expect.objectContaining({ file: firstFile, supplierName: "Ferretería Norte" }),
+      expect.objectContaining({ file: secondFile, supplierName: "Mayorista Sur" }),
+    ]);
+  });
 });
 
 describe("HeaderChoice", () => {

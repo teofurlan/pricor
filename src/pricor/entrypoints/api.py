@@ -29,6 +29,7 @@ Endpoints:
                                   "fit": {"matched", "total", "unmatched": [names], "mismatch"}
     DELETE /output-format         remove the store-wide format -> 204
     POST /sheets                  multipart: file -> {"sheets": ["..."]}
+    GET  /suppliers               {"suppliers": ["..."]}  saved suppliers with an approved plan
     POST /imports                 multipart: file, supplier_name, [sheet], [language],
                                   [force_first_import]  -> 201 state
     GET  /imports/{id}            current state
@@ -156,6 +157,7 @@ from pricor.domain.roles import ColumnRole
 from pricor.ports.import_session import ImportSession, PlanChange, PreviewPage, PreviewRow
 from pricor.ports.import_session_repository import SessionNotFoundError
 from pricor.ports.memory import Memory, MemoryNotFoundError
+from pricor.ports.plan_repository import PlanRepository
 from pricor.ports.price_history import ImportSummary
 from pricor.ports.question_model import Option
 from pricor.ports.output_format import OUTPUT_FIELDS, OutputFormat, OutputFormatNotFoundError, check_fit
@@ -210,6 +212,7 @@ class ApiDependencies:
     workspaces: bool = False  # private workspace per visitor (hosted demo); see workspaces.py
     warm_up_timeout: float = 120.0  # seconds `POST /warm-up` holds a request open for the load
     google_client_id: str | None = None  # optional OAuth client ID for Google Sign-In
+    plans: PlanRepository | None = None  # saved supplier plans; falls back to use_case._plans
 
 
 class OutputMappingBody(BaseModel):
@@ -757,6 +760,7 @@ def create_app(
     app = FastAPI(title="Pricor", version="0.1.0", lifespan=lifespan)
     use_case = dependencies.use_case
     reader = dependencies.reader or getattr(use_case, "_reader", None)
+    plans = dependencies.plans or getattr(use_case, "_plans", None)
     question_help = AskAboutQuestion(use_case.get, dependencies.question_helper)
     exports = dependencies.exports or ExportImport(
         use_case.get, [CsvExporter(), XlsxExporter()],
@@ -815,6 +819,12 @@ def create_app(
         finally:
             shutil.rmtree(directory, ignore_errors=True)
         return {"sheets": names}
+
+    @app.get("/suppliers")
+    def list_suppliers() -> dict[str, list[str]]:
+        if plans is None:
+            return {"suppliers": []}
+        return {"suppliers": list(plans.list_suppliers())}
 
     def memories() -> ManageMemory:
         if dependencies.memory is None:

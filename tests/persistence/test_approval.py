@@ -138,3 +138,15 @@ def test_a_second_import_of_the_supplier_adds_a_plan_version_and_an_import(datab
 def test_without_a_unit_of_work_approval_still_works():
     flow = Flow()
     assert flow.approved().status is SessionStatus.APPROVED
+
+
+def test_list_suppliers_returns_sorted_distinct_latest_spellings(database):
+    assert database.plans.list_suppliers() == ()
+
+    ids = (f"s{n}" for n in count(1))
+    Flow(database.sessions, supplier="Zeta Distribuidora", approvals=database, clock=lambda: NOW, id_factory=lambda: next(ids)).approved()
+    Flow(database.sessions, supplier="Alpha Ferreteria", approvals=database, clock=lambda: NOW, id_factory=lambda: next(ids)).approved()
+    # Second approval for the same supplier_key updates the display spelling to the latest version.
+    Flow(database.sessions, supplier="ALPHA FERRETERIA", approvals=database, clock=lambda: NOW, id_factory=lambda: next(ids)).approved()
+
+    assert database.plans.list_suppliers() == ("ALPHA FERRETERIA", "Zeta Distribuidora")
