@@ -331,3 +331,59 @@ def test_borderless_pdf_keeps_long_description_separate_from_price_and_enforces_
 
     with pytest.raises(TooManyRowsError):
         PdfPriceListReader(max_rows=2).read_sheet(path)
+
+
+def test_borderless_pdf_keeps_code_and_description_separate_despite_frequent_section_rows(tmp_path):
+    # Reproduces the Domitec/Presea failure mode: ~10% 2-segment "GRUPO DE PRODUCTOS" rows
+    # span the narrow gutter between COD_ALFA and DETALLE, exceeding the 5% floor.
+    section_line = (["GRUPO DE PRODUCTOS    01 - AUTOMOVIL"], False)
+    product_rows = [
+        ([f"0551709{i:02d}", f"DET CONC 2X10 LT LIMPIA MOTOR {i}", f"{1000 + i}.26", "64.31"], False)
+        for i in range(18)
+    ]
+    pages = [
+        [
+            (["COD_ALFA", "DETALLE", "PRECIO", "PR. UNIT"], True),
+            section_line,
+            *product_rows[:9],
+            section_line,
+            (["Usuario:CBOSCHI Fecha:11/01/2021 Item:2035"], False),
+        ],
+        [
+            (["COD_ALFA", "DETALLE", "PRECIO", "PR. UNIT"], True),
+            section_line,
+            *product_rows[9:],
+            (["Usuario:CBOSCHI Fecha:11/01/2021 Item:2035"], False),
+        ],
+    ]
+    path = tmp_path / "domitec_sections.pdf"
+    path.write_bytes(
+        borderless_pdf_bytes(pages, col_x=(40, 100, 410, 500), right_align_cols=(2, 3))
+    )
+
+    sheet = PdfPriceListReader().read_sheet(path)
+
+    assert sheet.extraction == "pdf_table"
+    assert sheet.rows[0] == ("COD_ALFA", "DETALLE", "PRECIO", "PR. UNIT")
+    assert ("055170900", "DET CONC 2X10 LT LIMPIA MOTOR 0", "1000.26", "64.31") in sheet.rows
+
+
+def test_borderless_two_column_pdf_splits_past_section_gutter(tmp_path):
+    # Even when section rows also have 2 segments (same mode as the table), relative valley
+    # splitting keeps the two columns separated.
+    section = (["GRUPO    RUBRO"], False)
+    rows = [([f"DETALLE PRODUCTO {i}", f"{200 + i}.50"], False) for i in range(18)]
+    path = tmp_path / "two_cols.pdf"
+    path.write_bytes(
+        borderless_pdf_bytes(
+            [[(["DETALLE", "PRECIO"], False), section, *rows, section]],
+            col_x=(40, 320),
+            right_align_cols=(1,),
+        )
+    )
+
+    sheet = PdfPriceListReader().read_sheet(path)
+
+    assert sheet.extraction == "pdf_table"
+    assert sheet.rows[0] == ("DETALLE", "PRECIO")
+    assert ("DETALLE PRODUCTO 0", "200.50") in sheet.rows

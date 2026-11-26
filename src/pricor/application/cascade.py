@@ -155,41 +155,45 @@ def _suppress_retail_price(outcomes: dict[int, _Outcome]) -> dict[int, _Outcome]
     return result
 
 
-def _one_code_suggestion(
+_UNIQUE_ROLES = (ColumnRole.CODE, ColumnRole.DESCRIPTION, ColumnRole.COST_PRICE)
+
+
+def _one_unique_role_suggestion(
     outcomes: dict[int, _Outcome],
     columns: dict[int, ColumnProfile],
-    code_settled: bool,
+    target_role: ColumnRole,
+    role_settled: bool,
     contested: int | None,
 ) -> tuple[dict[int, _Outcome], int | None]:
-    """Keep the `code` suggestion on a single column.
+    """Keep a unique required role's suggestion (`code`, `description`, `cost_price`) on one column.
 
-    Several columns proposed as the product code cannot all be right: only the most complete one
-    (fewest empty rows; a tie keeps the column order) keeps its suggestion, the rest lose theirs.
-    While candidates compete, nothing is settled as `code`: the user confirms which one it is.
-    `contested` is the winner of a competition seen by an earlier stage: the contest stays open,
-    so a later stage proposing a single column cannot settle it. Once an earlier stage settled
-    `code`, no later stage may propose it for another column. Returns the open contest's winner.
+    Several columns proposed for the same unique role cannot all be right: only the most complete
+    one (fewest empty rows; a tie keeps the column order) keeps its suggestion, the rest lose
+    theirs. While candidates compete, nothing is settled as that role: the user confirms which one
+    it is. `contested` is the winner of a competition seen by an earlier stage: the contest stays
+    open, so a later stage proposing a single column cannot settle it. Once an earlier stage
+    settled that role, no later stage may propose it for another column.
     """
     candidates = [
         index
         for index, outcome in sorted(outcomes.items())
-        if any(item.role is ColumnRole.CODE for item in outcome.proposals)
+        if any(item.role is target_role for item in outcome.proposals)
     ]
     if contested is not None and contested in columns and contested not in candidates:
         candidates = sorted([*candidates, contested])
-    if not candidates or (len(candidates) == 1 and not code_settled and contested is None):
+    if not candidates or (len(candidates) == 1 and not role_settled and contested is None):
         return outcomes, contested
-    winner = None if code_settled else min(candidates, key=lambda index: (columns[index].empty_rows, index))
+    winner = None if role_settled else min(candidates, key=lambda index: (columns[index].empty_rows, index))
     result = dict(outcomes)
     for index in candidates:
         outcome = outcomes.get(index)
         if outcome is None:
             continue
         proposals = tuple(
-            item for item in outcome.proposals if index == winner or item.role is not ColumnRole.CODE
+            item for item in outcome.proposals if index == winner or item.role is not target_role
         )
         settled = outcome.settled
-        if settled is not None and settled.role is ColumnRole.CODE:
+        if settled is not None and settled.role is target_role:
             settled = None
         result[index] = _Outcome(proposals, settled)
     return result, winner
@@ -215,7 +219,7 @@ def run_cascade(
     decisions: dict[int, ColumnDecision] = {}
     notices: list[Notice] = []
     unreachable = False
-    contested_code: int | None = None
+    contested: dict[ColumnRole, int | None] = {role: None for role in _UNIQUE_ROLES}
 
     for stage in stages:
         if not remaining:
@@ -249,10 +253,12 @@ def run_cascade(
             break
         logger.info("cascade stage %s: %.2fs", stage.name, time.perf_counter() - started)
         outcomes = _suppress_retail_price(outcomes)
-        code_settled = any(decision.role is ColumnRole.CODE for decision in decisions.values())
-        outcomes, contested_code = _one_code_suggestion(
-            outcomes, {column.index: column for column in remaining}, code_settled, contested_code
-        )
+        remaining_by_index = {column.index: column for column in remaining}
+        for role in _UNIQUE_ROLES:
+            role_settled = any(decision.role is role for decision in decisions.values())
+            outcomes, contested[role] = _one_unique_role_suggestion(
+                outcomes, remaining_by_index, role, role_settled, contested[role]
+            )
         undecided = []
         for column in remaining:
             outcome = outcomes.get(column.index)

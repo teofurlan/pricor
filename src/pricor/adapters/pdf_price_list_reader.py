@@ -13,6 +13,7 @@ from __future__ import annotations
 import io
 import math
 import statistics
+from collections import Counter
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
@@ -121,23 +122,81 @@ def _merge_line_segments(
     return segments
 
 
+def _split_band_at_valleys(
+    histogram: Sequence[int], start: int, end: int, peak_threshold: int
+) -> list[tuple[float, float]]:
+    if end - start < 3:
+        return [(float(start), float(end))]
+
+    span = histogram[start:end]
+    prefix_max = [0] * len(span)
+    running = 0
+    for i, val in enumerate(span):
+        running = max(running, val)
+        prefix_max[i] = running
+
+    suffix_max = [0] * len(span)
+    running = 0
+    for i in range(len(span) - 1, -1, -1):
+        running = max(running, span[i])
+        suffix_max[i] = running
+
+    best_x = -1
+    best_ratio = 1.0
+    best_val = 0
+    best_cut = 0
+    for idx in range(1, len(span) - 1):
+        left_peak = prefix_max[idx - 1]
+        right_peak = suffix_max[idx + 1]
+        if left_peak < peak_threshold or right_peak < peak_threshold:
+            continue
+        ref_peak = min(left_peak, right_peak)
+        ratio = span[idx] / ref_peak
+        if ratio <= 0.15 and (best_x == -1 or ratio < best_ratio or (ratio == best_ratio and span[idx] < best_val)):
+            best_x = start + idx
+            best_ratio = ratio
+            best_val = span[idx]
+            best_cut = max(best_val, int(0.15 * ref_peak))
+
+    if best_x == -1:
+        return [(float(start), float(end))]
+
+    left = best_x
+    while left > start and histogram[left - 1] <= best_cut:
+        left -= 1
+    right = best_x + 1
+    while right < end and histogram[right] <= best_cut:
+        right += 1
+    return _split_band_at_valleys(histogram, start, left, peak_threshold) + _split_band_at_valleys(
+        histogram, right, end, peak_threshold
+    )
+
+
 def _detect_column_bands(
     tabular_lines_per_page: Sequence[Sequence[Sequence[tuple[float, float]]]],
     total_tabular_lines: int,
     max_x1: float,
 ) -> list[tuple[float, float]]:
-    histogram = [0] * (math.ceil(max_x1) + 2)
-    for page_lines in tabular_lines_per_page:
-        for segments in page_lines:
-            for seg_x0, seg_x1 in segments:
-                start = max(0, math.floor(seg_x0))
-                end = max(start + 1, math.ceil(seg_x1))
-                for x in range(start, min(end, len(histogram))):
-                    histogram[x] += 1
+    all_lines = [segments for page_lines in tabular_lines_per_page for segments in page_lines]
+    counts = Counter(len(segments) for segments in all_lines)
+    mode_segments = max(counts, key=lambda n: (counts[n], n))
+    core_lines = [segments for segments in all_lines if len(segments) >= mode_segments]
+    source_lines = (
+        core_lines if len(core_lines) >= max(2, int(0.30 * total_tabular_lines)) else all_lines
+    )
+    line_count = len(source_lines)
 
-    valley_threshold = max(0, int(0.05 * total_tabular_lines))
-    peak_threshold = max(2, int(0.05 * total_tabular_lines))
-    bands: list[tuple[float, float]] = []
+    histogram = [0] * (math.ceil(max_x1) + 2)
+    for segments in source_lines:
+        for seg_x0, seg_x1 in segments:
+            start = max(0, math.floor(seg_x0))
+            end = max(start + 1, math.ceil(seg_x1))
+            for x in range(start, min(end, len(histogram))):
+                histogram[x] += 1
+
+    valley_threshold = max(0, int(0.05 * line_count))
+    peak_threshold = max(2, int(0.05 * line_count))
+    raw_bands: list[tuple[int, int]] = []
     in_band = False
     band_start = 0
     band_peak = 0
@@ -151,10 +210,14 @@ def _detect_column_bands(
                 band_peak = max(band_peak, count)
         elif in_band:
             if band_peak >= peak_threshold:
-                bands.append((float(band_start), float(x)))
+                raw_bands.append((band_start, x))
             in_band = False
     if in_band and band_peak >= peak_threshold:
-        bands.append((float(band_start), float(len(histogram))))
+        raw_bands.append((band_start, len(histogram)))
+
+    bands: list[tuple[float, float]] = []
+    for start, end in raw_bands:
+        bands.extend(_split_band_at_valleys(histogram, start, end, peak_threshold))
     return bands
 
 
@@ -397,7 +460,7 @@ class PdfPriceListReader:
         if not heights:
             return None
 
-        gap_threshold = max(5.0, statistics.median(heights) * 0.85)
+        gap_threshold = max(4.5, statistics.median(heights) * 0.70)
         pages_lines = [_group_words_into_lines(words) for words in pages_words]
         tabular_lines_per_page: list[list[list[tuple[float, float]]]] = []
         max_x1 = 0.0
