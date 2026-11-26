@@ -155,4 +155,14 @@ describe("api client", () => {
       ["/workspace/google", { method: "DELETE" }],
     ]);
   });
+
+  it("lists saved suppliers from GET /suppliers", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ suppliers: ["Distribuidora Norte", "Ferretería Sur"] }));
+    const api = createApiClient(fetchMock);
+
+    const suppliers = await api.listSuppliers();
+
+    expect(suppliers).toEqual(["Distribuidora Norte", "Ferretería Sur"]);
+    expect(fetchMock).toHaveBeenCalledWith("/suppliers", undefined);
+  });
 });

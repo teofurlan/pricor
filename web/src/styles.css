@@ -924,3 +924,13 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
   .table--columns .cell--role { padding-right: 12px; }
   .table--columns td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 2px; color: var(--muted); font-size: 0.6875rem; letter-spacing: 0.035em; text-transform: uppercase; }
 }
+.supplier-combo { display: grid; gap: 4px; width: 100%; min-width: 0; }
+.supplier-combo__control { position: relative; width: 100%; }
+.supplier-combo__list { position: absolute; left: 0; right: 0; top: calc(100% + 2px); z-index: 30; list-style: none; margin: 0; padding: 0; background: var(--paper); border: 1px solid var(--ink); box-shadow: 0 4px 12px rgba(28, 28, 26, 0.12); max-height: 220px; overflow-y: auto; }
+.supplier-combo__option { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 8px 10px; border-bottom: 1px solid var(--rule); cursor: pointer; font-size: 0.875rem; color: var(--ink); }
+.supplier-combo__option:last-child { border-bottom: 0; }
+.supplier-combo__option--active { background: var(--surface-subtle); }
+.supplier-combo__name { min-width: 0; overflow-wrap: anywhere; font-weight: 500; }
+.supplier-combo__option--active .supplier-combo__name { font-weight: 650; }
+.supplier-combo__tag { flex-shrink: 0; font: 500 0.6875rem/1 var(--figures); letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.supplier-combo__match { font-size: 0.75rem; font-weight: 560; color: var(--ink-sage); }

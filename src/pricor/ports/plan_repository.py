@@ -47,3 +47,7 @@ class PlanRepository(Protocol):
     def versions_for(self, supplier: str) -> tuple[StoredPlan, ...]:
         """Every version, oldest first."""
         ...
+
+    def list_suppliers(self) -> tuple[str, ...]:
+        """Distinct supplier names with at least one approved plan, sorted alphabetically."""
+        ...

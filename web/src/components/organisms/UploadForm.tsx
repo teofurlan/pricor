@@ -8,6 +8,7 @@ import { FileMark } from "../atoms/FileMark";
 import { TapeFigure } from "../atoms/TapeFigure";
 import { TapeLoader } from "../atoms/TapeLoader";
 import { SamplePicker } from "../molecules/SamplePicker";
+import { SupplierCombobox } from "../molecules/SupplierCombobox";
 
 /** One file of a queue, as the user left it before starting. */
 export interface QueueDraft {
@@ -41,6 +42,7 @@ interface Props {
   /** Sample lists to try; the picker shows only when both are given and the list is not empty. */
   onListSamples?(): Promise<SampleListing[]>;
   onLoadSample?(sample: SampleListing): Promise<File>;
+  savedSuppliers?: string[];
 }
 
 function formatFileSize(bytes: number): string {
@@ -56,7 +58,7 @@ function splitName(name: string): { stem: string; extension: string } {
 
 const sameFile = (a: File, b: File) => a.name === b.name && a.size === b.size && a.lastModified === b.lastModified;
 
-export function UploadForm({ busy, onSubmit, onSubmitMany, onInspectSheets, onListSamples, onLoadSample }: Props) {
+export function UploadForm({ busy, onSubmit, onSubmitMany, onInspectSheets, onListSamples, onLoadSample, savedSuppliers = [] }: Props) {
   const { t, language: interfaceLanguage } = useI18n();
   const many = onSubmitMany !== undefined;
   const [chosen, setChosen] = useState<Chosen[]>([]);
@@ -252,11 +254,12 @@ export function UploadForm({ busy, onSubmit, onSubmitMany, onInspectSheets, onLi
           {chosen.map((item) => (
             <div key={item.id} className="file-list__row">
               <span className="file-list__file">{item.file.name}</span>
-              <input
-                aria-label={t("queue.supplier", { file: item.file.name })}
+              <SupplierCombobox
+                ariaLabel={t("queue.supplier", { file: item.file.name })}
                 value={item.supplierName}
-                autoComplete="off"
-                onChange={(event) => patch(item.id, { supplierName: event.target.value })}
+                suppliers={savedSuppliers}
+                disabled={busy}
+                onChange={(supplierName) => patch(item.id, { supplierName })}
               />
               <span className="file-list__sheet">
                 {item.reading ? (

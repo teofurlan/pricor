@@ -356,6 +356,19 @@ class SqlitePlanRepository:
     def versions_for(self, supplier: str) -> tuple[StoredPlan, ...]:
         return tuple(self._load(supplier, newest_only=False))
 
+    def list_suppliers(self) -> tuple[str, ...]:
+        with self._db.transaction() as connection:
+            rows = connection.execute(
+                "select p.supplier_name "
+                "from plans p "
+                "inner join ("
+                "  select supplier_key, max(version) as max_version "
+                "  from plans group by supplier_key"
+                ") latest on p.supplier_key = latest.supplier_key and p.version = latest.max_version "
+                "order by p.supplier_key asc"
+            ).fetchall()
+        return tuple(row[0] for row in rows)
+
     def _load(self, supplier: str, *, newest_only: bool) -> list[StoredPlan]:
         order = "desc limit 1" if newest_only else "asc"
         with self._db.transaction() as connection:

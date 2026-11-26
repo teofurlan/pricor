@@ -386,6 +386,7 @@ def database_dependencies(
         model_provider=shared.provider,
         demo=shared.demo,
         warm_up=warm_up,
+        plans=database.plans,
     )
 
 

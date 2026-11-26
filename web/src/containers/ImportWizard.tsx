@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ApiClient, ApiError, CombinedExportApiClient, EventsApiClient, ExportFile, ExportSheet, MemoryApiClient, OutputFormatApiClient, SampleApiClient, WorkspaceApiClient } from "../api/client";
+import type { ApiClient, ApiError, CombinedExportApiClient, EventsApiClient, ExportFile, ExportSheet, MemoryApiClient, OutputFormatApiClient, SampleApiClient, SuppliersApiClient, WorkspaceApiClient } from "../api/client";
 import { useServerConfig } from "../api/serverConfig";
 import type { ColumnRole, CreateImportInput, FunnelEvent, GoogleResolution, Memory, OutputFormat, Question, SessionState, WorkspaceAccount } from "../api/types";
 import { Button } from "../components/atoms/Button";
@@ -171,9 +171,11 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [formatOpen, setFormatOpen] = useState(false);
   const [savedFormat, setSavedFormat] = useState<OutputFormat | null>(null);
+  const [savedSuppliers, setSavedSuppliers] = useState<string[]>([]);
   const [approveTab, setApproveTab] = useState<"files" | "report">("files");
   const memoryApi = "listMemories" in api ? (api as ApiClient & MemoryApiClient) : null;
   const sampleApi = typeof (api as Partial<SampleApiClient>).listSamples === "function" ? (api as ApiClient & SampleApiClient) : null;
+  const suppliersApi = typeof (api as Partial<SuppliersApiClient>).listSuppliers === "function" ? (api as ApiClient & SuppliersApiClient) : null;
   const formatApi = "getOutputFormat" in api ? (api as ApiClient & OutputFormatApiClient) : null;
 
   useEffect(() => {
@@ -199,6 +201,15 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   const [rateChanged, setRateChanged] = useState(false);
   useEffect(() => setRateChanged(false), [step]);
   const approvedId = session?.approved ? session.id : null;
+
+  useEffect(() => {
+    if (!suppliersApi || !dataReady) return;
+    let active = true;
+    suppliersApi.listSuppliers()
+      .then((names) => { if (active) setSavedSuppliers(names); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [suppliersApi, dataReady, workspaceLink, approvedId]);
 
   // The file preview reads the exported file itself, so it can only exist once the user signed.
   useEffect(() => {
@@ -766,6 +777,7 @@ export function ImportWizard({ api }: { api: ApiClient }) {
                 onSubmit={upload}
                 {...(combinedApi && { onSubmitMany: startQueue })}
                 onInspectSheets={(file) => api.listSheets(file)}
+                savedSuppliers={savedSuppliers}
                 {...(sampleApi && {
                   onListSamples: () => sampleApi.listSamples(),
                   onLoadSample: (sample) => sampleApi.downloadSample(sample),

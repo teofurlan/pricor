@@ -925,3 +925,44 @@ def test_wiring_enables_google_auth_when_client_id_env_is_set(tmp_path):
     res = client.post("/workspace/google", json={"credential": "not-a-real-jwt"})
     assert res.status_code == 401
     assert res.json()["error"]["code"] == "invalid_google_token"
+
+
+def test_get_suppliers_is_scoped_to_each_workspace(tmp_path):
+    from pricor.application.reuse_supplier_plan import ReuseSupplierPlan
+    from .test_api import ROWS, answer
+
+    clean = [row for row in ROWS if row[0] not in ("LISTA OCTUBRE", "TOTAL", "", "A6")]
+
+    def reuse_opener(path: Path) -> OpenWorkspace:
+        database = SqliteDatabase(path)
+        use_case = ReuseSupplierPlan(
+            FileSpreadsheetReader(),
+            database.sessions,
+            [ClassifierStage("heuristics", FakeClassifier(ROLES))],
+            plans=database.plans,
+            approvals=database,
+        )
+        return OpenWorkspace(
+            create_app(ApiDependencies(use_case, plans=database.plans)), database.close
+        )
+
+    registry = WorkspaceRegistry(tmp_path / "workspaces", reuse_opener, RecordingBackup())
+    app = create_workspace_app(public_dependencies(), registry)
+
+    anonymous = client_for(app)
+    unauth = anonymous.get("/suppliers")
+    assert unauth.status_code == 401
+    assert unauth.json()["error"]["code"] == "workspace_required"
+
+    alice, bob = client_for(app), client_for(app)
+    new_workspace(alice)
+    new_workspace(bob)
+
+    state = upload(alice, rows=clean, supplier="Ferretería Norte").json()
+    for question in state["questions"]:
+        option = {"price_includes_vat": "yes", "currency": "ARS"}[question["id"]]
+        assert answer(alice, state["id"], question["id"], option).status_code == 200
+    assert alice.post(f"/imports/{state['id']}/approve").status_code == 200
+
+    assert alice.get("/suppliers").json() == {"suppliers": ["Ferretería Norte"]}
+    assert bob.get("/suppliers").json() == {"suppliers": []}

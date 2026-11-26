@@ -68,6 +68,26 @@ describe("private workspace panel", () => {
     expect(order[0]).toBe("workspace");
   });
 
+  it("does not load saved suppliers before the workspace cookie exists and passes them to UploadForm after settling", async () => {
+    let release: (value: { link: string }) => void = () => { };
+    const order: string[] = [];
+    const client = api({ model_provider: "gemini", demo: true, workspaces: true }, {
+      workspace: vi.fn(() => new Promise((resolve) => { release = resolve; order.push("workspace"); })),
+      listSuppliers: vi.fn(() => { order.push("suppliers"); return Promise.resolve(["Ferretería Norte"]); }),
+    });
+    mount(client);
+
+    await waitFor(() => expect(order).toEqual(["workspace"]));
+    await act(async () => release({ link: LINK }));
+    await waitFor(() => expect(order).toEqual(["workspace", "suppliers"]));
+
+    const file = new File(["x"], "a.csv", { type: "text/csv" });
+    await userEvent.upload(document.querySelector("input[type=file]") as HTMLInputElement, file);
+    const input = await screen.findByLabelText("Supplier for a.csv");
+    await userEvent.click(input);
+    expect(await screen.findByRole("option", { name: /Ferretería Norte/ })).toBeInTheDocument();
+  });
+
   it("tells the user to reload on workspace_required", async () => {
     const client = api({ model_provider: "gemini", demo: true, workspaces: false }, {
       listSheets: vi.fn().mockRejectedValue(new ApiError(401, "workspace_required", "open a workspace")),

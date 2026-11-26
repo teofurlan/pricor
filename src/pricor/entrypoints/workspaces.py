@@ -2,7 +2,7 @@
 
 A visitor gets a random token, kept in an HttpOnly cookie and shown as a personal link
 (`/#w=<token>`, the token in the URL fragment so it never reaches a server log) to come back from another device. Requests to the data paths (imports,
-memories, output format, sheets) go to that visitor's own app over its own database; the
+memories, output format, sheets, suppliers) go to that visitor's own app over its own database; the
 configuration, the sample lists and the web shell are public. The models are built once and
 shared by every workspace (see `wiring.workspace_app_from_env`).
 
@@ -41,7 +41,7 @@ COOKIE_NAME = "pricor_workspace"
 COOKIE_MAX_AGE = 365 * 24 * 60 * 60
 DEFAULT_MAX_OPEN = 16
 # First path segments that hold a visitor's data; everything else is public.
-WORKSPACE_PREFIXES = frozenset({"imports", "memories", "output-format", "sheets"})
+WORKSPACE_PREFIXES = frozenset({"imports", "memories", "output-format", "sheets", "suppliers"})
 _TOKEN = re.compile(r"^[A-Za-z0-9_-]{43}$")
 _READS = frozenset({"GET", "HEAD", "OPTIONS"})
 

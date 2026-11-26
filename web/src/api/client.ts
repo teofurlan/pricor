@@ -76,6 +76,11 @@ export interface SampleApiClient {
   downloadSample(sample: SampleListing): Promise<File>;
 }
 
+/** Distinct suppliers with at least one approved plan in the active workspace (`/suppliers`). */
+export interface SuppliersApiClient {
+  listSuppliers(): Promise<string[]>;
+}
+
 /** The visitor's private workspace: its personal link, which also sets the workspace cookie. */
 export interface WorkspaceApiClient {
   workspace(): Promise<WorkspaceInfo>;
@@ -140,7 +145,7 @@ async function fail(response: Response): Promise<never> {
   throw new ApiError(response.status, "unexpected_response", `The server answered ${response.status}.`);
 }
 
-export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), baseUrl = ""): ApiClient & MemoryApiClient & OutputFormatApiClient & SampleApiClient & WorkspaceApiClient & CombinedExportApiClient & EventsApiClient & WarmUpApiClient {
+export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), baseUrl = ""): ApiClient & MemoryApiClient & OutputFormatApiClient & SampleApiClient & SuppliersApiClient & WorkspaceApiClient & CombinedExportApiClient & EventsApiClient & WarmUpApiClient {
   async function call<T>(path: string, init?: RequestInit): Promise<T> {
     let response: Response;
     try {
@@ -268,6 +273,10 @@ export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), 
       }
     },
     listSamples: () => call<SampleListing[]>("/samples"),
+    listSuppliers: async () => {
+      const data = await call<{ suppliers: string[] }>("/suppliers");
+      return data.suppliers;
+    },
     async downloadSample(sample) {
       let response: Response;
       try {
