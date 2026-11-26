@@ -40,6 +40,7 @@ def step_index(data: dict, op: str) -> int:
 def test_operation_catalog_is_closed():
     assert {op.value for op in Operation} == {
         "parse_number",
+        "parse_unit_price",
         "apply_discounts",
         "strip_vat",
         "per_unit",

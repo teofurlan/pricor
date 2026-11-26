@@ -135,9 +135,32 @@ def test_only_the_most_complete_cost_price_candidate_is_suggested_and_not_pre_se
 
     assert decisions[0].role is ColumnRole.CODE
     assert decisions[1].role is ColumnRole.DESCRIPTION
-    # PRECIO (0 empty rows) keeps cost_price suggestion; PR. UNIT (2 empty rows) loses it; neither is pre-settled.
+    # PRECIO (0 empty rows) keeps cost_price suggestion; PR. UNIT (2 empty rows) is suggested as unit_price; neither is pre-settled.
     assert decisions[2].role is None and len(_proposals_for(decisions[2], ColumnRole.COST_PRICE)) == 1
     assert decisions[3].role is None and _proposals_for(decisions[3], ColumnRole.COST_PRICE) == []
+    assert len(_proposals_for(decisions[3], ColumnRole.UNIT_PRICE)) == 1
+
+
+def test_competing_non_unit_cost_price_columns_drop_duplicate_without_unit_price():
+    rows = [
+        ["COD", "DESC", "PRECIO_A", "PRECIO_B"],
+        ["001", "Detergente", "1286.26", "1200.00"],
+        ["002", "Cera", "2635.08", ""],
+    ]
+    two_costs = {
+        "COD": (ColumnRole.CODE, 0.99),
+        "DESC": (ColumnRole.DESCRIPTION, 0.99),
+        "PRECIO_A": (ColumnRole.COST_PRICE, 0.99),
+        "PRECIO_B": (ColumnRole.COST_PRICE, 0.99),
+    }
+
+    decisions, _, _ = run_cascade(
+        [ClassifierStage("laya", FakeClassifier(two_costs), 0.5)],
+        profile_sheet(rows),
+    )
+
+    assert decisions[2].role is None and len(_proposals_for(decisions[2], ColumnRole.COST_PRICE)) == 1
+    assert decisions[3].role is None and decisions[3].proposals == ()
 
 
 def test_competing_description_candidates_keep_only_most_complete_and_require_confirmation():

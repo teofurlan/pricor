@@ -64,3 +64,4 @@ class ContractRecord:
     fx_rate: Decimal | None = None
     fx_source: str | None = None
     fx_date: str | None = None  # ISO date of the quote
+    unit_price: Decimal | None = None

@@ -85,6 +85,7 @@ _COST_MODIFIERS = frozenset(
 _RETAIL_MODIFIERS = frozenset(
     {"venta", "sugerido", "sugerida", "publico", "pvp", "minorista", "pv", "recomendado", "final"}
 )
+_UNIT_PRICE_MODIFIERS = frozenset({"unitario", "unitaria", "unit", "unid", "unidad"})
 _PLAIN_PRICE = {R.COST_PRICE: 0.5, R.RETAIL_PRICE: 0.3}
 
 
@@ -131,11 +132,15 @@ def _header_evidence(header: str) -> dict[ColumnRole, tuple[float, str]]:
     token_set = set(tokens)
     retail = token_set & _RETAIL_MODIFIERS
     cost = token_set & _COST_MODIFIERS
+    unit = token_set & _UNIT_PRICE_MODIFIERS
     price = token_set & _PRICE_WORDS
     if retail:
         found[R.RETAIL_PRICE] = (0.95 if price else 0.9, sorted(retail)[0])
     elif cost:
         found[R.COST_PRICE] = (0.95 if price else 0.9, sorted(cost)[0])
+    elif price and unit:
+        found[R.UNIT_PRICE] = (0.95, sorted(unit)[0])
+        found[R.COST_PRICE] = (_PLAIN_PRICE[R.COST_PRICE], sorted(price)[0])
     elif price:
         word = sorted(price)[0]
         found[R.COST_PRICE] = (_PLAIN_PRICE[R.COST_PRICE], word)
@@ -195,7 +200,7 @@ def _fit(role: ColumnRole, s: _Shape) -> float:
     t = s.type
     if t is ColumnType.EMPTY:
         return 0.0
-    if role in (R.COST_PRICE, R.RETAIL_PRICE):
+    if role in (R.COST_PRICE, R.UNIT_PRICE, R.RETAIL_PRICE):
         return {
             ColumnType.MONEY: 1.0, ColumnType.DECIMAL: 1.0, ColumnType.INTEGER: 0.8,
             ColumnType.TEXT: 0.1, ColumnType.CODE: 0.1, ColumnType.BARCODE: 0.2,

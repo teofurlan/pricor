@@ -241,7 +241,7 @@ def generate_columns(
         if not pool:
             raise ValueError(f"every {role.value} header is banned; the generator has nothing to say")
         pools[role] = pool
-    roles = list(ColumnRole)
+    roles = list(VOCABULARY)
     columns = []
     for i in range(count):
         role = roles[i % len(roles)]

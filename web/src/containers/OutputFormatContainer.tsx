@@ -11,7 +11,7 @@ import { describeError } from "../i18n/serverText";
  */
 export const OUTPUT_FIELDS = [
   "supplier_code", "description", "unit_cost_net", "currency", "vat_rate", "units_per_pack", "barcode",
-  "suggested_retail_price", "unit_cost_net_converted", "fx_rate", "fx_source", "fx_date", "source_row",
+  "suggested_retail_price", "unit_price", "unit_cost_net_converted", "fx_rate", "fx_source", "fx_date", "source_row",
 ];
 
 interface Props {

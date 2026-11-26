@@ -76,5 +76,5 @@ def test_the_same_column_always_gives_the_same_text():
 def test_the_question_offers_exactly_the_ten_closed_roles():
     criteria = QUESTIONS[QUESTION_ID]["criteria"]
 
-    assert set(criteria) == {role.value for role in ColumnRole}
+    assert set(criteria) == {role.value for role in ColumnRole if role is not ColumnRole.UNIT_PRICE}
     assert QUESTIONS[QUESTION_ID]["type"] == "choice"

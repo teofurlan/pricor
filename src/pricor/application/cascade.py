@@ -12,7 +12,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
 from pricor.domain.profile import ColumnProfile, SheetProfile
-from pricor.domain.roles import ColumnRole
+from pricor.domain.roles import ColumnRole, is_unit_price_header
 from pricor.ports.column_classifier import ColumnClassifier
 from pricor.ports.import_session import ColumnDecision, Notice, StageProposal
 from pricor.ports.model_errors import (
@@ -189,9 +189,17 @@ def _one_unique_role_suggestion(
         outcome = outcomes.get(index)
         if outcome is None:
             continue
-        proposals = tuple(
-            item for item in outcome.proposals if index == winner or item.role is not target_role
-        )
+        if index == winner:
+            proposals = outcome.proposals
+        elif target_role is ColumnRole.COST_PRICE and is_unit_price_header(columns[index].raw_header):
+            proposals = tuple(
+                StageProposal(item.stage, ColumnRole.UNIT_PRICE, item.score, item.rationale)
+                if item.role is ColumnRole.COST_PRICE
+                else item
+                for item in outcome.proposals
+            )
+        else:
+            proposals = tuple(item for item in outcome.proposals if item.role is not target_role)
         settled = outcome.settled
         if settled is not None and settled.role is target_role:
             settled = None

@@ -34,6 +34,7 @@ from .plan import (
     MapValues,
     NormalizeText,
     ParseNumber,
+    ParseUnitPrice,
     PerUnit,
     StripVat,
     column_header,
@@ -107,7 +108,7 @@ def _normalize_header(header: str) -> str:
 def _referenced_columns(plan: ImportPlan) -> list[ColumnRef]:
     refs: list[ColumnRef] = []
     for step in plan.steps:
-        if isinstance(step, NormalizeText | ParseNumber | MapValues):
+        if isinstance(step, NormalizeText | ParseNumber | ParseUnitPrice | MapValues):
             refs.append(step.column)
         elif isinstance(step, ApplyDiscounts) and isinstance(step.source, ColumnDiscounts):
             refs.append(step.source.column)
@@ -190,6 +191,7 @@ class _RowRun:
         self.trace: list[TraceStep] = []
         self.cost: Decimal | None = None
         self.cost_broken = False
+        self.unit_price: Decimal | None = None
 
     # -- helpers --
 
@@ -223,6 +225,8 @@ class _RowRun:
             self._normalize_text(step)
         elif isinstance(step, ParseNumber):
             self._parse_number(step)
+        elif isinstance(step, ParseUnitPrice):
+            self._parse_unit_price(step)
         elif isinstance(step, ApplyDiscounts):
             self._apply_discounts(step)
         elif isinstance(step, StripVat):
@@ -256,6 +260,20 @@ class _RowRun:
             self._break_cost()
             return
         self.trace.append(TraceStep("parse_number", self.cost))
+
+    def _parse_unit_price(self, step: ParseUnitPrice) -> None:
+        raw = _cell(self.row, step.column.index)
+        if not raw.strip():
+            return
+        try:
+            native = _native_number(self.row, step.column.index)
+            self.unit_price = (
+                native
+                if native is not None
+                else parse_number(raw, step.decimal_sep, step.thousands_sep)
+            )
+        except CellError as error:
+            self._reject(step.column, str(error))
 
     def _apply_discounts(self, step: ApplyDiscounts) -> None:
         source = step.source
@@ -390,6 +408,7 @@ class _RowRun:
             fx_rate=None if self.converted is None else self.fx.rate,
             fx_source=None if self.converted is None else self.fx.label,
             fx_date=None if self.converted is None else self.fx.date,
+            unit_price=self.unit_price,
         )
 
 

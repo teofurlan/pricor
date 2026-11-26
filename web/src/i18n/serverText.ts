@@ -14,6 +14,8 @@ const ROLE_LABELS: Record<string, string> = {
   "description": "la descripción",
   "the cost price": "el precio de costo",
   "cost_price": "el precio de costo",
+  "the unit price": "el precio unitario",
+  "unit_price": "el precio unitario",
   "the barcode": "el código de barras",
   "barcode": "el código de barras",
   "the retail price": "el precio de venta sugerido",

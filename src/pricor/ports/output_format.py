@@ -15,11 +15,12 @@ from pricor.ports.exporter import (
     CONTRACT_COLUMNS,
     CONVERTED_COLUMNS,
     TRACEABILITY_COLUMNS,
+    UNIT_PRICE_COLUMNS,
     Exporter,
     ImportExport,
 )
 
-OUTPUT_FIELDS = CONTRACT_COLUMNS + CONVERTED_COLUMNS + TRACEABILITY_COLUMNS
+OUTPUT_FIELDS = CONTRACT_COLUMNS + UNIT_PRICE_COLUMNS + CONVERTED_COLUMNS + TRACEABILITY_COLUMNS
 
 OUTPUT_KINDS = ("text", "description", "code", "number", "price")
 _KIND_BY_FIELD = {
@@ -27,6 +28,7 @@ _KIND_BY_FIELD = {
     "supplier_code": "code",
     "barcode": "code",
     "unit_cost_net": "price",
+    "unit_price": "price",
     "suggested_retail_price": "price",
     "unit_cost_net_converted": "price",
     "vat_rate": "number",

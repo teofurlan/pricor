@@ -123,11 +123,11 @@ def test_all_closed_fields_use_existing_text_and_number_rules(tmp_path, exporter
     path.write_text(",".join(OUTPUT_FIELDS) + "\n", encoding="utf-8")
     manager.upload(path)
     fmt = manager.confirm([f"field:{name}" for name in OUTPUT_FIELDS])
-    record = ContractRecord("001", "=formula", Decimal("1.20"), "USD", Decimal("21"), Decimal("12"), "0007", Decimal("2.30"), Decimal("1200.00"), Decimal("1000.00"), "manual", "2026-10-19")
+    record = ContractRecord("001", "=formula", Decimal("1.20"), "USD", Decimal("21"), Decimal("12"), "0007", Decimal("2.30"), Decimal("1200.00"), Decimal("1000.00"), "manual", "2026-10-19", Decimal("0.10"))
     data = sample(accepted=[ImportedRecord(7, record)])
     content = exporter.export_formatted(data, fmt)
     if exporter.format == "csv":
-        assert csv_rows(content) == [list(OUTPUT_FIELDS), ["001", "'=formula", "1.20", "USD", "21", "12", "0007", "2.30", "1200.00", "1000.00", "manual", "2026-10-19", "7"]]
+        assert csv_rows(content) == [list(OUTPUT_FIELDS), ["001", "'=formula", "1.20", "USD", "21", "12", "0007", "2.30", "0.10", "1200.00", "1000.00", "manual", "2026-10-19", "7"]]
     else:
         mapped = cells(content)
         standard = cells(exporter.export(data))

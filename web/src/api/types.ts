@@ -50,6 +50,7 @@ export type ColumnRole =
   | "code"
   | "description"
   | "cost_price"
+  | "unit_price"
   | "retail_price"
   | "vat_rate"
   | "units_per_pack"
@@ -62,6 +63,7 @@ export const COLUMN_ROLES: readonly ColumnRole[] = [
   "code",
   "description",
   "cost_price",
+  "unit_price",
   "retail_price",
   "vat_rate",
   "units_per_pack",

@@ -171,3 +171,86 @@ def test_borderless_digital_pdf_imports_without_vision_or_notice(tmp_path):
         "068152912",
     ]
     assert str(accepted[0].record["unit_cost_net"]) == "1286.26"
+
+
+def test_borderless_domitec_import_preserves_optional_unit_price_and_reuses_it(tmp_path):
+    from decimal import Decimal
+    from pricor.adapters.csv_exporter import CsvExporter
+    from pricor.adapters.xlsx_exporter import XlsxExporter
+    from pricor.ports.exporter import ImportExport
+    from pricor.ports.price_history import ImportedRecord
+
+    pdf = tmp_path / "domitec.pdf"
+    pdf.write_bytes(
+        borderless_pdf_bytes(
+            [
+                [
+                    (["COD_ALFA", "DETALLE", "PRECIO", "PR. UNIT"], True),
+                    (["055170911", "DET CONC 2X10 LT LIMPIA MOTOR", "1286.26", "64.31"], False),
+                    (["069151999", "SOLO ENVASE SIN FRACCIONAR", "250.80", ""], False),
+                ],
+                [
+                    (["COD_ALFA", "DETALLE", "PRECIO", "PR. UNIT"], True),
+                    (["068152912", "CERA LIQUIDA 3X4.5 LTS NEGRA", "2851.83", "42.24"], False),
+                ],
+            ],
+            right_align_cols=(2, 3),
+        )
+    )
+    reader = FileSpreadsheetReader(pdf_reader=PdfPriceListReader(vision_client=None))
+    db = SqliteDatabase(":memory:")
+    try:
+        use_case = ReuseSupplierPlan(
+            reader,
+            db.sessions,
+            [ClassifierStage("heuristics", HeuristicColumnClassifier(), 0.75)],
+            None,
+            plans=db.plans,
+            approvals=db,
+        )
+        session = use_case.start(pdf, "Domitec")
+        # Heuristics proposes PR. UNIT as unit_price automatically.
+        assert session.columns[3].proposals[0].role is ColumnRole.UNIT_PRICE
+
+        session = use_case.set_roles(
+            session.id,
+            {
+                0: ColumnRole.CODE,
+                1: ColumnRole.DESCRIPTION,
+                2: ColumnRole.COST_PRICE,
+                3: ColumnRole.UNIT_PRICE,
+            },
+        )
+        session = use_case.answer(session.id, "price_includes_vat", "no")
+        session = use_case.answer(session.id, "currency", "ARS")
+        approved = use_case.approve(session.id)
+        records = db.history.records_of(approved.id)
+        assert [r.record.unit_cost_net for r in records] == [
+            Decimal("1286.26"),
+            Decimal("250.80"),
+            Decimal("2851.83"),
+        ]
+        assert [r.record.unit_price for r in records] == [
+            Decimal("64.31"),
+            None,
+            Decimal("42.24"),
+        ]
+
+        export_data = ImportExport(
+            "Domitec",
+            tuple(ImportedRecord(r.row_number, r.record) for r in records),
+            (),
+            ("COD_ALFA", "DETALLE", "PRECIO", "PR. UNIT"),
+        )
+        csv_text = CsvExporter().export(export_data).decode("utf-8-sig")
+        assert "unit_price" in csv_text.splitlines()[0]
+        assert "64.31" in csv_text
+        assert XlsxExporter().export(export_data).startswith(b"PK")
+
+        # Next import reuses the saved unit_price role automatically.
+        reused = use_case.start(pdf, "Domitec")
+        assert reused.mode == "reuse"
+        assert reused.columns[3].role is ColumnRole.UNIT_PRICE
+        assert reused.columns[3].decided_by == "saved_plan"
+    finally:
+        db.close()
