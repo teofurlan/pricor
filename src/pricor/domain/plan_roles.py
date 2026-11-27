@@ -15,6 +15,7 @@ from .plan import (
     MapValues,
     NormalizeText,
     ParseNumber,
+    ParseUnitPrice,
     PerUnit,
     StripVat,
 )
@@ -38,6 +39,8 @@ def _used(step) -> tuple[ColumnRef, ColumnRole] | None:
             return column, _NORMALIZED_ROLES[field]
         case ParseNumber(column=column):
             return column, ColumnRole.COST_PRICE
+        case ParseUnitPrice(column=column):
+            return column, ColumnRole.UNIT_PRICE
         case ApplyDiscounts(source=ColumnDiscounts(column=column)):
             return column, ColumnRole.DISCOUNT
         case StripVat(rate_from=FromColumn(column=column)):

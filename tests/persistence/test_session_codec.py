@@ -87,3 +87,24 @@ def test_a_session_stored_before_reuse_existed_still_loads():
         None,
         (),
     )
+
+
+def test_ignored_rows_and_cell_overrides_round_trip_and_stay_backward_compatible():
+    from dataclasses import replace
+
+    session = replace(
+        Flow().ready(),
+        ignored_rows={4, 6},
+        cell_overrides={(7, 2): "121,00"},
+    )
+    restored = decode(encode(session))
+    assert restored == session
+    assert restored.ignored_rows == {4, 6}
+    assert restored.cell_overrides == {(7, 2): "121,00"}
+
+    legacy_doc = json.loads(encode(Flow().ready()))
+    for name in ("ignored_rows", "cell_overrides"):
+        legacy_doc["f"].pop(name, None)
+    legacy_restored = decode(json.dumps(legacy_doc))
+    assert legacy_restored.ignored_rows == set()
+    assert legacy_restored.cell_overrides == {}

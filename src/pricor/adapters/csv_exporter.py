@@ -19,6 +19,7 @@ from pricor.adapters.export_common import (
     csv_bytes,
     formatted_product_values,
     has_conversion,
+    has_unit_price,
     product_columns,
     product_values,
     rejected_header,
@@ -38,7 +39,8 @@ class CsvExporter:
 
     def export(self, data: ImportExport) -> bytes:
         converted = has_conversion(data)
-        rows = (product_values(item.row_number, item.record, converted) for item in data.accepted)
+        unit_price = has_unit_price(data)
+        rows = (product_values(item.row_number, item.record, converted, unit_price) for item in data.accepted)
         return csv_bytes(product_columns(data), rows, self.delimiter)
 
     def export_formatted(self, data: ImportExport, output_format: OutputFormat) -> bytes:

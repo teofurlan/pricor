@@ -114,4 +114,28 @@ describe("ColumnsTable duplicate roles", () => {
     renderWithI18n(<ColumnsTable columns={[column({ index: 0, header: "PVP" })]} issues={[]} busy={false} onConfirm={vi.fn()} />, "es");
     expect(screen.queryByRole("option", { name: /Precio de venta sugerido/ })).not.toBeInTheDocument();
   });
+
+  it("offers unit_price as an optional role and renders its suggestion in English and Spanish", async () => {
+    const onConfirm = vi.fn();
+    const prUnit = column({
+      index: 0,
+      header: "PR. UNIT",
+      role: null,
+      decided_by: null,
+      proposals: [{ stage: "heuristics", role: "unit_price", score: 0.95, rationale: "unit price" }],
+    });
+    const { unmount } = renderWithI18n(<ColumnsTable columns={[prUnit]} issues={[]} busy={false} onConfirm={onConfirm} />, "es");
+    const esRow = screen.getByRole("row", { name: /PR\. UNIT/ });
+    expect(within(esRow).getByText("Precio unitario", { selector: ".suggestion__label" })).toBeInTheDocument();
+    expect(within(esRow).getByRole("option", { name: /Precio unitario/ })).toBeInTheDocument();
+    await userEvent.click(within(esRow).getByRole("button", { name: /Aceptar/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Confirmar columnas" }));
+    expect(onConfirm).toHaveBeenCalledWith({ 0: "unit_price" });
+    unmount();
+
+    renderWithI18n(<ColumnsTable columns={[prUnit]} issues={[]} busy={false} onConfirm={vi.fn()} />);
+    const enRow = screen.getByRole("row", { name: /PR\. UNIT/ });
+    expect(within(enRow).getByText("Unit price", { selector: ".suggestion__label" })).toBeInTheDocument();
+    expect(within(enRow).getByRole("option", { name: /Unit price/ })).toBeInTheDocument();
+  });
 });

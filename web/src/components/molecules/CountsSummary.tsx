@@ -1,6 +1,7 @@
 import type { PreviewTotals } from "../../api/types";
 import { useI18n, type TextKey } from "../../i18n";
 import { formatInteger } from "../../lib/decimalText";
+import { Button } from "../atoms/Button";
 import { TapeFigure } from "../atoms/TapeFigure";
 
 const SKIPPED: [string, TextKey][] = [
@@ -8,12 +9,24 @@ const SKIPPED: [string, TextKey][] = [
   ["total", "counts.skipped.total"],
   ["section", "counts.skipped.section"],
   ["preamble", "counts.skipped.preamble"],
+  ["ignored_by_user", "counts.skipped.ignoredByUser"],
 ];
 
 /** Accepted + rejected = data rows, with the rows that were left out of the count named. */
-export function CountsSummary({ totals, tape = false }: { totals: PreviewTotals; tape?: boolean }) {
+export function CountsSummary({
+  totals,
+  tape = false,
+  onRestoreIgnored,
+  busy = false,
+}: {
+  totals: PreviewTotals;
+  tape?: boolean;
+  onRestoreIgnored?: () => void;
+  busy?: boolean;
+}) {
   const { t, language } = useI18n();
   const adds = totals.accepted + totals.rejected === totals.data_rows;
+  const ignoredCount = totals.skipped_rows.ignored_by_user ?? 0;
   const skipped = SKIPPED.filter(([kind]) => (totals.skipped_rows[kind] ?? 0) > 0).map(([kind, key]) =>
     t(key, { count: formatInteger(totals.skipped_rows[kind], language) }),
   );
@@ -40,7 +53,16 @@ export function CountsSummary({ totals, tape = false }: { totals: PreviewTotals;
           {t("counts.mismatch", { accepted: formatInteger(totals.accepted, language), rejected: formatInteger(totals.rejected, language), total: formatInteger(totals.data_rows, language) })}
         </p>
       )}
-      {skipped.length > 0 && <p className="counts__skipped">{t("counts.skipped", { list: skipped.join(", ") })}</p>}
+      {skipped.length > 0 && (
+        <div className="counts__skipped-row">
+          <p className="counts__skipped">{t("counts.skipped", { list: skipped.join(", ") })}</p>
+          {ignoredCount > 0 && onRestoreIgnored && (
+            <Button variant="quiet" disabled={busy} onClick={onRestoreIgnored}>
+              {t("counts.restoreIgnored")}
+            </Button>
+          )}
+        </div>
+      )}
     </section>
   );
 }

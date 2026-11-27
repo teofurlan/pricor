@@ -34,6 +34,7 @@ ROLE_DESCRIPTIONS: dict[ColumnRole, str] = {
     ColumnRole.CODE: "the supplier product code or SKU",
     ColumnRole.DESCRIPTION: "the product name or description",
     ColumnRole.COST_PRICE: "the price the store pays the supplier (list/wholesale price)",
+    ColumnRole.UNIT_PRICE: "an optional reference unit price (e.g. PR. UNIT / precio unitario) when another column holds the main cost price",
     ColumnRole.RETAIL_PRICE: "a suggested price to the public",
     ColumnRole.VAT_RATE: "the VAT (IVA) rate of the product",
     ColumnRole.UNITS_PER_PACK: "how many units a pack or box contains (a fixed pack size, never stock or available quantity)",

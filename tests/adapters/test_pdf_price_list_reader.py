@@ -10,7 +10,7 @@ from pricor.ports.spreadsheet import (
     TooManyRowsError,
 )
 
-from .pdf_fixtures import pdf_bytes
+from .pdf_fixtures import borderless_pdf_bytes, pdf_bytes
 
 
 class FakeVisionClient:
@@ -244,3 +244,146 @@ def test_enforces_max_rows_and_wrong_sheet_name_and_corrupt_pdf(tmp_path):
     bad.write_bytes(b"%PDF-1.4 broken")
     with pytest.raises(SpreadsheetError, match="cannot read the PDF"):
         PdfPriceListReader().read_sheet(bad)
+
+
+def test_reads_multipage_borderless_presea_style_pdf_without_vision(tmp_path):
+    pages = [
+        [
+            (["LISTA DE PRECIOS VENTA SUELTOS"], False),
+            (["COD_ALFA", "DETALLE", "PRECIO", "PR. UNIT"], True),
+            (["GRUPO DE PRODUCTOS 01 - AUTOMOVIL"], False),
+            (["055170911", "DET CONC 2X10 LT LIMPIA MOTOR", "1286.26", "64.31"], False),
+            (["069151911", "REVIVIDOR SILICONADO 1X4.5 LT MULTIUSO", "2188.67", "486.37"], False),
+            (["069151999", "SOLO ENVASE SIN FRACCIONAR", "250.80", ""], False),
+            (["Usuario:CBOSCHI Fecha:11/01/2021 Item:2035 Reporte:_LISTA PRECIOS"], False),
+        ],
+        [
+            (["COD_ALFA", "DETALLE", "PRECIO", "PR. UNIT"], True),
+            (["068152912", "CERA LIQUIDA 3X4.5 LTS NEGRA (1+4)", "2851.83", "42.24"], False),
+            (["112151962", "DESENGRASANTE 1X4.5 LT PARA MANOS", "1018.94", "226.43"], False),
+            (["Usuario:CBOSCHI Fecha:11/01/2021 Item:2035 Reporte:_LISTA PRECIOS"], False),
+        ],
+    ]
+    path = tmp_path / "domitec.pdf"
+    path.write_bytes(borderless_pdf_bytes(pages, right_align_cols=(2, 3)))
+    vision = FakeVisionClient(error=AssertionError("vision must not be called"))
+
+    sheet = PdfPriceListReader(vision_client=vision).read_sheet(path)
+
+    assert sheet.extraction == "pdf_table"
+    assert vision.calls == []
+    assert sheet.rows[0] == ("COD_ALFA", "DETALLE", "PRECIO", "PR. UNIT")
+    assert ("055170911", "DET CONC 2X10 LT LIMPIA MOTOR", "1286.26", "64.31") in sheet.rows
+    assert ("069151999", "SOLO ENVASE SIN FRACCIONAR", "250.80", None) in sheet.rows
+    assert ("068152912", "CERA LIQUIDA 3X4.5 LTS NEGRA (1+4)", "2851.83", "42.24") in sheet.rows
+    assert ("112151962", "DESENGRASANTE 1X4.5 LT PARA MANOS", "1018.94", "226.43") in sheet.rows
+    # Repeated header on page 2 and repeated footer on both pages are stripped.
+    assert sum(1 for row in sheet.rows if row[0] == "COD_ALFA") == 1
+    assert all("Usuario:CBOSCHI" not in (cell or "") for row in sheet.rows for cell in row)
+
+
+def test_reads_single_page_completely_unruled_borderless_pdf(tmp_path):
+    pages = [
+        [
+            (["Codigo", "Descripcion", "Precio"], False),
+            (["001", "Tornillo 8x1", "100,50"], False),
+            (["002", "Tuerca M8", "50,00"], False),
+        ]
+    ]
+    path = tmp_path / "unruled.pdf"
+    path.write_bytes(
+        borderless_pdf_bytes(pages, col_x=(40, 120, 420), right_align_cols=(2,))
+    )
+    vision = FakeVisionClient(error=AssertionError("vision must not be called"))
+
+    sheet = PdfPriceListReader(vision_client=vision).read_sheet(path)
+
+    assert sheet.extraction == "pdf_table"
+    assert vision.calls == []
+    assert sheet.rows == (
+        ("Codigo", "Descripcion", "Precio"),
+        ("001", "Tornillo 8x1", "100,50"),
+        ("002", "Tuerca M8", "50,00"),
+    )
+
+
+def test_borderless_pdf_keeps_long_description_separate_from_price_and_enforces_max_rows(tmp_path):
+    pages = [
+        [
+            (["COD", "DETALLE", "PRECIO"], False),
+            (["A1", "DET CONC 3X4.5 LT LIMPIACARROCERIA SILICON PREMIUM EXTRA CONCENTRADO", "2196.39"], False),
+            (["A2", "LIMPIADOR LIQUIDO MULTIUSO CONCENTRADO", "855.00"], False),
+            (["A3", "CLAVO ACERO", "60.50"], False),
+        ]
+    ]
+    path = tmp_path / "wide_desc.pdf"
+    path.write_bytes(
+        borderless_pdf_bytes(pages, col_x=(40, 100, 460), right_align_cols=(2,))
+    )
+
+    sheet = PdfPriceListReader().read_sheet(path)
+    assert sheet.extraction == "pdf_table"
+    assert sheet.rows[1] == (
+        "A1",
+        "DET CONC 3X4.5 LT LIMPIACARROCERIA SILICON PREMIUM EXTRA CONCENTRADO",
+        "2196.39",
+    )
+
+    with pytest.raises(TooManyRowsError):
+        PdfPriceListReader(max_rows=2).read_sheet(path)
+
+
+def test_borderless_pdf_keeps_code_and_description_separate_despite_frequent_section_rows(tmp_path):
+    # Reproduces the Domitec/Presea failure mode: ~10% 2-segment "GRUPO DE PRODUCTOS" rows
+    # span the narrow gutter between COD_ALFA and DETALLE, exceeding the 5% floor.
+    section_line = (["GRUPO DE PRODUCTOS    01 - AUTOMOVIL"], False)
+    product_rows = [
+        ([f"0551709{i:02d}", f"DET CONC 2X10 LT LIMPIA MOTOR {i}", f"{1000 + i}.26", "64.31"], False)
+        for i in range(18)
+    ]
+    pages = [
+        [
+            (["COD_ALFA", "DETALLE", "PRECIO", "PR. UNIT"], True),
+            section_line,
+            *product_rows[:9],
+            section_line,
+            (["Usuario:CBOSCHI Fecha:11/01/2021 Item:2035"], False),
+        ],
+        [
+            (["COD_ALFA", "DETALLE", "PRECIO", "PR. UNIT"], True),
+            section_line,
+            *product_rows[9:],
+            (["Usuario:CBOSCHI Fecha:11/01/2021 Item:2035"], False),
+        ],
+    ]
+    path = tmp_path / "domitec_sections.pdf"
+    path.write_bytes(
+        borderless_pdf_bytes(pages, col_x=(40, 100, 410, 500), right_align_cols=(2, 3))
+    )
+
+    sheet = PdfPriceListReader().read_sheet(path)
+
+    assert sheet.extraction == "pdf_table"
+    assert sheet.rows[0] == ("COD_ALFA", "DETALLE", "PRECIO", "PR. UNIT")
+    assert ("055170900", "DET CONC 2X10 LT LIMPIA MOTOR 0", "1000.26", "64.31") in sheet.rows
+
+
+def test_borderless_two_column_pdf_splits_past_section_gutter(tmp_path):
+    # Even when section rows also have 2 segments (same mode as the table), relative valley
+    # splitting keeps the two columns separated.
+    section = (["GRUPO    RUBRO"], False)
+    rows = [([f"DETALLE PRODUCTO {i}", f"{200 + i}.50"], False) for i in range(18)]
+    path = tmp_path / "two_cols.pdf"
+    path.write_bytes(
+        borderless_pdf_bytes(
+            [[(["DETALLE", "PRECIO"], False), section, *rows, section]],
+            col_x=(40, 320),
+            right_align_cols=(1,),
+        )
+    )
+
+    sheet = PdfPriceListReader().read_sheet(path)
+
+    assert sheet.extraction == "pdf_table"
+    assert sheet.rows[0] == ("DETALLE", "PRECIO")
+    assert ("DETALLE PRODUCTO 0", "200.50") in sheet.rows

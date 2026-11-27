@@ -121,3 +121,106 @@ describe("PreviewTable search and status filters", () => {
     expect(onFilter).toHaveBeenLastCalledWith({ query: "", status: "all" });
   });
 });
+
+describe("PreviewTable contextual error preview and resolution", () => {
+  const rejectedReason = "PRECIO: empty value, expected a number";
+  const rejectedPage = () =>
+    previewPage({
+      items: [
+        previewItem({
+          row_number: 2,
+          status: "rejected",
+          original: ["", "GRUPO DE PRODUCTOS 01", ""],
+          trace: [],
+          record: null,
+          reasons: [rejectedReason],
+        }),
+      ],
+      total_items: 1,
+      totals: {
+        data_rows: 10,
+        accepted: 7,
+        rejected: 3,
+        rejected_rows: [
+          { row_number: 2, reasons: [rejectedReason] },
+          { row_number: 11, reasons: [rejectedReason] },
+          { row_number: 48, reasons: [rejectedReason] },
+        ],
+        reason_counts: { [rejectedReason]: 3 },
+        skipped_rows: { empty: 0, total: 0, section: 0, preamble: 0 },
+      },
+    });
+
+  const sampleContext = {
+    row_number: 2,
+    headers: ["CODIGO", "DESCRIPCION", "PRECIO"],
+    target_columns: [2],
+    rows: [
+      { row_number: 1, row_class: "preamble", cells: ["CODIGO", "DESCRIPCION", "PRECIO"], is_target: false, ignored: false },
+      { row_number: 2, row_class: "data", cells: ["", "GRUPO DE PRODUCTOS 01", ""], is_target: true, ignored: false },
+      { row_number: 3, row_class: "data", cells: ["A-1", "Tornillo", "1210.00"], is_target: false, ignored: false },
+    ],
+  };
+
+  it("loads the ±2-row file context and triggers batch ignore or cell edit", async () => {
+    const onLoadRowContext = vi.fn().mockResolvedValue(sampleContext);
+    const onResolveRows = vi.fn().mockResolvedValue({
+      affected: 3,
+      ignored_count: 3,
+      override_count: 0,
+      totals: rejectedPage().totals,
+    });
+
+    renderWithI18n(
+      <PreviewTable
+        page={rejectedPage()}
+        busy={false}
+        onPage={vi.fn()}
+        onLoadRowContext={onLoadRowContext}
+        onResolveRows={onResolveRows}
+      />,
+      "es",
+    );
+
+    expect(onLoadRowContext).toHaveBeenCalledWith(2);
+    const ctxRegion = await screen.findByRole("region", { name: "Vista del archivo (±2 filas)" });
+    expect(within(ctxRegion).getByText("GRUPO DE PRODUCTOS 01")).toBeInTheDocument();
+    expect(within(ctxRegion).getByText("Tornillo")).toBeInTheDocument();
+    expect(screen.getByText("Este error aparece en 3 filas.")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Ignorar las 3 filas con este error" }));
+    expect(onResolveRows).toHaveBeenCalledWith({
+      action: "ignore_by_reason",
+      reason: rejectedReason,
+    });
+
+    const input = screen.getByLabelText("Corregir «PRECIO»");
+    await userEvent.type(input, "500,00");
+    await userEvent.click(screen.getByRole("button", { name: "Aplicar en esta fila" }));
+    expect(onResolveRows).toHaveBeenCalledWith({
+      action: "edit_cell",
+      row_number: 2,
+      column_index: 2,
+      value: "500,00",
+    });
+  });
+
+  it("hides resolution actions when readOnly is true", async () => {
+    const onLoadRowContext = vi.fn().mockResolvedValue(sampleContext);
+    renderWithI18n(
+      <PreviewTable
+        page={rejectedPage()}
+        busy={false}
+        onPage={vi.fn()}
+        readOnly
+        onLoadRowContext={onLoadRowContext}
+        onResolveRows={vi.fn()}
+      />,
+      "es",
+    );
+
+    await screen.findByRole("region", { name: "Vista del archivo (±2 filas)" });
+    expect(screen.queryByRole("button", { name: /Ignorar/ })).toBeNull();
+    expect(screen.queryByLabelText(/Corregir/)).toBeNull();
+  });
+});

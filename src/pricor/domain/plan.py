@@ -27,6 +27,7 @@ MAX_ROUNDING_DECIMALS = 8
 
 class Operation(StrEnum):
     PARSE_NUMBER = "parse_number"
+    PARSE_UNIT_PRICE = "parse_unit_price"
     APPLY_DISCOUNTS = "apply_discounts"
     STRIP_VAT = "strip_vat"
     PER_UNIT = "per_unit"
@@ -117,6 +118,14 @@ class ParseNumber:
 
 
 @dataclass(frozen=True)
+class ParseUnitPrice:
+    column: ColumnRef
+    decimal_sep: str
+    thousands_sep: str
+    op = Operation.PARSE_UNIT_PRICE
+
+
+@dataclass(frozen=True)
 class ApplyDiscounts:
     source: ColumnDiscounts | ConstantDiscounts
     op = Operation.APPLY_DISCOUNTS
@@ -163,6 +172,7 @@ class Constant:
 Step = (
     NormalizeText
     | ParseNumber
+    | ParseUnitPrice
     | ApplyDiscounts
     | StripVat
     | PerUnit
@@ -323,7 +333,9 @@ def _parse_normalize_text(step: dict, path: str, problems: _Problems) -> Step | 
     return NormalizeText(column, to) if column and to else None
 
 
-def _parse_parse_number(step: dict, path: str, problems: _Problems) -> Step | None:
+def _parse_number_step(
+    step: dict, path: str, problems: _Problems, cls: type[ParseNumber] | type[ParseUnitPrice]
+) -> ParseNumber | ParseUnitPrice | None:
     if not _check_keys(
         step, {"column", "decimal_sep", "thousands_sep"}, {"op"}, path, problems, "parameter"
     ):
@@ -340,7 +352,15 @@ def _parse_parse_number(step: dict, path: str, problems: _Problems) -> Step | No
     if valid and decimal_sep == thousands_sep:
         problems.add(path, "decimal_sep and thousands_sep must differ")
         valid = False
-    return ParseNumber(column, decimal_sep, thousands_sep) if valid else None
+    return cls(column, decimal_sep, thousands_sep) if valid else None
+
+
+def _parse_parse_number(step: dict, path: str, problems: _Problems) -> Step | None:
+    return _parse_number_step(step, path, problems, ParseNumber)
+
+
+def _parse_parse_unit_price(step: dict, path: str, problems: _Problems) -> Step | None:
+    return _parse_number_step(step, path, problems, ParseUnitPrice)
 
 
 def _parse_apply_discounts(step: dict, path: str, problems: _Problems) -> Step | None:
@@ -487,6 +507,7 @@ def _parse_constant(step: dict, path: str, problems: _Problems) -> Step | None:
 _STEP_PARSERS = {
     Operation.NORMALIZE_TEXT: _parse_normalize_text,
     Operation.PARSE_NUMBER: _parse_parse_number,
+    Operation.PARSE_UNIT_PRICE: _parse_parse_unit_price,
     Operation.APPLY_DISCOUNTS: _parse_apply_discounts,
     Operation.STRIP_VAT: _parse_strip_vat,
     Operation.PER_UNIT: _parse_per_unit,
@@ -524,6 +545,8 @@ def _check_plan_consistency(steps: tuple[Step, ...], problems: _Problems) -> Non
         problems.add("steps", f"cost pipeline steps are out of order; required order: {names}")
     if Operation.PARSE_NUMBER not in {s.op for s in steps}:
         problems.add("steps", "plan must include a parse_number step to produce unit_cost_net")
+    if sum(1 for s in steps if s.op is Operation.PARSE_UNIT_PRICE) > 1:
+        problems.add("steps", "parse_unit_price appears more than once")
 
     produced: set[TargetField] = set()
     for i, step in enumerate(steps):
@@ -650,7 +673,7 @@ def _step_dict(step: Step) -> dict[str, Any]:
     match step:
         case NormalizeText():
             data |= {"column": _column_dict(step.column), "to": step.to.value}
-        case ParseNumber():
+        case ParseNumber() | ParseUnitPrice():
             data |= {
                 "column": _column_dict(step.column),
                 "decimal_sep": step.decimal_sep,

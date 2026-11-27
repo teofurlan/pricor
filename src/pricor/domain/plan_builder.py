@@ -163,6 +163,13 @@ def build_plan(assignments: Sequence[RoleAssignment], parameters: PlanParameters
         by_role[ColumnRole.DESCRIPTION], "description_column", "the description", missing
     )
     cost = _single(by_role[ColumnRole.COST_PRICE], "cost_price_column", "the cost price", missing)
+    unit_prices = by_role[ColumnRole.UNIT_PRICE]
+    if len(unit_prices) > 1:
+        missing.append(
+            UnresolvedParameter(
+                "unit_price_column", f"{len(unit_prices)} columns were identified as the unit price"
+            )
+        )
     barcodes = by_role[ColumnRole.BARCODE]
     if len(barcodes) > 1:
         missing.append(
@@ -190,6 +197,20 @@ def build_plan(assignments: Sequence[RoleAssignment], parameters: PlanParameters
                 "column": _ref(cost),
                 "decimal_sep": separators[0],
                 "thousands_sep": separators[1],
+            }
+        )
+    if len(unit_prices) == 1 and separators:
+        unit_fmt = unit_prices[0].number_format
+        if unit_fmt is not None and not unit_fmt.ambiguous and unit_fmt.decimal_sep is not None:
+            u_dec, u_thou = unit_fmt.decimal_sep, unit_fmt.thousands_sep or ""
+        else:
+            u_dec, u_thou = separators
+        steps.append(
+            {
+                "op": "parse_unit_price",
+                "column": _ref(unit_prices[0]),
+                "decimal_sep": u_dec,
+                "thousands_sep": u_thou,
             }
         )
 

@@ -5,7 +5,6 @@ import { useI18n } from "../../i18n";
 import { describeError } from "../../i18n/serverText";
 import { Button } from "../atoms/Button";
 import { FileMark } from "../atoms/FileMark";
-import { TapeFigure } from "../atoms/TapeFigure";
 import { TapeLoader } from "../atoms/TapeLoader";
 import { SamplePicker } from "../molecules/SamplePicker";
 import { SupplierCombobox } from "../molecules/SupplierCombobox";
@@ -148,7 +147,7 @@ export function UploadForm({ busy, onSubmit, onSubmitMany, onInspectSheets, onLi
   };
 
   return (
-    <div className={`upload${chosen.length === 0 ? " workbench workbench--upload" : ""}`}>
+    <div className="upload">
     <form className="form" onSubmit={submit}>
       <div className="feed-slot">
         <span aria-hidden="true">↓</span>
@@ -304,51 +303,6 @@ export function UploadForm({ busy, onSubmit, onSubmitMany, onInspectSheets, onLi
         {busy ? <TapeLoader size="normal" text={t("upload.reading")} /> : t("upload.start")}
       </Button>
     </form>
-    {chosen.length === 0 && (
-      <section className="tape tape--example" aria-label={t("upload.exampleTitle")}>
-        <h2 className="tape__heading">{t("upload.exampleTitle")}</h2>
-        <p className="tape__description">{t("upload.exampleNote")}</p>
-        <ol className="trace">
-          <li className="trace__step">
-            <span className="trace__operator" aria-hidden="true">#</span>
-            <span className="trace__label">{t("upload.exampleBox")}</span>
-            <TapeFigure className="trace__value" language={interfaceLanguage} value="12100.00" fracWidth={3} />
-            <span className="trace__mark" aria-hidden="true" />
-          </li>
-          <li className="trace__step">
-            <span className="trace__operator" aria-hidden="true">×</span>
-            <span className="trace__label">{t("upload.exampleDisc1")}</span>
-            <TapeFigure className="trace__value" language={interfaceLanguage} value="0.90" fracWidth={3} />
-            <span className="trace__mark" aria-hidden="true" />
-          </li>
-          <li className="trace__step">
-            <span className="trace__operator" aria-hidden="true">×</span>
-            <span className="trace__label">{t("upload.exampleDisc2")}</span>
-            <TapeFigure className="trace__value" language={interfaceLanguage} value="0.95" fracWidth={3} />
-            <span className="trace__mark" aria-hidden="true" />
-          </li>
-          <li className="trace__step">
-            <span className="trace__operator" aria-hidden="true">÷</span>
-            <span className="trace__label">{t("upload.exampleVat")}</span>
-            <TapeFigure className="trace__value" language={interfaceLanguage} value="1.21" fracWidth={3} />
-            <span className="trace__mark" aria-hidden="true" />
-          </li>
-          <li className="trace__step">
-            <span className="trace__operator" aria-hidden="true">÷</span>
-            <span className="trace__label">{t("upload.examplePack")}</span>
-            <TapeFigure className="trace__value" language={interfaceLanguage} value="10" fracWidth={3} />
-            <span className="trace__mark" aria-hidden="true" />
-          </li>
-          <li className="trace__step trace__step--final">
-            <span className="trace__operator" aria-hidden="true">=</span>
-            <span className="trace__label">{t("upload.exampleTotal")}</span>
-            <TapeFigure className="trace__value" language={interfaceLanguage} value="855.00 ARS" fracWidth={3} />
-            <span className="trace__mark" aria-hidden="true">✱</span>
-          </li>
-        </ol>
-        <div className="tape__tear" aria-hidden="true" />
-      </section>
-    )}
     </div>
   );
 }

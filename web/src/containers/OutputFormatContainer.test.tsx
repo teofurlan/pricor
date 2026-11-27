@@ -93,6 +93,6 @@ describe("OutputFormatContainer", () => {
     renderWithI18n(<OutputFormatContainer api={fakeApi()} />);
     await userEvent.click(await screen.findByRole("button", { name: "Add column" }));
     const options = screen.getByRole("combobox", { name: "Source for column 1" }).querySelectorAll("option");
-    expect(options).toHaveLength(15); // 13 fields, empty and fixed value
+    expect(options).toHaveLength(16); // 14 fields, empty and fixed value
   });
 });

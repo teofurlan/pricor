@@ -203,8 +203,8 @@ function RolePicker({
   );
 }
 
-/** Roles the plan needs exactly one column for; two columns with the same one cannot be confirmed. */
-const UNIQUE_ROLES: readonly ColumnRole[] = ["code", "description", "cost_price"];
+/** Roles at most one column can carry; two columns with the same one cannot be confirmed. */
+const UNIQUE_ROLES: readonly ColumnRole[] = ["code", "description", "cost_price", "unit_price"];
 /** A column empty in at least this share of the data rows gets a completeness note. */
 const EMPTY_NOTE_SHARE = 0.05;
 

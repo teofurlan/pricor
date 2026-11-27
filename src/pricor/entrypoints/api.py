@@ -278,6 +278,16 @@ class RateBody(BaseModel):
     rate: str
 
 
+class ResolveRowsBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["ignore_row", "ignore_by_reason", "edit_cell", "edit_by_reason", "restore_ignored"]
+    row_number: int | None = None
+    reason: str | None = None
+    column_index: int | None = None
+    value: str | None = None
+
+
 class MemoryNoteBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -921,6 +931,21 @@ def create_app(
         status: str = "all",
     ) -> dict[str, Any]:
         return preview_body(use_case.preview(session_id, offset, limit, query=q, status=status))
+
+    @app.get("/imports/{session_id}/rows/{row_number}/context")
+    def row_context(session_id: str, row_number: int, radius: int = 2) -> dict[str, Any]:
+        return use_case.row_context(session_id, row_number, radius=radius)
+
+    @app.post("/imports/{session_id}/resolve-rows")
+    def resolve_rows(session_id: str, body: ResolveRowsBody) -> dict[str, Any]:
+        return use_case.resolve_rows(
+            session_id,
+            body.action,
+            row_number=body.row_number,
+            reason=body.reason,
+            column_index=body.column_index,
+            value=body.value,
+        )
 
     @app.get("/imports/{session_id}/sample")
     def sample(session_id: str, limit: int = 5) -> dict[str, Any]:

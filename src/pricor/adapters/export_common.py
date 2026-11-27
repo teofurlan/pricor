@@ -12,6 +12,7 @@ from pricor.ports.exporter import (
     REJECTED_COLUMNS,
     SUPPLIER_COLUMN,
     TRACEABILITY_COLUMNS,
+    UNIT_PRICE_COLUMNS,
     ImportExport,
 )
 
@@ -60,20 +61,26 @@ def rejected_width(data: ImportExport) -> int:
     return len(rejected_header(data)) - len(REJECTED_COLUMNS)
 
 
+def has_unit_price(data: ImportExport) -> bool:
+    return any(item.record.unit_price is not None for item in data.accepted)
+
+
 def has_conversion(data: ImportExport) -> bool:
     return any(item.record.unit_cost_net_converted is not None for item in data.accepted)
 
 
 def product_columns(data: ImportExport) -> tuple[str, ...]:
-    """The contract columns, the converted ones when any record was converted, then traceability."""
-    extra = CONVERTED_COLUMNS if has_conversion(data) else ()
-    return (*CONTRACT_COLUMNS, *extra, *TRACEABILITY_COLUMNS)
+    """The contract columns, optional unit price and converted columns when present, then traceability."""
+    extra_unit = UNIT_PRICE_COLUMNS if has_unit_price(data) else ()
+    extra_fx = CONVERTED_COLUMNS if has_conversion(data) else ()
+    return (*CONTRACT_COLUMNS, *extra_unit, *extra_fx, *TRACEABILITY_COLUMNS)
 
 
 def product_values(
-    row_number: int, record: ContractRecord, converted: bool = False
+    row_number: int, record: ContractRecord, converted: bool = False, unit_price: bool = False
 ) -> list[object]:
     """Typed values in `product_columns` order (Decimal/None for numbers, str for text)."""
+    extra_unit = [record.unit_price] if unit_price else []
     extra = (
         [record.unit_cost_net_converted, record.fx_rate, record.fx_source, record.fx_date]
         if converted
@@ -88,6 +95,7 @@ def product_values(
         record.units_per_pack,
         record.barcode,
         record.suggested_retail_price,
+        *extra_unit,
         *extra,
         row_number,
     ]
@@ -130,7 +138,7 @@ def formatted_product_values(
     row_number: int, record: ContractRecord, output_format: OutputFormat
 ) -> list[object]:
     """Project already-computed values, never interpret source text as code."""
-    fields = dict(zip(OUTPUT_FIELDS, product_values(row_number, record, converted=True), strict=True))
+    fields = dict(zip(OUTPUT_FIELDS, product_values(row_number, record, converted=True, unit_price=True), strict=True))
     values = []
     for column in output_format.columns:
         source = column.source
@@ -158,16 +166,23 @@ def combined_products(
     if output_format is not None:
         header = [column.name for column in output_format.columns]
     else:
+        unit_price = any(has_unit_price(part) for part in parts)
         converted = any(has_conversion(part) for part in parts)
-        extra = CONVERTED_COLUMNS if converted else ()
-        header = [*CONTRACT_COLUMNS, *extra, *TRACEABILITY_COLUMNS]
+        extra_unit = UNIT_PRICE_COLUMNS if unit_price else ()
+        extra_fx = CONVERTED_COLUMNS if converted else ()
+        header = [*CONTRACT_COLUMNS, *extra_unit, *extra_fx, *TRACEABILITY_COLUMNS]
     rows: list[list[object]] = []
     for part in parts:
         for item in part.accepted:
             values = (
                 formatted_product_values(item.row_number, item.record, output_format)
                 if output_format is not None
-                else product_values(item.row_number, item.record, "unit_cost_net_converted" in header)
+                else product_values(
+                    item.row_number,
+                    item.record,
+                    "unit_cost_net_converted" in header,
+                    "unit_price" in header,
+                )
             )
             rows.append([part.supplier_name, *values])
     return [SUPPLIER_COLUMN, *header], rows

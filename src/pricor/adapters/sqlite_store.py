@@ -145,6 +145,12 @@ MIGRATIONS: tuple[Migration, ...] = (
             )""",
         ],
     ),
+    (
+        5,
+        [
+            "alter table price_records add column unit_price text",
+        ],
+    ),
 )
 
 
@@ -434,8 +440,9 @@ class SqlitePriceHistory:
             connection.executemany(
                 "insert into price_records (import_id, row_number, supplier_code, description, "
                 "unit_cost_net, currency, vat_rate, units_per_pack, barcode, "
-                "suggested_retail_price, unit_cost_net_converted, fx_rate, fx_source, fx_date) "
-                "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "suggested_retail_price, unit_cost_net_converted, fx_rate, fx_source, fx_date, "
+                "unit_price) "
+                "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 [
                     (
                         import_id,
@@ -452,6 +459,7 @@ class SqlitePriceHistory:
                         _text(item.record.fx_rate),
                         item.record.fx_source,
                         item.record.fx_date,
+                        _text(item.record.unit_price),
                     )
                     for item in records
                 ],
@@ -521,7 +529,7 @@ class SqlitePriceHistory:
             rows = connection.execute(
                 "select row_number, supplier_code, description, unit_cost_net, currency, "
                 "vat_rate, units_per_pack, barcode, suggested_retail_price, "
-                "unit_cost_net_converted, fx_rate, fx_source, fx_date "
+                "unit_cost_net_converted, fx_rate, fx_source, fx_date, unit_price "
                 "from price_records where import_id = ? order by row_number",
                 (import_id,),
             ).fetchall()
@@ -541,6 +549,7 @@ class SqlitePriceHistory:
                     _decimal(fx_rate),
                     fx_source,
                     fx_date,
+                    _decimal(unit_price),
                 ),
             )
             for (
@@ -557,6 +566,7 @@ class SqlitePriceHistory:
                 fx_rate,
                 fx_source,
                 fx_date,
+                unit_price,
             ) in rows
         )
 

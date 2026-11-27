@@ -5,7 +5,7 @@ import pytest
 
 from pricor.domain.roles import ColumnRole
 from tools.laya.split import normalize_header
-from tools.laya.synth import generate_columns
+from tools.laya.synth import VOCABULARY, generate_columns
 
 BANNED = frozenset({"codigo", "descripcion", "preciolista", "precioventa", "preciosugerido", "marca", "rubro"})
 
@@ -22,7 +22,7 @@ def test_generation_is_deterministic_for_a_seed_and_differs_between_seeds():
 def test_every_role_is_represented_in_a_balanced_way():
     counts = Counter(column.role for column in columns(300))
 
-    assert set(counts) == set(ColumnRole)
+    assert set(counts) == set(VOCABULARY)
     assert max(counts.values()) - min(counts.values()) <= 1
 
 

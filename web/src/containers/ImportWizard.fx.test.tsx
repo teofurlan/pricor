@@ -93,7 +93,6 @@ describe("ImportWizard: currency conversion", () => {
     await userEvent.click(screen.getByRole("button", { name: "Use this rate" }));
     expect(api.setManualRate).toHaveBeenCalledWith("s1", "1420,5");
 
-    await userEvent.click(await screen.findByRole("button", { name: "See the preview" }));
     expect(await screen.findByText("1 USD = 1,420.5 ARS")).toBeInTheDocument();
     expect(screen.getByText("Typed by you")).toBeInTheDocument();
     expect(screen.getByText("3,551.25 ARS")).toBeInTheDocument();
@@ -113,6 +112,7 @@ describe("ImportWizard: currency conversion", () => {
     const api = fakeApi({
       createImport: vi.fn().mockResolvedValue(needsRate),
       refreshRate: vi.fn().mockResolvedValue(live),
+      preview: vi.fn().mockResolvedValue(previewPage()),
     });
     renderWithI18n(<ImportWizard api={api} />);
     await startImport();

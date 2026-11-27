@@ -315,7 +315,6 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
 .lang__option[aria-pressed="true"]:hover:not(:disabled) { background: var(--ink); color: var(--paper); }
 
 .upload { max-width: 52rem; min-width: 0; }
-.upload.workbench--upload { max-width: none; }
 .upload__advanced { border-top: 1px dashed var(--rule); padding-top: 12px; }
 .upload__advanced summary { cursor: pointer; font-size: 0.875rem; font-weight: 600; color: var(--muted); }
 .upload__advanced summary:hover { color: var(--ink); }
@@ -553,6 +552,28 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
 .original-cells summary { cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .original-cells p { padding-top: 8px; min-width: 12ch; overflow-wrap: anywhere; }
 .reasons { display: grid; gap: 6px; font-size: 0.8125rem; color: var(--red); overflow-wrap: anywhere; }
+.row-resolver { margin-top: 12px; gap: 14px; min-width: 0; }
+.row-resolver__batch-note { color: var(--ink); font-weight: 560; padding-top: 4px; border-top: 1px dashed var(--rule); }
+.row-context { display: grid; gap: 8px; min-width: 0; }
+.row-context__heading { font-size: 0.75rem; font-weight: 650; letter-spacing: 0.03em; color: var(--muted); text-transform: uppercase; }
+.row-context__wrap { overflow-x: auto; max-width: 100%; border: 1px solid var(--rule); border-radius: 3px; background: var(--surface-subtle); }
+.table--context { width: 100%; min-width: max-content; font-size: 0.75rem; border-collapse: collapse; }
+.table--context th, .table--context td { padding: 6px 8px; border-bottom: 1px solid var(--rule); text-align: left; white-space: nowrap; max-width: 18ch; overflow: hidden; text-overflow: ellipsis; }
+.table--context thead th { background: var(--paper); font-weight: 650; border-bottom-color: var(--ink); }
+.table--context tbody tr:last-child th, .table--context tbody tr:last-child td { border-bottom: 0; }
+.row-context__th--error { color: var(--red); }
+.row-context__row--meta > * { color: var(--muted); }
+.row-context__row--ignored > * { opacity: 0.55; text-decoration: line-through; }
+.row-context__row--target > * { background: var(--red-bg); font-weight: 600; }
+.row-context__row--target > th { color: var(--red); box-shadow: inset 1px 0 0 var(--red); }
+.row-context__cell--error { outline: 1px solid var(--red); outline-offset: -1px; color: var(--red); }
+.row-context__empty { color: var(--muted); }
+.row-resolve { display: grid; gap: 12px; padding-top: 12px; border-top: 1px dashed var(--rule-strong); }
+.row-resolve__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.row-resolve__edit { display: grid; gap: 10px; }
+.row-resolve__input { width: 100%; font-family: var(--figures); font-size: 0.875rem; padding: 8px 10px; }
+.counts__skipped-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.counts__skipped-row .button { min-height: 32px; padding: 5px 10px; font-size: 0.75rem; }
 .pager { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
 .pager .button { padding: 8px 12px; min-height: 36px; font-size: 0.8125rem; }
 
@@ -685,16 +706,19 @@ input[inputmode="decimal"], input[type="number"] { font-family: var(--figures); 
 
 @media (min-width: 1024px) {
   .workbench { grid-template-columns: minmax(0, 1fr) 20rem; gap: 1.5rem; }
+  .workbench--preview { grid-template-columns: minmax(0, 1fr) 24rem; }
   .trace__label { white-space: nowrap; }
   .masthead__brand { display: flex; align-items: baseline; gap: 1.5rem; min-width: 0; }
   .masthead__promise { max-width: 46ch; }
 }
 @media (min-width: 1280px) {
   .workbench { grid-template-columns: minmax(0, 1fr) 23.5rem; gap: 2rem; }
+  .workbench--preview { grid-template-columns: minmax(0, 1fr) 26.5rem; }
   .masthead__promise { max-width: none; white-space: nowrap; }
 }
 @media (min-width: 1400px) {
   .workbench { grid-template-columns: minmax(0, 1fr) 25rem; gap: 2.5rem; }
+  .workbench--preview { grid-template-columns: minmax(0, 1fr) 28rem; }
 }
 @media (max-width: 1180px) {
   .upload-step { grid-template-columns: minmax(0, 1fr); gap: 1.75rem; }

@@ -173,7 +173,9 @@ def test_jsonl_rows_carry_state_question_and_gold_label():
 
     assert row["state"] == "State text"
     assert row["expected"] == {"role": "code"}
-    assert set(row["questions"]["role"]["criteria"]) == {r.value for r in ColumnRole}
+    assert set(row["questions"]["role"]["criteria"]) == {
+        r.value for r in ColumnRole if r is not ColumnRole.UNIT_PRICE
+    }
 
 
 def test_examples_are_written_as_one_json_object_per_line(tmp_path):
@@ -224,7 +226,7 @@ def test_the_real_corpus_builds_a_leak_free_training_set():
     assert {e.source for e in data.held_out} and all(
         distributor_of(e.source) in HELD_OUT_DISTRIBUTORS for e in data.held_out
     )
-    assert {e.role for e in data.train} == set(ColumnRole)
+    assert {e.role for e in data.train} == {r for r in ColumnRole if r is not ColumnRole.UNIT_PRICE}
 
 
 # -- the profile behind each state (the benchmark runs the other classifiers on it) --

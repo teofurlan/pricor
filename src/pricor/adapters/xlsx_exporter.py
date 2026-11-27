@@ -22,6 +22,7 @@ from pricor.adapters.export_common import (
     combined_rejected,
     formatted_product_values,
     has_conversion,
+    has_unit_price,
     product_columns,
     product_values,
     rejected_header,
@@ -63,11 +64,12 @@ def _header(sheet: Worksheet, names: list[str]) -> None:
 def _products(sheet: Worksheet, data: ImportExport, output_format: OutputFormat | None = None) -> None:
     names = tuple(c.name for c in output_format.columns) if output_format else product_columns(data)
     converted = has_conversion(data)
+    unit_price = has_unit_price(data)
     _header(sheet, list(names))
     for row, item in enumerate(data.accepted, start=2):
         values = (
             formatted_product_values(item.row_number, item.record, output_format)
-            if output_format else product_values(item.row_number, item.record, converted)
+            if output_format else product_values(item.row_number, item.record, converted, unit_price)
         )
         for column, (name, value) in enumerate(zip(names, values, strict=True), start=1):
             if value is None:

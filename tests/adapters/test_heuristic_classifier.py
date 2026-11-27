@@ -214,6 +214,7 @@ def test_role_set_is_the_closed_list():
         "code",
         "description",
         "cost_price",
+        "unit_price",
         "retail_price",
         "vat_rate",
         "units_per_pack",
@@ -278,4 +279,11 @@ def test_stock_words_do_not_drop_code_or_description_headers(header, values, rol
     result = classify(header, values)
     assert result.role is role
     assert result.score >= 0.8
+
+
+@pytest.mark.parametrize("header", ["PR. UNIT", "P. UNIT", "Precio unitario", "Precio por unidad"])
+def test_unit_price_headers_classify_as_unit_price(header):
+    result = classify(header, PRICES)
+    assert result.role is ColumnRole.UNIT_PRICE
+    assert result.score >= 0.9
 

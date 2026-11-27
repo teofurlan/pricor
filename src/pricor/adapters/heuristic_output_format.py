@@ -14,6 +14,7 @@ _ALIASES = {
     "units_per_pack": ("unidades por bulto", "unidades por pack", "uxb", "pack"),
     "barcode": ("ean", "gtin", "codigo de barras", "codigo barras"),
     "suggested_retail_price": ("precio sugerido", "precio venta", "pvp", "retail price"),
+    "unit_price": ("precio unitario", "p unit", "pr unit", "unit price"),
     "unit_cost_net_converted": ("costo convertido", "precio convertido", "converted cost"),
     "fx_rate": ("tipo de cambio", "exchange rate", "cotizacion"),
     "fx_source": ("fuente cambio", "fuente tipo de cambio", "exchange rate source"),

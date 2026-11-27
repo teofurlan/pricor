@@ -1,15 +1,19 @@
-"""Reads supplier price lists from PDFs: multi-page tables first, vision fallback second.
+"""Reads supplier price lists from PDFs: digital tables first, vision fallback second.
 
 Stage 1 uses `pdfplumber` across all pages (up to `MAX_DIGITAL_PAGES`) to extract ruled
-or aligned tables deterministically without invoking any model. When no usable table is
-found (for example, a scanned or borderless PDF), Stage 2 renders each page to PNG via
-`pypdfium2` and asks a `VisionChatClient` to transcribe the rows as structured JSON.
-File contents and model outputs are untrusted data.
+tables deterministically first, and borderless column-aligned tables from word
+coordinates second, without invoking any model. When no usable table is found (for
+example, a scanned or prose PDF), Stage 2 renders each page to PNG via `pypdfium2` and
+asks a `VisionChatClient` to transcribe the rows as structured JSON. File contents and
+model outputs are untrusted data.
 """
 
 from __future__ import annotations
 
 import io
+import math
+import statistics
+from collections import Counter
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
@@ -74,6 +78,202 @@ def _cell(value: object) -> str | None:
 
 def _normalized_header_key(row: Sequence[str | None]) -> tuple[str, ...]:
     return tuple((cell or "").casefold() for cell in row)
+
+
+def _group_words_into_lines(
+    words: Sequence[dict[str, Any]], y_tolerance: float = 3.0
+) -> list[list[dict[str, Any]]]:
+    if not words:
+        return []
+    ordered = sorted(words, key=lambda w: (float(w["top"]), float(w["x0"])))
+    lines: list[list[dict[str, Any]]] = []
+    anchor_top = float(ordered[0]["top"])
+    current: list[dict[str, Any]] = []
+    for word in ordered:
+        top = float(word["top"])
+        if not current or abs(top - anchor_top) <= y_tolerance:
+            current.append(word)
+            anchor_top = sum(float(item["top"]) for item in current) / len(current)
+        else:
+            lines.append(sorted(current, key=lambda w: float(w["x0"])))
+            current = [word]
+            anchor_top = top
+    if current:
+        lines.append(sorted(current, key=lambda w: float(w["x0"])))
+    return lines
+
+
+def _merge_line_segments(
+    line: Sequence[dict[str, Any]], gap_threshold: float
+) -> list[tuple[float, float]]:
+    if not line:
+        return []
+    segments: list[tuple[float, float]] = []
+    seg_x0 = float(line[0]["x0"])
+    seg_x1 = float(line[0]["x1"])
+    for word in line[1:]:
+        wx0, wx1 = float(word["x0"]), float(word["x1"])
+        if wx0 - seg_x1 <= gap_threshold:
+            seg_x1 = max(seg_x1, wx1)
+        else:
+            segments.append((seg_x0, seg_x1))
+            seg_x0, seg_x1 = wx0, wx1
+    segments.append((seg_x0, seg_x1))
+    return segments
+
+
+def _split_band_at_valleys(
+    histogram: Sequence[int], start: int, end: int, peak_threshold: int
+) -> list[tuple[float, float]]:
+    if end - start < 3:
+        return [(float(start), float(end))]
+
+    span = histogram[start:end]
+    prefix_max = [0] * len(span)
+    running = 0
+    for i, val in enumerate(span):
+        running = max(running, val)
+        prefix_max[i] = running
+
+    suffix_max = [0] * len(span)
+    running = 0
+    for i in range(len(span) - 1, -1, -1):
+        running = max(running, span[i])
+        suffix_max[i] = running
+
+    best_x = -1
+    best_ratio = 1.0
+    best_val = 0
+    best_cut = 0
+    for idx in range(1, len(span) - 1):
+        left_peak = prefix_max[idx - 1]
+        right_peak = suffix_max[idx + 1]
+        if left_peak < peak_threshold or right_peak < peak_threshold:
+            continue
+        ref_peak = min(left_peak, right_peak)
+        ratio = span[idx] / ref_peak
+        if ratio <= 0.15 and (best_x == -1 or ratio < best_ratio or (ratio == best_ratio and span[idx] < best_val)):
+            best_x = start + idx
+            best_ratio = ratio
+            best_val = span[idx]
+            best_cut = max(best_val, int(0.15 * ref_peak))
+
+    if best_x == -1:
+        return [(float(start), float(end))]
+
+    left = best_x
+    while left > start and histogram[left - 1] <= best_cut:
+        left -= 1
+    right = best_x + 1
+    while right < end and histogram[right] <= best_cut:
+        right += 1
+    return _split_band_at_valleys(histogram, start, left, peak_threshold) + _split_band_at_valleys(
+        histogram, right, end, peak_threshold
+    )
+
+
+def _detect_column_bands(
+    tabular_lines_per_page: Sequence[Sequence[Sequence[tuple[float, float]]]],
+    total_tabular_lines: int,
+    max_x1: float,
+) -> list[tuple[float, float]]:
+    all_lines = [segments for page_lines in tabular_lines_per_page for segments in page_lines]
+    counts = Counter(len(segments) for segments in all_lines)
+    mode_segments = max(counts, key=lambda n: (counts[n], n))
+    core_lines = [segments for segments in all_lines if len(segments) >= mode_segments]
+    source_lines = (
+        core_lines if len(core_lines) >= max(2, int(0.30 * total_tabular_lines)) else all_lines
+    )
+    line_count = len(source_lines)
+
+    histogram = [0] * (math.ceil(max_x1) + 2)
+    for segments in source_lines:
+        for seg_x0, seg_x1 in segments:
+            start = max(0, math.floor(seg_x0))
+            end = max(start + 1, math.ceil(seg_x1))
+            for x in range(start, min(end, len(histogram))):
+                histogram[x] += 1
+
+    valley_threshold = max(0, int(0.05 * line_count))
+    peak_threshold = max(2, int(0.05 * line_count))
+    raw_bands: list[tuple[int, int]] = []
+    in_band = False
+    band_start = 0
+    band_peak = 0
+    for x, count in enumerate(histogram):
+        if count > valley_threshold:
+            if not in_band:
+                in_band = True
+                band_start = x
+                band_peak = count
+            else:
+                band_peak = max(band_peak, count)
+        elif in_band:
+            if band_peak >= peak_threshold:
+                raw_bands.append((band_start, x))
+            in_band = False
+    if in_band and band_peak >= peak_threshold:
+        raw_bands.append((band_start, len(histogram)))
+
+    bands: list[tuple[float, float]] = []
+    for start, end in raw_bands:
+        bands.extend(_split_band_at_valleys(histogram, start, end, peak_threshold))
+    return bands
+
+
+def _assign_line_words_to_bands(
+    line: Sequence[dict[str, Any]], bands: Sequence[tuple[float, float]]
+) -> list[str | None]:
+    buckets: list[list[str]] = [[] for _ in bands]
+    for word in line:
+        wx0, wx1 = float(word["x0"]), float(word["x1"])
+        best_idx = 0
+        best_overlap = 0.0
+        for idx, (b0, b1) in enumerate(bands):
+            overlap = min(wx1, b1) - max(wx0, b0)
+            if overlap > best_overlap:
+                best_overlap = overlap
+                best_idx = idx
+        if best_overlap <= 0.0:
+            best_idx = min(
+                range(len(bands)),
+                key=lambda idx: max(0.0, bands[idx][0] - wx1, wx0 - bands[idx][1]),
+            )
+        text = str(word["text"]).strip()
+        if text:
+            buckets[best_idx].append(text)
+    return [_cell(" ".join(words)) for words in buckets]
+
+
+def _strip_repeating_footers(pages_rows: list[list[list[str | None]]]) -> None:
+    if len(pages_rows) < 2:
+        return
+    counts: dict[tuple[str, ...], int] = {}
+    for page_rows in pages_rows:
+        key = _normalized_header_key(page_rows[-1])
+        counts[key] = counts.get(key, 0) + 1
+    repeating = {key for key, count in counts.items() if count >= 2}
+    if not repeating:
+        return
+    for page_rows in pages_rows:
+        if page_rows and _normalized_header_key(page_rows[-1]) in repeating:
+            page_rows.pop()
+
+
+def _trim_first_page_preamble(pages_rows: list[list[list[str | None]]]) -> None:
+    if len(pages_rows) < 2:
+        return
+    candidate_header = next(
+        (row for row in pages_rows[1] if sum(1 for cell in row if cell is not None) >= MIN_COLUMNS),
+        None,
+    )
+    if candidate_header is None:
+        return
+    cand_key = _normalized_header_key(candidate_header)
+    for idx, row in enumerate(pages_rows[0][:10]):
+        if _normalized_header_key(row) == cand_key:
+            pages_rows[0] = pages_rows[0][idx:]
+            return
 
 
 def _render_pdf_pages(path: Path, max_pages: int, dpi: int = VISION_DPI) -> list[bytes]:
@@ -179,7 +379,6 @@ class PdfPriceListReader:
             raise SpreadsheetError(f"cannot read the PDF {path.name}")
 
     def _extract_digital_tables(self, path: Path) -> tuple[int, tuple[Row, ...] | None]:
-        tables: list[tuple[int, list[list[str | None]]]] = []
         try:
             with pdfplumber.open(path) as pdf:
                 total_pages = len(pdf.pages)
@@ -189,30 +388,35 @@ class PdfPriceListReader:
                     raise SpreadsheetError(
                         f"the PDF has {total_pages} pages; the limit is {self.max_digital_pages}"
                     )
-                for page in pdf.pages:
-                    for raw_table in page.extract_tables():
-                        cleaned = [
-                            [_cell(c) for c in row]
-                            for row in raw_table
-                            if any(_cell(c) is not None for c in row)
-                        ]
-                        if not cleaned:
-                            continue
-                        width = max(len(row) for row in cleaned)
-                        if width < MIN_COLUMNS:
-                            continue
-                        padded = [
-                            row + [None] * (width - len(row))
-                            for row in cleaned
-                        ]
-                        tables.append((width, padded))
+                ruled = self._extract_ruled_tables(pdf)
+                if ruled is not None:
+                    return total_pages, ruled
+                borderless = self._extract_borderless_tables(pdf)
+                return total_pages, borderless
         except SpreadsheetError:
             raise
         except Exception as error:
             raise SpreadsheetError(f"cannot read the PDF {path.name}") from error
 
+    def _extract_ruled_tables(self, pdf: Any) -> tuple[Row, ...] | None:
+        tables: list[tuple[int, list[list[str | None]]]] = []
+        for page in pdf.pages:
+            for raw_table in page.extract_tables():
+                cleaned = [
+                    [_cell(c) for c in row]
+                    for row in raw_table
+                    if any(_cell(c) is not None for c in row)
+                ]
+                if not cleaned:
+                    continue
+                width = max(len(row) for row in cleaned)
+                if width < MIN_COLUMNS:
+                    continue
+                padded = [row + [None] * (width - len(row)) for row in cleaned]
+                tables.append((width, padded))
+
         if not tables:
-            return total_pages, None
+            return None
 
         counts_by_width: dict[int, int] = {}
         for width, table_rows in tables:
@@ -234,8 +438,89 @@ class PdfPriceListReader:
                     raise TooManyRowsError(f"the sheet has more than {self.max_rows} rows")
 
         if len(merged) < 2:
-            return total_pages, None
-        return total_pages, tuple(merged)
+            return None
+        return tuple(merged)
+
+    def _extract_borderless_tables(self, pdf: Any) -> tuple[Row, ...] | None:
+        pages_words = [
+            page.extract_words(
+                keep_blank_chars=False,
+                use_text_flow=False,
+                x_tolerance=2,
+                y_tolerance=3,
+            )
+            for page in pdf.pages
+        ]
+        heights = [
+            float(word["bottom"]) - float(word["top"])
+            for words in pages_words
+            for word in words
+            if float(word["bottom"]) > float(word["top"])
+        ]
+        if not heights:
+            return None
+
+        gap_threshold = max(4.5, statistics.median(heights) * 0.70)
+        pages_lines = [_group_words_into_lines(words) for words in pages_words]
+        tabular_lines_per_page: list[list[list[tuple[float, float]]]] = []
+        max_x1 = 0.0
+        for lines in pages_lines:
+            page_tab: list[list[tuple[float, float]]] = []
+            for line in lines:
+                segments = _merge_line_segments(line, gap_threshold)
+                if len(segments) >= MIN_COLUMNS:
+                    page_tab.append(segments)
+                    max_x1 = max(max_x1, segments[-1][1])
+            tabular_lines_per_page.append(page_tab)
+
+        total_tabular_lines = sum(len(page_tab) for page_tab in tabular_lines_per_page)
+        max_tabular_on_page = max((len(page_tab) for page_tab in tabular_lines_per_page), default=0)
+        if total_tabular_lines < 2 or max_tabular_on_page < 2:
+            return None
+
+        bands = _detect_column_bands(tabular_lines_per_page, total_tabular_lines, max_x1)
+        if len(bands) < MIN_COLUMNS:
+            return None
+
+        pages_rows: list[list[list[str | None]]] = []
+        for lines in pages_lines:
+            page_rows: list[list[str | None]] = []
+            for line in lines:
+                row = _assign_line_words_to_bands(line, bands)
+                if any(cell is not None for cell in row):
+                    page_rows.append(row)
+            if page_rows:
+                pages_rows.append(page_rows)
+
+        if not pages_rows:
+            return None
+
+        _strip_repeating_footers(pages_rows)
+        pages_rows = [page_rows for page_rows in pages_rows if page_rows]
+        if not pages_rows:
+            return None
+
+        _trim_first_page_preamble(pages_rows)
+
+        merged: list[Row] = []
+        first_header: tuple[str, ...] | None = None
+        for page_rows in pages_rows:
+            start_idx = 0
+            if first_header is None:
+                first_header = _normalized_header_key(page_rows[0])
+            elif _normalized_header_key(page_rows[0]) == first_header:
+                start_idx = 1
+            for row in page_rows[start_idx:]:
+                merged.append(tuple(row))
+                if len(merged) > self.max_rows:
+                    raise TooManyRowsError(f"the sheet has more than {self.max_rows} rows")
+
+        multi_cell_rows = sum(
+            1 for row in merged if sum(1 for cell in row if cell is not None) >= MIN_COLUMNS
+        )
+        if len(merged) < 2 or multi_cell_rows < 2:
+            return None
+        return tuple(merged)
 
     def _extract_with_vision(self, path: Path, total_pages: int) -> tuple[Row, ...]:
         if self._vision_client is None:

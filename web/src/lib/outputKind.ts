@@ -8,6 +8,7 @@ const FIELD_KINDS: Record<string, OutputKind> = {
   supplier_code: "code",
   barcode: "code",
   unit_cost_net: "price",
+  unit_price: "price",
   suggested_retail_price: "price",
   unit_cost_net_converted: "price",
   vat_rate: "number",

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ApiClient, ApiError, CombinedExportApiClient, EventsApiClient, ExportFile, ExportSheet, MemoryApiClient, OutputFormatApiClient, SampleApiClient, SuppliersApiClient, WorkspaceApiClient } from "../api/client";
 import { useServerConfig } from "../api/serverConfig";
-import type { ColumnRole, CreateImportInput, FunnelEvent, GoogleResolution, Memory, OutputFormat, Question, SessionState, WorkspaceAccount } from "../api/types";
+import type { ColumnRole, CreateImportInput, FunnelEvent, GoogleResolution, Memory, OutputFormat, Question, ResolveRowsInput, ResolveRowsResult, SessionState, WorkspaceAccount } from "../api/types";
 import { Button } from "../components/atoms/Button";
 import { TapeLoader } from "../components/atoms/TapeLoader";
 import { CountsSummary } from "../components/molecules/CountsSummary";
@@ -24,7 +24,7 @@ import { UploadForm } from "../components/organisms/UploadForm";
 import type { QueueDraft } from "../components/organisms/UploadForm";
 import { UploadQueueTray, QueueSummary, type QueueItem } from "../components/organisms/UploadQueueTray";
 import { captureGroup, storedGroup } from "../lib/group";
-import { formatFigure } from "../lib/decimalText";
+import { formatFigure, formatInteger } from "../lib/decimalText";
 import { describeError } from "../i18n/serverText";
 import { useI18n, type TextKey } from "../i18n";
 import { PriceChanges } from "./PriceChanges";
@@ -151,6 +151,8 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   const dataReady = loaded && (!workspaceOn || workspaceSettled);
   const [session, setSession] = useState<SessionState | null>(null);
   const [step, setStep] = useState<StepId>("upload");
+  const stepRef = useRef<StepId>(step);
+  stepRef.current = step;
   const [headerNeeded, setHeaderNeeded] = useState(false);
   const [busy, setBusy] = useState(false);
   // True while an import is being created; after a few seconds the wait gets an honest note (cold model start).
@@ -199,7 +201,13 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   const [sheets, setSheets] = useState<Partial<Record<ExportFile, ExportSheet>>>({});
   // A rate changed on the preview step reloads it; say so, since the figures move under the user.
   const [rateChanged, setRateChanged] = useState(false);
-  useEffect(() => setRateChanged(false), [step]);
+  const [resolutionRevision, setResolutionRevision] = useState(0);
+  const [resolutionNotice, setResolutionNotice] = useState<string | null>(null);
+  const [restoringIgnored, setRestoringIgnored] = useState(false);
+  useEffect(() => {
+    setRateChanged(false);
+    setResolutionNotice(null);
+  }, [step]);
   const approvedId = session?.approved ? session.id : null;
 
   useEffect(() => {
@@ -260,9 +268,48 @@ export function ImportWizard({ api }: { api: ApiClient }) {
     (step === "preview" || step === "format" || step === "approve" || (step === "questions" && session.status === "ready_for_preview"));
   // Everything the server uses to compute the preview; when it changes, the preview is stale.
   const planRevision = session
-    ? JSON.stringify([session.header.row_index, session.columns.map((item) => item.role), session.answers, session.fx?.snapshot])
+    ? JSON.stringify([session.header.row_index, session.columns.map((item) => item.role), session.answers, session.fx?.snapshot, resolutionRevision])
     : "";
   const preview = usePreview(api, session?.id ?? null, previewEnabled, planRevision);
+
+  const loadRowContext = useCallback(
+    (rowNumber: number) => api.getRowContext!(session!.id, rowNumber, 2),
+    [api, session?.id],
+  );
+
+  const handleResolveRows = async (input: ResolveRowsInput): Promise<ResolveRowsResult> => {
+    if (!session || !api.resolveRows) {
+      throw new Error("Row resolution is not available");
+    }
+    const result = await api.resolveRows(session.id, input);
+    const countText = formatInteger(result.affected, language);
+    if (input.action === "restore_ignored") {
+      setResolutionNotice(t(result.affected === 1 ? "preview.resolve.restored.one" : "preview.resolve.restored.other", { count: countText }));
+    } else if (input.action === "ignore_row" || input.action === "ignore_by_reason") {
+      setResolutionNotice(t(result.affected === 1 ? "preview.resolve.ignored.one" : "preview.resolve.ignored.other", { count: countText }));
+    } else {
+      setResolutionNotice(t(result.affected === 1 ? "preview.resolve.done.one" : "preview.resolve.done.other", { count: countText }));
+    }
+    if (preview.filter.status === "rejected" && result.totals.rejected === 0) {
+      preview.setFilter({ ...preview.filter, status: "all" });
+    } else {
+      setResolutionRevision((value) => value + 1);
+    }
+    return result;
+  };
+
+  const handleRestoreIgnored = async () => {
+    if (!api.resolveRows || restoringIgnored) return;
+    setRestoringIgnored(true);
+    setError(null);
+    try {
+      await handleResolveRows({ action: "restore_ignored" });
+    } catch (failure) {
+      setError(toApiError(failure));
+    } finally {
+      setRestoringIgnored(false);
+    }
+  };
 
   const finalCosts = preview.page?.items
     ? preview.page.items
@@ -302,6 +349,8 @@ export function ImportWizard({ api }: { api: ApiClient }) {
   const open = (created: SessionState) => {
     setAskedQuestions([]);
     setApproveTab("files");
+    setResolutionNotice(null);
+    setResolutionRevision(0);
     remember(created);
     track("import_started");
     const needsHeader = created.status === "header_choice_required";
@@ -432,6 +481,13 @@ export function ImportWizard({ api }: { api: ApiClient }) {
           }
           remember(next);
           setLocalAnswers(() => ({ ...next.answers, ...pendingAnswersRef.current }));
+          if (
+            Object.keys(pendingAnswersRef.current).length === 0 &&
+            next.status === "ready_for_preview" &&
+            stepRef.current === "questions"
+          ) {
+            setStep("preview");
+          }
         } catch (failure) {
           if (generation !== generationRef.current) return;
           // A refused answer must not stay on screen as chosen; fall back to the server's answer.
@@ -451,7 +507,9 @@ export function ImportWizard({ api }: { api: ApiClient }) {
       if (!session) return;
       const next = await call(session.id);
       remember(next);
-      if (step === "preview" && JSON.stringify(next.fx?.snapshot) !== JSON.stringify(session.fx?.snapshot)) {
+      if (stepRef.current === "questions" && next.status === "ready_for_preview") {
+        setStep("preview");
+      } else if (stepRef.current === "preview" && JSON.stringify(next.fx?.snapshot) !== JSON.stringify(session.fx?.snapshot)) {
         setRateChanged(true);
       }
     });
@@ -483,6 +541,8 @@ export function ImportWizard({ api }: { api: ApiClient }) {
     setResetPrompt(false);
     setError(null);
     setGoogleError(false);
+    setResolutionNotice(null);
+    setResolutionRevision(0);
     resetQueue();
     setSession(null);
     sessionRef.current = null;
@@ -834,12 +894,19 @@ export function ImportWizard({ api }: { api: ApiClient }) {
           {step === "preview" &&
             (preview.page ? (
               <div className="stack">
-                <CountsSummary totals={preview.page.totals} />
+                <CountsSummary
+                  totals={preview.page.totals}
+                  onRestoreIgnored={!session?.approved && api.resolveRows ? () => void handleRestoreIgnored() : undefined}
+                  busy={restoringIgnored}
+                />
                 {session?.fx && (
                   <FxPanel fx={session.fx} busy={busy} onManual={setManualRate} onRefresh={refreshRate} readOnly={session.approved} />
                 )}
                 {rateChanged && !preview.loading && (
                   <p role="status" className="fx__updated">{t("preview.rateUpdated")}</p>
+                )}
+                {resolutionNotice && !preview.loading && (
+                  <p role="status" className="fx__updated">{resolutionNotice}</p>
                 )}
                 <PreviewTable
                   page={preview.page}
@@ -848,6 +915,10 @@ export function ImportWizard({ api }: { api: ApiClient }) {
                   fx={session?.fx ?? null}
                   filter={preview.filter}
                   onFilter={preview.setFilter}
+                  readOnly={session?.approved}
+                  revision={planRevision}
+                  onLoadRowContext={api.getRowContext && session ? loadRowContext : undefined}
+                  onResolveRows={!session?.approved && api.resolveRows ? handleResolveRows : undefined}
                 />
                 <section className="stack">
                   <h2 className="subtitle">{t("rejected.title", { count: preview.page.totals.rejected })}</h2>
