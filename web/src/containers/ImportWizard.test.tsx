@@ -81,7 +81,7 @@ describe("ImportWizard", () => {
     await userEvent.click(screen.getByRole("button", { name: "Use this row" }));
     await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
     await userEvent.click(await screen.findByRole("button", { name: /Argentine pesos/ }));
-    expect(await screen.findByRole("button", { name: "See the preview" })).toBeEnabled();
+    expect(await screen.findByLabelText("Accepted")).toHaveTextContent("5");
 
     await userEvent.click(screen.getByRole("button", { name: /Header/ }));
     await userEvent.click(await screen.findByRole("radio", { name: /Row 1/ }));
@@ -154,10 +154,12 @@ describe("ImportWizard", () => {
   });
 
   it("reloads the preview when an answer changes after the import was ready", async () => {
-    const vat = question({ id: "vat_rate", allows_custom: true, options: [
-      { token: "constant:21", label: { en: "21%", es: "21%" } },
-      { token: "constant:10.5", label: { en: "10.5%", es: "10,5%" } },
-    ] });
+    const vat = question({
+      id: "vat_rate", allows_custom: true, options: [
+        { token: "constant:21", label: { en: "21%", es: "21%" } },
+        { token: "constant:10.5", label: { en: "10.5%", es: "10,5%" } },
+      ]
+    });
     const at21 = session({ status: "ready_for_preview", questions: [vat], answers: { vat_rate: "constant:21" } });
     const at105 = session({ status: "ready_for_preview", questions: [vat], answers: { vat_rate: "constant:10.5" } });
     const api = fakeApi({
@@ -218,13 +220,9 @@ describe("ImportWizard", () => {
     for (const button of within(qGroup).getAllByRole("button")) expect(button).toHaveAttribute("aria-pressed", "false");
     await userEvent.click(screen.getByRole("button", { name: /Argentine pesos/ }));
     expect(api.answer).toHaveBeenCalledWith("s1", "currency", "ARS");
-    // An answered question moves to the history above with its answer, where it can be changed.
-    const history = await screen.findByRole("list", { name: "Answered questions" });
-    expect(within(history).getByText("Argentine pesos (ARS)")).toBeInTheDocument();
-    expect(within(history).getByRole("button", { name: "Change" })).toBeInTheDocument();
 
-    await userEvent.click(await screen.findByRole("button", { name: "See the preview" }));
-    expect(api.preview).toHaveBeenCalledWith("s1", 0, 50);
+    // Answering the final question moves straight into the preview without an extra click.
+    await waitFor(() => expect(api.preview).toHaveBeenCalledWith("s1", 0, 50));
     expect(await screen.findByLabelText("Accepted")).toHaveTextContent("5");
     expect(screen.getByLabelText("Rejected")).toHaveTextContent("1");
     expect(screen.getByLabelText("Data rows")).toHaveTextContent("6");
@@ -256,7 +254,6 @@ describe("ImportWizard", () => {
     await startImport();
     await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
     await userEvent.click(await screen.findByRole("button", { name: /Argentine pesos/ }));
-    await userEvent.click(await screen.findByRole("button", { name: "See the preview" }));
     await userEvent.click(await screen.findByRole("button", { name: "Continue to approval" }));
     const steps = screen.getByRole("navigation", { name: "Import steps" });
     expect(within(steps).getByRole("button", { name: "Columns" })).toBeInTheDocument();
@@ -470,7 +467,7 @@ describe("ImportWizard", () => {
   });
 
   it("says the processor is working while a slow call is pending", async () => {
-    let finish: (value: SessionState) => void = () => {};
+    let finish: (value: SessionState) => void = () => { };
     const api = fakeApi({
       createImport: vi.fn().mockReturnValue(new Promise<SessionState>((resolve) => (finish = resolve))),
     });
@@ -483,7 +480,7 @@ describe("ImportWizard", () => {
   });
 
   it("says the processor is working in Spanish while a slow call is pending", async () => {
-    let finish: (value: SessionState) => void = () => {};
+    let finish: (value: SessionState) => void = () => { };
     const api = fakeApi({
       createImport: vi.fn().mockReturnValue(new Promise<SessionState>((resolve) => (finish = resolve))),
     });
@@ -496,7 +493,7 @@ describe("ImportWizard", () => {
   });
 
   it("says the processor is working in hosted mode while a slow call is pending", async () => {
-    let finish: (value: SessionState) => void = () => {};
+    let finish: (value: SessionState) => void = () => { };
     const api = fakeApi({
       createImport: vi.fn().mockReturnValue(new Promise<SessionState>((resolve) => (finish = resolve))),
     });
@@ -513,7 +510,7 @@ describe("ImportWizard", () => {
   });
 
   it("says the processor is working in Spanish in hosted mode while a slow call is pending", async () => {
-    let finish: (value: SessionState) => void = () => {};
+    let finish: (value: SessionState) => void = () => { };
     const api = fakeApi({
       createImport: vi.fn().mockReturnValue(new Promise<SessionState>((resolve) => (finish = resolve))),
     });
@@ -657,6 +654,7 @@ describe("ImportWizard", () => {
 
     const api = fakeApi({
       createImport: vi.fn().mockResolvedValue(sessionWithTwoQuestions),
+      preview: vi.fn().mockResolvedValue(previewPage()),
       answer: vi
         .fn()
         .mockImplementationOnce(() => firstAnswerPromise)
@@ -695,13 +693,15 @@ describe("ImportWizard", () => {
       }),
     );
 
-    // Both answers must be recorded in order
+    // Both answers must be recorded in order, and completing the last question moves straight to preview
     await waitFor(() => {
       expect(api.answer).toHaveBeenCalledWith("s1", "vat_included", "yes");
     });
     expect(api.answer).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(api.preview).toHaveBeenCalledWith("s1", 0, 50));
 
-    const history = screen.getByRole("list", { name: "Answered questions" });
+    await userEvent.click(screen.getByRole("button", { name: /Questions/ }));
+    const history = await screen.findByRole("list", { name: "Answered questions" });
     expect(within(history).getByText(/Argentine pesos/)).toBeInTheDocument();
     expect(within(history).getByText(/Yes/)).toBeInTheDocument();
   });
@@ -717,7 +717,7 @@ describe("ImportWizard", () => {
 
     it("shows the notice only after the wait, and removes it when the answer arrives", async () => {
       try {
-        let finish: (value: SessionState) => void = () => {};
+        let finish: (value: SessionState) => void = () => { };
         const api = fakeApi({ createImport: vi.fn().mockReturnValue(new Promise<SessionState>((resolve) => (finish = resolve))) });
         renderWithI18n(<ImportWizard api={api} />);
         await screen.findByLabelText("Price list file");
@@ -740,7 +740,7 @@ describe("ImportWizard", () => {
 
     it("removes the notice when the import fails", async () => {
       try {
-        let fail: (reason: unknown) => void = () => {};
+        let fail: (reason: unknown) => void = () => { };
         const api = fakeApi({ createImport: vi.fn().mockReturnValue(new Promise<SessionState>((_, reject) => (fail = reject))) });
         renderWithI18n(<ImportWizard api={api} />);
         await screen.findByLabelText("Price list file");
@@ -757,7 +757,7 @@ describe("ImportWizard", () => {
 
     it("says it in Spanish", async () => {
       try {
-        const api = fakeApi({ createImport: vi.fn().mockReturnValue(new Promise<SessionState>(() => {})) });
+        const api = fakeApi({ createImport: vi.fn().mockReturnValue(new Promise<SessionState>(() => { })) });
         renderWithI18n(<ImportWizard api={api} />, "es");
         await screen.findByLabelText("Archivo de la lista de precios");
         vi.useFakeTimers();
@@ -770,5 +770,84 @@ describe("ImportWizard", () => {
         vi.useRealTimers();
       }
     });
+  });
+
+  it("resolves rejected rows by reason in preview and restores ignored rows from CountsSummary", async () => {
+    const reason = "PRECIO: empty value, expected a number";
+    const beforePage = previewPage({
+      items: [
+        {
+          row_number: 2,
+          status: "rejected",
+          original: ["", "GRUPO 01", ""],
+          trace: [],
+          record: null,
+          reasons: [reason],
+        },
+      ],
+      total_items: 1,
+      totals: {
+        data_rows: 5,
+        accepted: 3,
+        rejected: 2,
+        rejected_rows: [
+          { row_number: 2, reasons: [reason] },
+          { row_number: 8, reasons: [reason] },
+        ],
+        reason_counts: { [reason]: 2 },
+        skipped_rows: { empty: 0, total: 0, section: 0, preamble: 0 },
+      },
+    });
+    const afterIgnorePage = previewPage({
+      totals: {
+        data_rows: 3,
+        accepted: 3,
+        rejected: 0,
+        rejected_rows: [],
+        reason_counts: {},
+        skipped_rows: { empty: 0, total: 0, section: 0, preamble: 0, ignored_by_user: 2 },
+      },
+    });
+
+    const api = fakeApi({
+      createImport: vi.fn().mockResolvedValue(ready),
+      preview: vi.fn()
+        .mockResolvedValueOnce(beforePage)
+        .mockResolvedValueOnce(afterIgnorePage)
+        .mockResolvedValueOnce(beforePage),
+      getRowContext: vi.fn().mockResolvedValue({
+        row_number: 2,
+        headers: ["CODIGO", "DESCRIPCION", "PRECIO"],
+        target_columns: [2],
+        rows: [
+          { row_number: 2, row_class: "data", cells: ["", "GRUPO 01", ""], is_target: true, ignored: false },
+        ],
+      }),
+      resolveRows: vi.fn()
+        .mockResolvedValueOnce({
+          affected: 2,
+          ignored_count: 2,
+          override_count: 0,
+          totals: afterIgnorePage.totals,
+        })
+        .mockResolvedValueOnce({
+          affected: 2,
+          ignored_count: 0,
+          override_count: 0,
+          totals: beforePage.totals,
+        }),
+    });
+
+    renderWithI18n(<ImportWizard api={api} />);
+    await startImport();
+    await userEvent.click(await screen.findByRole("button", { name: "Confirm columns" }));
+
+    await userEvent.click(await screen.findByRole("button", { name: "Ignore all 2 rows with this error" }));
+    expect(api.resolveRows).toHaveBeenCalledWith("s1", { action: "ignore_by_reason", reason });
+    expect(await screen.findByText("Ignored 2 rows.")).toBeInTheDocument();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Restore ignored" }));
+    expect(api.resolveRows).toHaveBeenLastCalledWith("s1", { action: "restore_ignored" });
+    expect(await screen.findByText("Restored 2 ignored rows.")).toBeInTheDocument();
   });
 });

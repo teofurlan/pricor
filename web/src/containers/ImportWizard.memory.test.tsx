@@ -66,6 +66,8 @@ describe("ImportWizard memory", () => {
     renderWithI18n(<ImportWizard api={api} />);
     await startImport();
     await userEvent.click(screen.getByRole("button", { name: /US dollars/ }));
+    await screen.findByLabelText("Accepted");
+    await userEvent.click(screen.getByRole("button", { name: /Questions/ }));
     await userEvent.click(await screen.findByRole("button", { name: "Remember this" }));
     expect(api.rememberSuggestion).toHaveBeenCalledWith("s1", "currency");
     expect(await screen.findByText("Saved to notes")).toBeInTheDocument();
@@ -77,6 +79,8 @@ describe("ImportWizard memory", () => {
     renderWithI18n(<ImportWizard api={api} />);
     await startImport();
     await userEvent.click(screen.getByRole("button", { name: /Argentine pesos/ }));
+    await screen.findByLabelText("Accepted");
+    await userEvent.click(screen.getByRole("button", { name: /Questions/ }));
     const history = await screen.findByRole("list", { name: "Answered questions" });
     expect(within(history).getByText("Argentine pesos (ARS)")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Remember this" })).toBeNull();
@@ -92,6 +96,8 @@ describe("ImportWizard memory", () => {
     renderWithI18n(<ImportWizard api={api} />);
     await startImport();
     await userEvent.click(screen.getByRole("button", { name: /US dollars/ }));
+    await screen.findByLabelText("Accepted");
+    await userEvent.click(screen.getByRole("button", { name: /Questions/ }));
     await userEvent.click(await screen.findByRole("button", { name: "Remember this" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("The recorded answer is not the suggestion.");
   });

@@ -1,9 +1,20 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import type { FxState, Language, PreviewFilter, PreviewItem, PreviewPage, PreviewStatusFilter } from "../../api/types";
+import type {
+  FxState,
+  Language,
+  PreviewFilter,
+  PreviewItem,
+  PreviewPage,
+  PreviewStatusFilter,
+  ResolveRowsInput,
+  ResolveRowsResult,
+  RowContext,
+} from "../../api/types";
 import { useI18n } from "../../i18n";
 import { conversionText, formatDecimalText, formatFigure, formatInteger } from "../../lib/decimalText";
 import { Badge } from "../atoms/Badge";
 import { Button } from "../atoms/Button";
+import { RowErrorResolver } from "../molecules/RowErrorResolver";
 import { StepTrace, visibleSteps } from "../molecules/StepTrace";
 import { usePendingAction } from "../atoms/usePendingAction";
 
@@ -18,6 +29,10 @@ interface Props {
   fx?: FxState | null;
   filter?: PreviewFilter;
   onFilter?(next: PreviewFilter): void;
+  readOnly?: boolean;
+  revision?: string;
+  onLoadRowContext?: (rowNumber: number) => Promise<RowContext>;
+  onResolveRows?: (input: ResolveRowsInput) => Promise<ResolveRowsResult>;
 }
 
 /** The accessible hint of a converted cell: the unrounded input and the rate behind the figure. */
@@ -29,7 +44,18 @@ function conversionTitle(item: PreviewItem, to: string, language: Language): str
 }
 
 /** The ruled journal keeps every row; the selected row feeds the adjacent tape. */
-export function PreviewTable({ page, busy, onPage, fx = null, filter = DEFAULT_FILTER, onFilter }: Props) {
+export function PreviewTable({
+  page,
+  busy,
+  onPage,
+  fx = null,
+  filter = DEFAULT_FILTER,
+  onFilter,
+  readOnly = false,
+  revision = "",
+  onLoadRowContext,
+  onResolveRows,
+}: Props) {
   const { t, language } = useI18n();
   const pending = usePendingAction<"previous" | "next">(busy);
   const [selection, setSelection] = useState({ offset: page.offset, row: page.items[0]?.row_number });
@@ -215,13 +241,37 @@ export function PreviewTable({ page, busy, onPage, fx = null, filter = DEFAULT_F
           {selected ? <>
             <p className="tape__reference"># {t("preview.rowNumber", { row: selected.row_number })}{selected.record?.supplier_code ? ` / ${selected.record.supplier_code}` : ""}</p>
             {selected.record?.description && <p className="tape__description">{selected.record.description}</p>}
-            {selected.original.length > 0 && (
-              <details className="original-cells original-cells--tape">
-                <summary>{t("preview.original")}</summary>
-                <p>{selected.original.join(", ")}</p>
-              </details>
+            {selected.status === "rejected" ? (
+              <RowErrorResolver
+                item={selected}
+                reasonCounts={page.totals.reason_counts}
+                readOnly={readOnly}
+                revision={revision}
+                onLoadRowContext={onLoadRowContext}
+                onResolveRows={onResolveRows}
+              />
+            ) : (
+              <>
+                {selected.original.length > 0 && (
+                  <details className="original-cells original-cells--tape">
+                    <summary>{t("preview.original")}</summary>
+                    <p>{selected.original.join(", ")}</p>
+                  </details>
+                )}
+                {selected.trace.length ? (
+                  <StepTrace
+                    key={selected.row_number}
+                    trace={selected.trace}
+                    currency={selected.record?.currency ?? null}
+                    convertedCurrency={fx?.to ?? null}
+                    animate={!browsed}
+                    announce
+                  />
+                ) : (
+                  <p className="hint">{t("preview.noTrace")}</p>
+                )}
+              </>
             )}
-            {selected.status === "rejected" ? <div className="reasons"><strong>{t("preview.rejected")}</strong>{selected.reasons.map((reason) => <p key={reason}>{reason}</p>)}</div> : selected.trace.length ? <StepTrace key={selected.row_number} trace={selected.trace} currency={selected.record?.currency ?? null} convertedCurrency={fx?.to ?? null} animate={!browsed} announce /> : <p className="hint">{t("preview.noTrace")}</p>}
           </> : <p className="hint">{t("preview.empty")}</p>}
         </section>
       </div>

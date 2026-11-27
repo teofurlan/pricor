@@ -422,3 +422,53 @@ def test_preview_rejects_unknown_status_or_overlong_query():
     assert too_long.status_code == 422
     assert too_long.json()["error"]["code"] == "invalid_input"
 
+
+def test_row_context_and_resolve_rows_endpoints():
+    rows = [
+        ["Codigo", "Descripcion", "Precio lista", "IVA"],
+        ["A-10", "Lámpara LED", "1.210,00", "21%"],
+        ["CAT-1", "CATEGORÍA", "", "21%"],
+        ["A-20", "Tornillo", "968,00", "21%"],
+        ["CAT-2", "OTRA CATEGORÍA", "", "21%"],
+        ["A-30", "Tuerca", "bad", "21%"],
+    ]
+    client = make_client()
+    session_id = upload(client, rows=rows).json()["id"]
+    answer(client, session_id, "number_format", "decimal_comma")
+    answer(client, session_id, "price_includes_vat", "yes")
+    answer(client, session_id, "currency", "ARS")
+
+    ctx_resp = client.get(f"/imports/{session_id}/rows/3/context")
+    assert ctx_resp.status_code == 200
+    ctx = ctx_resp.json()
+    assert ctx["row_number"] == 3
+    assert ctx["target_columns"] == [2]
+    assert [r["row_number"] for r in ctx["rows"]] == [1, 2, 3, 4, 5]
+
+    preview_before = client.get(f"/imports/{session_id}/preview", params={"status": "rejected"}).json()
+    empty_reason = preview_before["items"][0]["reasons"][0]
+
+    ignore_resp = client.post(
+        f"/imports/{session_id}/resolve-rows",
+        json={"action": "ignore_by_reason", "reason": empty_reason},
+    )
+    assert ignore_resp.status_code == 200
+    assert ignore_resp.json()["affected"] == 2
+    assert ignore_resp.json()["totals"]["rejected"] == 1
+    assert ignore_resp.json()["totals"]["skipped_rows"]["ignored_by_user"] == 2
+
+    edit_resp = client.post(
+        f"/imports/{session_id}/resolve-rows",
+        json={"action": "edit_cell", "row_number": 6, "column_index": 2, "value": "121,00"},
+    )
+    assert edit_resp.status_code == 200
+    assert edit_resp.json()["totals"]["accepted"] == 3
+    assert edit_resp.json()["totals"]["rejected"] == 0
+
+    assert client.post(f"/imports/{session_id}/approve").status_code == 200
+    locked = client.post(
+        f"/imports/{session_id}/resolve-rows",
+        json={"action": "restore_ignored"},
+    )
+    assert locked.status_code == 409
+

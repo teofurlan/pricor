@@ -200,6 +200,8 @@ class ImportFirstTime:
         session.profile = profile
         session.header_confirmed = True
         session.answers = {}
+        session.ignored_rows = set()
+        session.cell_overrides = {}
         session.proposal = None
         session.proposal_key = None
         self._classify(session)
@@ -268,6 +270,137 @@ class ImportFirstTime:
             items = [row for row in items if _row_matches(row, needle)]
         page = tuple(items[offset : offset + limit])
         return PreviewPage(offset, limit, len(items), page, self._totals(session))
+
+    def row_context(self, session_id: str, row_number: int, radius: int = 2) -> dict[str, Any]:
+        """Return surrounding rows (`±radius`) around `row_number` with failing column indexes."""
+        if not 0 <= radius <= 5:
+            raise InvalidInputError("radius must be between 0 and 5")
+        session = self._repository.get(session_id)
+        if session.status not in (SessionStatus.READY_FOR_PREVIEW, SessionStatus.APPROVED):
+            raise InvalidOperationError(
+                f"the session is {session.status.value}; answer the open questions first"
+            )
+        if not 1 <= row_number <= len(session.rows):
+            raise InvalidInputError(f"row_number must be between 1 and {len(session.rows)}")
+
+        result = self._execute(session)
+        rejected = next((item for item in result.rejected if item.row_number == row_number), None)
+        columns_by_header_len = sorted(
+            enumerate(session.profile.columns),
+            key=lambda pair: len(pair[1].plan_header),
+            reverse=True,
+        )
+        target_columns: list[int] = []
+        if rejected is not None:
+            for reason in rejected.reasons:
+                match = next(
+                    (
+                        pos
+                        for pos, col in columns_by_header_len
+                        if reason.startswith(f"{col.plan_header}: ")
+                    ),
+                    None,
+                )
+                if match is not None and match not in target_columns:
+                    target_columns.append(match)
+
+        class_by_index = {item.index: item.kind.value for item in session.profile.row_classes}
+        start = max(0, row_number - 1 - radius)
+        end = min(len(session.rows), row_number + radius)
+        headers = [col.raw_header or col.plan_header for col in session.profile.columns]
+        rows = []
+        for idx in range(start, end):
+            current_row_number = idx + 1
+            effective = self._effective_row(session, current_row_number)
+            cells = [
+                _preview_text(effective[col.index]) if col.index < len(effective) else ""
+                for col in session.profile.columns
+            ]
+            rows.append(
+                {
+                    "row_number": current_row_number,
+                    "row_class": class_by_index.get(idx, RowClass.DATA.value),
+                    "cells": cells,
+                    "is_target": current_row_number == row_number,
+                    "ignored": current_row_number in session.ignored_rows,
+                }
+            )
+        return {
+            "row_number": row_number,
+            "headers": headers,
+            "column_indexes": [col.index for col in session.profile.columns],
+            "target_columns": target_columns,
+            "rows": rows,
+        }
+
+    def resolve_rows(
+        self,
+        session_id: str,
+        action: str,
+        *,
+        row_number: int | None = None,
+        reason: str | None = None,
+        column_index: int | None = None,
+        value: str | None = None,
+    ) -> dict[str, Any]:
+        """Ignore non-product rows or override offending cells, then re-execute the plan."""
+        session = self._open(session_id)
+        if session.status is not SessionStatus.READY_FOR_PREVIEW:
+            raise InvalidOperationError(
+                f"the session is {session.status.value}; answer the open questions first"
+            )
+        result = self._execute(session)
+        data_rows = {index + 1 for index in session.profile.indexes_of(RowClass.DATA)}
+        valid_columns = {col.index for col in session.profile.columns}
+
+        if action == "ignore_row":
+            if row_number is None or row_number not in data_rows:
+                raise InvalidInputError("a valid data row_number is required")
+            session.ignored_rows.add(row_number)
+            affected = 1
+        elif action == "ignore_by_reason":
+            if not isinstance(reason, str) or not reason.strip():
+                raise InvalidInputError("a non-empty reason is required")
+            matched = [item.row_number for item in result.rejected if reason in item.reasons]
+            session.ignored_rows.update(matched)
+            affected = len(matched)
+        elif action == "edit_cell":
+            if row_number is None or row_number not in data_rows:
+                raise InvalidInputError("a valid data row_number is required")
+            if column_index is None or column_index not in valid_columns:
+                raise InvalidInputError("a valid column_index is required")
+            if value is None:
+                raise InvalidInputError("value is required")
+            session.ignored_rows.discard(row_number)
+            session.cell_overrides[(row_number, column_index)] = value
+            affected = 1
+        elif action == "edit_by_reason":
+            if not isinstance(reason, str) or not reason.strip():
+                raise InvalidInputError("a non-empty reason is required")
+            if column_index is None or column_index not in valid_columns:
+                raise InvalidInputError("a valid column_index is required")
+            if value is None:
+                raise InvalidInputError("value is required")
+            matched = [item.row_number for item in result.rejected if reason in item.reasons]
+            for r_num in matched:
+                session.ignored_rows.discard(r_num)
+                session.cell_overrides[(r_num, column_index)] = value
+            affected = len(matched)
+        elif action == "restore_ignored":
+            affected = len(session.ignored_rows)
+            session.ignored_rows.clear()
+        else:
+            raise InvalidInputError(f"unknown resolution action {action!r}")
+
+        session.result = None
+        self._execute(session)
+        self._repository.save(session)
+        return {
+            "affected": affected,
+            "ignored_count": len(session.ignored_rows),
+            "override_count": len(session.cell_overrides),
+            "totals": self._totals(session),
+        }
 
     def sample(self, session_id: str, limit: int = 5) -> dict[str, Any]:
         if not 1 <= limit <= 20:
@@ -530,11 +663,33 @@ class ImportFirstTime:
 
     # -- preview ---------------------------------------------------------------
 
+    @staticmethod
+    def _effective_row(session: ImportSession, row_number: int) -> tuple[Any, ...]:
+        raw = session.rows[row_number - 1]
+        if not session.cell_overrides:
+            return tuple(raw)
+        row_edits = {
+            col: val
+            for (r_num, col), val in session.cell_overrides.items()
+            if r_num == row_number
+        }
+        if not row_edits:
+            return tuple(raw)
+        width = max(len(raw), max(row_edits) + 1)
+        cells = [raw[i] if i < len(raw) else None for i in range(width)]
+        for col, val in row_edits.items():
+            cells[col] = val
+        return tuple(cells)
+
     def _execute(self, session: ImportSession):
         if session.result is None:
             profile = session.profile
             headers = [column.plan_header for column in profile.columns]
-            data = [(index + 1, session.rows[index]) for index in profile.indexes_of(RowClass.DATA)]
+            data = [
+                (index + 1, self._effective_row(session, index + 1))
+                for index in profile.indexes_of(RowClass.DATA)
+                if (index + 1) not in session.ignored_rows
+            ]
             session.result = execute_numbered_rows(
                 session.plan, headers, data, session.fx_snapshot
             )
@@ -569,7 +724,9 @@ class ImportFirstTime:
 
     @staticmethod
     def _original(session: ImportSession, row_number: int) -> tuple[str, ...]:
-        return tuple(_preview_text(cell) for cell in session.rows[row_number - 1])
+        return tuple(
+            _preview_text(cell) for cell in ImportFirstTime._effective_row(session, row_number)
+        )
 
     def _totals(self, session: ImportSession) -> dict[str, Any]:
         result = self._execute(session)
@@ -581,6 +738,8 @@ class ImportFirstTime:
             kind.value: len(session.profile.indexes_of(kind))
             for kind in (RowClass.EMPTY, RowClass.TOTAL, RowClass.SECTION, RowClass.PREAMBLE)
         }
+        if session.ignored_rows:
+            skipped["ignored_by_user"] = len(session.ignored_rows)
         return {
             "data_rows": len(result.accepted) + len(result.rejected),
             "accepted": len(result.accepted),

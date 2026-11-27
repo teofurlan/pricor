@@ -10,6 +10,9 @@ import type {
   PreviewFilter,
   PreviewPage,
   PriceReport,
+  ResolveRowsInput,
+  ResolveRowsResult,
+  RowContext,
   SessionState,
   ColumnRole,
   Memory,
@@ -57,6 +60,8 @@ export interface ApiClient {
   /** Ask the live source for the plan's rate again. */
   refreshRate(id: string): Promise<SessionState>;
   preview(id: string, offset: number, limit: number, filter?: Partial<PreviewFilter>): Promise<PreviewPage>;
+  getRowContext?(id: string, rowNumber: number, radius?: number): Promise<RowContext>;
+  resolveRows?(id: string, input: ResolveRowsInput): Promise<ResolveRowsResult>;
   approve(id: string): Promise<SessionState>;
   /** What changed since the supplier's previous approved import; `threshold` is a ratio ("0.30"). */
   report(id: string, threshold?: string): Promise<PriceReport>;
@@ -195,6 +200,10 @@ export function createApiClient(fetchImpl: Fetch = (...args) => fetch(...args), 
       if (filter?.status && filter.status !== "all") params.set("status", filter.status);
       return call(`${base(id)}/preview?${params.toString()}`);
     },
+    getRowContext: (id, rowNumber, radius = 2) =>
+      call<RowContext>(`${base(id)}/rows/${rowNumber}/context?radius=${radius}`),
+    resolveRows: (id, input) =>
+      call<ResolveRowsResult>(`${base(id)}/resolve-rows`, json("POST", input)),
     approve: (id) => call(`${base(id)}/approve`, { method: "POST" }),
     report: (id, threshold) =>
       call(`${base(id)}/report${threshold === undefined ? "" : `?threshold=${encodeURIComponent(threshold)}`}`),

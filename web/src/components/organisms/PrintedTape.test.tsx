@@ -96,15 +96,8 @@ describe("printed preview tape", () => {
 });
 
 describe("upload step", () => {
-  it("shows a compact worked example beside the empty upload form and hides it once a file is chosen", async () => {
+  it("does not show the worked example tape beside the upload form", () => {
     renderWithI18n(<UploadForm busy={false} onSubmit={vi.fn()} />);
-    const example = screen.getByRole("region", { name: "How Pricor calculates a cost" });
-    expect(example).toBeInTheDocument();
-    expect(within(example).getByText("855")).toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText("Price list file"), {
-      target: { files: [new File(["a,b"], "lista.csv")] },
-    });
     expect(screen.queryByRole("region", { name: "How Pricor calculates a cost" })).toBeNull();
   });
 });

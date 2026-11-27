@@ -331,6 +331,44 @@ export interface PreviewPage {
   items: PreviewItem[];
 }
 
+export interface RowContextEntry {
+  row_number: number;
+  row_class: string;
+  cells: string[];
+  is_target: boolean;
+  ignored: boolean;
+}
+
+export interface RowContext {
+  row_number: number;
+  headers: string[];
+  column_indexes?: number[];
+  target_columns: number[];
+  rows: RowContextEntry[];
+}
+
+export type ResolveRowsAction =
+  | "ignore_row"
+  | "ignore_by_reason"
+  | "edit_cell"
+  | "edit_by_reason"
+  | "restore_ignored";
+
+export interface ResolveRowsInput {
+  action: ResolveRowsAction;
+  row_number?: number;
+  reason?: string;
+  column_index?: number;
+  value?: string;
+}
+
+export interface ResolveRowsResult {
+  affected: number;
+  ignored_count: number;
+  override_count: number;
+  totals: PreviewTotals;
+}
+
 export type ExportFormat = "csv" | "xlsx";
 
 export interface CreateImportInput {

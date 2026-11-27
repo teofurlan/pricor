@@ -148,6 +148,8 @@ class ImportSession:
     # store-wide layout, as they always did.
     approved_output_format: OutputFormat | None = None
     output_format_frozen: bool = False
+    ignored_rows: set[int] = field(default_factory=set)  # 1-based file row numbers ignored by user
+    cell_overrides: dict[tuple[int, int], str] = field(default_factory=dict)  # (row_number, col_index) -> text
 
     @property
     def conversion(self) -> ConvertCurrency | None:
